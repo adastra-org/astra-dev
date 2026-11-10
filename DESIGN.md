@@ -51,8 +51,8 @@ Space Mono (code, data). Averia Serif Libre is loaded but not used in the shell.
 ```
 lg and up                         under lg (375 to 1023 px)
 +---------+-----------------+     +-----------------------+
-| sidebar | top bar         |     | menu  title      ES EN |
-| 16 rem  +-----------------+     +-----------------------+
+| sidebar | (crumbs) (find) |     | (=) (... / page) (q) ES |
+| 16 rem  |  floating pills |     |  floating pills       |
 | sticky  | content         |     | content               |
 |         |  max-w-5xl      |     | (sidebar = drawer)    |
 +---------+-----------------+     +-----------------------+
@@ -63,8 +63,16 @@ lg and up                         under lg (375 to 1023 px)
   text; never a left bar or any single-side border. Sticky full height
   on `lg+`. Under `lg` it is a drawer over the content with a scrim; it never pushes the content. Esc, the scrim, the
   close button and any navigation close it. Closed, it is `visibility: hidden`, so it is out of the tab order.
-- **Top bar**: sticky, 56 px, solid `surface` (no glass). Left: menu button (under `lg`) and the current section.
-  Right: language switch.
+- **Top bar = floating pills**, not a bar. The header itself has no fill, no border and no shadow; it is separated from
+  the content by space only (and the sidebar brand row has no bottom border either). Each control is its own pill
+  (`rounded-pill`, `surface-raised` fill, no border): menu button (under `lg`), breadcrumbs, search trigger, language
+  switch. Hover and active are fills (`surface-overlay`, `accent-fill`), never a border, underline or side stripe. The
+  header is sticky and `pointer-events-none`; only the pills take clicks, and because every pill is opaque, content that
+  scrolls under the gaps stays readable. Pills are 44 px under `lg`, 40 px from `lg`.
+- **Breadcrumbs** (`nav aria-label="Migas de pan"`, `src/lib/crumbs.ts`): Inicio / section / document, built from the
+  route. The last crumb is the current page (`aria-current="page"`), not a link, one line with an ellipsis. Under `md`
+  they collapse to "… / current", where "…" links to the parent (`aria-label="Subir a …"`). A route that does not exist
+  ends in "Página no encontrada".
 - **Language switch** (placeholder until M2): segmented ES / EN. ES is pressed, EN is disabled with a title. Copy
   is Spanish only. No state is stored.
 - **Content**: centered, `max-w-5xl`; reading text caps at `max-w-prose` (65 ch). Wide elements (tables, graphs, code)
@@ -86,7 +94,8 @@ lg and up                         under lg (375 to 1023 px)
   hidden on touch (`pointer-fine`). Options, close button and trigger are 44 px under `lg`.
 - Esc closes the topmost layer only: with the palette over the mobile drawer, the first Esc closes the palette.
 - Motion: the panel and backdrop enter in `--duration-panel` with `--ease-out-brand`, only without `prefers-reduced-motion`.
-- Copy: empty state says what to try ("Prueba con otro término"), no exclamation marks.
+- Copy: empty state says what to try ("Prueba con otro término"), no exclamation marks. Exception to the house
+  "empty = dashed box": no box, because the panel is already the one bordered level.
 
 ## Docs reading layout
 

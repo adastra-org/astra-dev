@@ -20,7 +20,7 @@ export function PaletteTrigger({ onOpen }: { onOpen: () => void }) {
       aria-label="Buscar"
       aria-haspopup="dialog"
       aria-keyshortcuts={keys[0] === '⌘' ? 'Meta+K' : 'Control+K'}
-      className="text-ink-muted bg-surface-raised hover:text-ink flex size-11 shrink-0 items-center justify-center gap-3 rounded-md md:h-11 md:w-64 md:justify-start md:px-3 lg:h-9"
+      className="text-ink-muted bg-surface-raised hover:bg-surface-overlay hover:text-ink rounded-pill flex size-11 shrink-0 items-center justify-center gap-3 md:w-44 md:justify-start md:px-4 lg:h-10 xl:w-64"
     >
       <Search className="size-5 shrink-0 md:size-4" aria-hidden="true" />
       <span className="text-body-sm hidden flex-1 text-left md:inline">

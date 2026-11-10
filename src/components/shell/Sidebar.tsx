@@ -42,7 +42,7 @@ export function Sidebar({ open, onClose }: Props) {
           open ? 'translate-x-0' : 'invisible -translate-x-full lg:visible',
         ].join(' ')}
       >
-        <div className="border-border flex h-14 shrink-0 items-center justify-between border-b px-4">
+        <div className="flex h-14 shrink-0 items-center justify-between px-4">
           <Link
             to="/"
             className="font-heading flex items-center gap-2 text-sm font-bold tracking-tight"
