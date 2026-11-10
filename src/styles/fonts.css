@@ -1,0 +1,19 @@
+/* Fuentes self-hosted (SIL OFL). MADE Outer Sans es de uso personal: no se distribuye;
+   el wordmark se usa como imagen y en texto vivo cae a Unbounded Black. */
+@import '@fontsource-variable/unbounded/wght.css';
+@import '@fontsource-variable/geologica/wght.css';
+@import '@fontsource/averia-serif-libre/400.css';
+@import '@fontsource/averia-serif-libre/400-italic.css';
+@import '@fontsource/averia-serif-libre/700.css';
+@import '@fontsource/space-mono/400.css';
+@import '@fontsource/space-mono/700.css';
+
+@theme {
+  --font-display: 'Unbounded Variable', 'Unbounded', sans-serif;
+  --font-heading: 'Unbounded Variable', 'Unbounded', sans-serif;
+  --font-text: 'Geologica Variable', 'Geologica', system-ui, sans-serif;
+  --font-quote: 'Averia Serif Libre', Georgia, serif;
+  /* Alias legado hasta M1 (páginas viejas usan font-body). */
+  --font-body: var(--font-text);
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+}

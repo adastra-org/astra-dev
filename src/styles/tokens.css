@@ -1,0 +1,389 @@
+/* Ad Astra — generado desde design/tokens.json por scripts/tokens.ts. No editar a mano. */
+
+:root {
+  --primary-dark: #5d12d2;
+  --vibrant: #b931fc;
+  --pink: #ff6ac2;
+  --off-white: #ffe5e5;
+  --brand-dark: #0d0d0d;
+  --violet-50: #f3f0ff;
+  --violet-100: #e8e3ff;
+  --violet-200: #d6ccff;
+  --violet-300: #bfaffe;
+  --violet-400: #a68cff;
+  --violet-500: #8d63ff;
+  --violet-600: #7540ec;
+  --violet-700: var(--primary-dark);
+  --violet-800: #4600a9;
+  --violet-900: #30007d;
+  --violet-950: #1b0051;
+  --orchid-50: #f6ebff;
+  --orchid-100: #f0dcff;
+  --orchid-200: #e5c1ff;
+  --orchid-300: #d89eff;
+  --orchid-400: #c971ff;
+  --orchid-500: var(--vibrant);
+  --orchid-600: #9e14db;
+  --orchid-700: #7f00b3;
+  --orchid-800: #63008c;
+  --orchid-900: #470067;
+  --orchid-950: #2c0042;
+  --pink-50: #fff1f8;
+  --pink-100: #fee3f0;
+  --pink-200: #ffc6e3;
+  --pink-300: #ff9fd3;
+  --pink-400: var(--pink);
+  --pink-500: #dc54a6;
+  --pink-600: #ba448b;
+  --pink-700: #96356f;
+  --pink-800: #732a56;
+  --pink-900: #52203d;
+  --pink-950: #360f26;
+  --blush-50: #fef3f3;
+  --blush-100: var(--off-white);
+  --blush-200: #efd2d2;
+  --blush-300: #d9bbbb;
+  --blush-400: #c1a1a1;
+  --blush-500: #a88687;
+  --blush-600: #916e6e;
+  --blush-700: #795556;
+  --blush-800: #633e40;
+  --blush-900: #4d292a;
+  --blush-950: #361316;
+  --void-50: #f6f3fc;
+  --void-100: #eae8f1;
+  --void-200: #d5d3db;
+  --void-300: #b8b6be;
+  --void-400: #939199;
+  --void-500: #727078;
+  --void-600: #56545b;
+  --void-700: #3e3c43;
+  --void-800: #2a282e;
+  --void-900: #1a181e;
+  --void-950: var(--brand-dark);
+  --surface: var(--brand-dark);
+  --surface-raised: var(--void-900);
+  --surface-overlay: var(--void-800);
+  --surface-sunken: #070707;
+  --surface-brand: var(--primary-dark);
+  --ink: var(--off-white);
+  --ink-muted: var(--void-300);
+  --ink-subtle: var(--void-400);
+  --on-brand: var(--off-white);
+  --accent: var(--orchid-400);
+  --accent-fill: var(--primary-dark);
+  --accent-fill-hover: var(--violet-600);
+  --on-accent: var(--off-white);
+  --highlight: var(--pink);
+  --border: var(--void-700);
+  --border-strong: var(--void-500);
+  --focus: var(--pink);
+  --success: #3dd6b0;
+  --success-surface: #0f2b25;
+  --warning: #ffb547;
+  --warning-surface: #2e2109;
+  --danger: #ff7a5c;
+  --danger-surface: #331410;
+  --info: #7fb6ff;
+  --info-surface: #121f33;
+  --staff-ground: var(--primary-dark);
+  --staff-ink: var(--off-white);
+  --facciones-ground: #ffbce3;
+  --facciones-ink: var(--primary-dark);
+  --testers-ground: var(--off-white);
+  --testers-ink: var(--pink);
+  --latam-ground: #bde8f5;
+  --latam: #376aa1;
+  --latam-deep: #214678;
+  --ether-blue: #2f2fe4;
+  --ether-cobalt: #162e93;
+  --ether-navy: #1a1953;
+  --ether-ink: #080616;
+  --chart-1: var(--vibrant);
+  --chart-2: var(--pink);
+  --chart-3: var(--violet-400);
+  --chart-4: #3dd6b0;
+  --chart-5: #f8d45c;
+  --chart-up: var(--success);
+  --chart-down: var(--danger);
+  --chart-grid: var(--void-800);
+  --chart-track: var(--void-800);
+  --tier-bronze: #e9bc79;
+  --tier-bronze-light: #f8d895;
+  --tier-bronze-deep: #dca461;
+  --tier-silver: #a1a1a1;
+  --tier-silver-light: #bbbbbb;
+  --tier-silver-deep: #6b6b6b;
+  --tier-gold: #f8d45c;
+  --tier-gold-light: #fde08c;
+  --tier-gold-deep: #f4ca32;
+  --tier-platinum: #cbc9c9;
+  --tier-platinum-light: #d3d2d2;
+  --tier-platinum-deep: #c7c5c5;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+  --radius-none: 0px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-app: 22%;
+  --radius-pill: 999px;
+  --shadow-raised: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --glow-vibrant: 0 0 32px rgba(185, 49, 252, 0.45);
+  --glow-pink: 0 0 24px rgba(255, 106, 194, 0.4);
+  --gradient-dusk: linear-gradient(
+    180deg,
+    #5d12d2 0%,
+    #5d12d2 33%,
+    #722dd4 50%,
+    #9156d8 67%,
+    #c193de 83%,
+    #ffe5e5 100%
+  );
+  --gradient-dawn: linear-gradient(
+    180deg,
+    #ffe5e5 0%,
+    #ffe5e5 33%,
+    #f9d5e7 50%,
+    #ebb1eb 67%,
+    #d57bf3 83%,
+    #b931fc 100%
+  );
+  --gradient-mark: linear-gradient(
+    120deg,
+    #6816d7 0%,
+    #ab2cf5 65%,
+    #d77ef2 100%
+  );
+  --gradient-gold: linear-gradient(
+    90deg,
+    #fde08c 0%,
+    #f8d45c 50%,
+    #f4ca32 100%
+  );
+  --gradient-silver: linear-gradient(
+    90deg,
+    #bbbbbb 0%,
+    #a1a1a1 50%,
+    #6b6b6b 100%
+  );
+  --gradient-bronze: linear-gradient(
+    90deg,
+    #f8d895 0%,
+    #e9bc79 50%,
+    #dca461 100%
+  );
+  --gradient-platinum: linear-gradient(
+    90deg,
+    #d3d2d2 0%,
+    #cbc9c9 50%,
+    #c7c5c5 100%
+  );
+}
+
+[data-theme='light'] {
+  --primary-dark: #5d12d2;
+  --vibrant: #b931fc;
+  --pink: #ff6ac2;
+  --off-white: #ffe5e5;
+  --brand-dark: #0d0d0d;
+  --violet-50: #f3f0ff;
+  --violet-100: #e8e3ff;
+  --violet-200: #d6ccff;
+  --violet-300: #bfaffe;
+  --violet-400: #a68cff;
+  --violet-500: #8d63ff;
+  --violet-600: #7540ec;
+  --violet-700: var(--primary-dark);
+  --violet-800: #4600a9;
+  --violet-900: #30007d;
+  --violet-950: #1b0051;
+  --orchid-50: #f6ebff;
+  --orchid-100: #f0dcff;
+  --orchid-200: #e5c1ff;
+  --orchid-300: #d89eff;
+  --orchid-400: #c971ff;
+  --orchid-500: var(--vibrant);
+  --orchid-600: #9e14db;
+  --orchid-700: #7f00b3;
+  --orchid-800: #63008c;
+  --orchid-900: #470067;
+  --orchid-950: #2c0042;
+  --pink-50: #fff1f8;
+  --pink-100: #fee3f0;
+  --pink-200: #ffc6e3;
+  --pink-300: #ff9fd3;
+  --pink-400: var(--pink);
+  --pink-500: #dc54a6;
+  --pink-600: #ba448b;
+  --pink-700: #96356f;
+  --pink-800: #732a56;
+  --pink-900: #52203d;
+  --pink-950: #360f26;
+  --blush-50: #fef3f3;
+  --blush-100: var(--off-white);
+  --blush-200: #efd2d2;
+  --blush-300: #d9bbbb;
+  --blush-400: #c1a1a1;
+  --blush-500: #a88687;
+  --blush-600: #916e6e;
+  --blush-700: #795556;
+  --blush-800: #633e40;
+  --blush-900: #4d292a;
+  --blush-950: #361316;
+  --void-50: #f6f3fc;
+  --void-100: #eae8f1;
+  --void-200: #d5d3db;
+  --void-300: #b8b6be;
+  --void-400: #939199;
+  --void-500: #727078;
+  --void-600: #56545b;
+  --void-700: #3e3c43;
+  --void-800: #2a282e;
+  --void-900: #1a181e;
+  --void-950: var(--brand-dark);
+  --surface: var(--off-white);
+  --surface-raised: var(--blush-50);
+  --surface-overlay: #ffffff;
+  --surface-sunken: var(--blush-200);
+  --surface-brand: var(--primary-dark);
+  --ink: var(--brand-dark);
+  --ink-muted: var(--void-600);
+  --ink-subtle: var(--blush-700);
+  --on-brand: var(--off-white);
+  --accent: var(--primary-dark);
+  --accent-fill: var(--primary-dark);
+  --accent-fill-hover: var(--violet-800);
+  --on-accent: var(--off-white);
+  --highlight: var(--pink-700);
+  --border: var(--blush-300);
+  --border-strong: var(--blush-600);
+  --focus: var(--orchid-600);
+  --success: #0a6e5a;
+  --success-surface: #d4f1e8;
+  --warning: #8a5200;
+  --warning-surface: #fbe6c6;
+  --danger: #b8261a;
+  --danger-surface: #f9d6d0;
+  --info: #2c5a94;
+  --info-surface: #d6e6fa;
+  --staff-ground: var(--primary-dark);
+  --staff-ink: var(--off-white);
+  --facciones-ground: #ffbce3;
+  --facciones-ink: var(--primary-dark);
+  --testers-ground: var(--off-white);
+  --testers-ink: var(--pink);
+  --latam-ground: #bde8f5;
+  --latam: #376aa1;
+  --latam-deep: #214678;
+  --ether-blue: #2f2fe4;
+  --ether-cobalt: #162e93;
+  --ether-navy: #1a1953;
+  --ether-ink: #080616;
+  --chart-1: var(--primary-dark);
+  --chart-2: var(--vibrant);
+  --chart-3: #c2387f;
+  --chart-4: #0a6e5a;
+  --chart-5: #9a6200;
+  --chart-up: var(--success);
+  --chart-down: var(--danger);
+  --chart-grid: var(--blush-200);
+  --chart-track: var(--blush-200);
+  --tier-bronze: #e9bc79;
+  --tier-bronze-light: #f8d895;
+  --tier-bronze-deep: #dca461;
+  --tier-silver: #a1a1a1;
+  --tier-silver-light: #bbbbbb;
+  --tier-silver-deep: #6b6b6b;
+  --tier-gold: #f8d45c;
+  --tier-gold-light: #fde08c;
+  --tier-gold-deep: #f4ca32;
+  --tier-platinum: #cbc9c9;
+  --tier-platinum-light: #d3d2d2;
+  --tier-platinum-deep: #c7c5c5;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+  --radius-none: 0px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-app: 22%;
+  --radius-pill: 999px;
+  --shadow-raised: 0 8px 24px rgba(93, 18, 210, 0.12);
+  --glow-vibrant: 0 0 32px rgba(185, 49, 252, 0.45);
+  --glow-pink: 0 0 24px rgba(255, 106, 194, 0.4);
+  --gradient-dusk: linear-gradient(
+    180deg,
+    #5d12d2 0%,
+    #5d12d2 33%,
+    #722dd4 50%,
+    #9156d8 67%,
+    #c193de 83%,
+    #ffe5e5 100%
+  );
+  --gradient-dawn: linear-gradient(
+    180deg,
+    #ffe5e5 0%,
+    #ffe5e5 33%,
+    #f9d5e7 50%,
+    #ebb1eb 67%,
+    #d57bf3 83%,
+    #b931fc 100%
+  );
+  --gradient-mark: linear-gradient(
+    120deg,
+    #6816d7 0%,
+    #ab2cf5 65%,
+    #d77ef2 100%
+  );
+  --gradient-gold: linear-gradient(
+    90deg,
+    #fde08c 0%,
+    #f8d45c 50%,
+    #f4ca32 100%
+  );
+  --gradient-silver: linear-gradient(
+    90deg,
+    #bbbbbb 0%,
+    #a1a1a1 50%,
+    #6b6b6b 100%
+  );
+  --gradient-bronze: linear-gradient(
+    90deg,
+    #f8d895 0%,
+    #e9bc79 50%,
+    #dca461 100%
+  );
+  --gradient-platinum: linear-gradient(
+    90deg,
+    #d3d2d2 0%,
+    #cbc9c9 50%,
+    #c7c5c5 100%
+  );
+}
+
+@theme {
+  --radius-none: 0px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-app: 22%;
+  --radius-pill: 999px;
+}
