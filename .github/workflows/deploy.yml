@@ -43,13 +43,35 @@ jobs:
           bun run build
           test -f dist/index.html
 
-      - name: Check nginx vhost drift
-        # The vhost is installed by hand once (docs/deploy/README.md). This only warns
-        # when the live file differs from the repo copy.
+      - name: Build server bundle (API + semantic index)
+        # The runner lives on the VPS, so the local embedder is reachable and the index is
+        # semantic. If it is down the index is keyword-only: warn, the deploy still works.
+        # The bundle is only src + production deps + the index (docs/server/README.md).
+        run: |
+          set -eu
+          export PATH="/opt/bun:$PATH"
+          (cd server && bun run index)
+          rm -rf server-dist
+          mkdir -p server-dist/data
+          cp -r server/src server/package.json server/bun.lock server-dist/
+          cp server/data/index.json server-dist/data/index.json
+          (cd server-dist && bun install --frozen-lockfile --production)
+          test -f server-dist/src/main.ts
+          if ! grep -q '"semantic":true' server-dist/data/index.json; then
+            echo "::warning::Docs index is keyword-only: the embedder was not reachable from the runner"
+          fi
+
+      - name: Check nginx vhost and systemd unit drift
+        # The vhost and the user unit are installed by hand once (docs/deploy/README.md,
+        # docs/server/README.md). This only warns when the live files differ from the repo copies.
         run: |
           live=/etc/nginx/sites-available/development.adastrarp.com
           if ! diff -q deploy/nginx/development.adastrarp.com.conf "$live" >/dev/null 2>&1; then
             echo "::warning::Live nginx vhost differs from deploy/nginx/development.adastrarp.com.conf (or is missing)"
+          fi
+          unit="$HOME/.config/systemd/user/astra-dev@.service"
+          if ! diff -q deploy/systemd/astra-dev@.service "$unit" >/dev/null 2>&1; then
+            echo "::warning::systemd user unit is not installed or differs from deploy/systemd/astra-dev@.service: the API stage is skipped until it is"
           fi
 
       - name: Deploy to idle slot, health check, switch
@@ -61,7 +83,9 @@ jobs:
           export PATH="/opt/bun:$PATH"
           version=$(bun -e "console.log(require('./package.json').version)")
           install -m 755 deploy/astra-dev.sh /home/hermes/deploy/astra-dev.sh
-          /home/hermes/deploy/astra-dev.sh deploy "$GITHUB_SHA" "$PWD/dist" "$version"
+          # 4th arg: the server bundle. The script skips the API stage (with a warning) when the
+          # systemd user unit is not installed yet, so the static deploy keeps working.
+          /home/hermes/deploy/astra-dev.sh deploy "$GITHUB_SHA" "$PWD/dist" "$version" "$PWD/server-dist"
 
       - name: Verify public domain
         id: verify
@@ -74,6 +98,16 @@ jobs:
             if printf '%s' "$body" | grep -q "\"sha\":\"$GITHUB_SHA\""; then
               echo "public ok: $body"
               curl -fsS --max-time 10 -o /dev/null -w 'GET / -> %{http_code}\n' https://development.adastrarp.com/
+              # API stage active (unit installed): /api/ready must carry the sha too.
+              if [ -f "$HOME/.config/systemd/user/astra-dev@.service" ]; then
+                api=$(curl -fsS --max-time 10 https://development.adastrarp.com/api/ready 2>/dev/null || true)
+                if printf '%s' "$api" | grep -q "\"sha\":\"$GITHUB_SHA\""; then
+                  echo "api ok: $api"
+                else
+                  echo "public /api/ready does not carry $GITHUB_SHA: last body: ${api:-<none>}"
+                  exit 1
+                fi
+              fi
               exit 0
             fi
             sleep 4
