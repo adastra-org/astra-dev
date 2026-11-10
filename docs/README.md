@@ -7,6 +7,7 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 ## Índice
 
 - [plan/README.md](plan/README.md) — milestones M0–M5, estimaciones, decisiones abiertas.
+- [shell/README.md](shell/README.md) — shell de la app (sidebar, barra superior, rutas, tokens). Reglas visuales en [`DESIGN.md`](../DESIGN.md).
 
 ## Qué resuelve
 

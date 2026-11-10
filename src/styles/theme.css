@@ -1,0 +1,115 @@
+/* Roles del design system expuestos a Tailwind. Los valores viven en tokens.css (generado). Radios y fuentes van en @theme sin inline
+   (tokens.css y fonts.css) porque sus nombres coinciden con los de Tailwind.
+   En componentes: siempre el rol (bg-surface, text-ink, text-accent…), nunca el hex. */
+@theme inline {
+  /* Superficies y texto */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-brand: var(--surface-brand);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-on-brand: var(--on-brand);
+
+  /* Acento, bordes, foco */
+  --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-fill-hover: var(--accent-fill-hover);
+  --color-on-accent: var(--on-accent);
+  --color-highlight: var(--highlight);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-focus: var(--focus);
+
+  /* Estados */
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+
+  /* Marca (piezas gráficas, no UI) */
+  --color-primary-dark: var(--primary-dark);
+  --color-vibrant: var(--vibrant);
+  --color-pink: var(--pink);
+  --color-off-white: var(--off-white);
+  --color-brand-dark: var(--brand-dark);
+  --color-ether-blue: var(--ether-blue);
+  --color-ether-cobalt: var(--ether-cobalt);
+  --color-ether-navy: var(--ether-navy);
+  --color-ether-ink: var(--ether-ink);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Sombras */
+  --shadow-card: var(--shadow-raised);
+  --shadow-glow-vibrant: var(--glow-vibrant);
+  --shadow-glow-pink: var(--glow-pink);
+
+  /* Movimiento: entradas desde abajo, ease-out, sin rebotes */
+  --ease-out-brand: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Escala tipográfica del DS (typography.md). Mobile: h1 → 34/40, h2 → 24/30. */
+@utility text-h1 {
+  font: 700 34px/40px var(--font-heading);
+  letter-spacing: -0.015em;
+  @media (width >= 48rem) {
+    font-size: 48px;
+    line-height: 54px;
+    letter-spacing: -0.02em;
+  }
+}
+@utility text-h2 {
+  font: 500 24px/30px var(--font-heading);
+  letter-spacing: -0.01em;
+  @media (width >= 48rem) {
+    font-weight: 700;
+    font-size: 34px;
+    line-height: 40px;
+    letter-spacing: -0.015em;
+  }
+}
+@utility text-h3 {
+  font: 500 24px/30px var(--font-heading);
+  letter-spacing: -0.01em;
+}
+@utility text-h4 {
+  font: 500 18px/24px var(--font-heading);
+}
+@utility text-eyebrow {
+  font: 500 12px/16px var(--font-heading);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+@utility text-body-lg {
+  font: 300 18px/28px var(--font-text);
+}
+@utility text-body {
+  font: 400 16px/24px var(--font-text);
+}
+@utility text-body-sm {
+  font: 400 14px/20px var(--font-text);
+}
+@utility text-label {
+  font: 600 14px/20px var(--font-text);
+}
+@utility text-caption {
+  font: 400 12px/16px var(--font-text);
+}
+@utility text-quote {
+  font: italic 400 24px/34px var(--font-quote);
+}
+@utility text-code {
+  font: 400 14px/22px var(--font-mono);
+}
+@utility text-data {
+  font: 700 12px/16px var(--font-mono);
+  letter-spacing: 0.06em;
+}
