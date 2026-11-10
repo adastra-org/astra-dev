@@ -72,11 +72,13 @@ nombre (`live/adastrarp.com/`), cambiar las dos rutas `ssl_certificate*` en el v
 
 ## 5. Vhost nginx
 
-Desde un clone del repo en el VPS (`/home/hermes/repos/astra-dev`, rama `main` o la del PR):
+Desde un clone del repo en el VPS (`/home/hermes/repos/astra-dev`). Hasta el primer merge a `main`, esa rama es solo
+el scaffold: el vhost y este doc viven en `dev`.
 
 ```bash
+cd /home/hermes/repos/astra-dev && git checkout dev && git pull --ff-only
 sudo install -m 644 deploy/nginx/development.adastrarp.com.conf /etc/nginx/sites-available/development.adastrarp.com
-sudo ln -s /etc/nginx/sites-available/development.adastrarp.com /etc/nginx/sites-enabled/development.adastrarp.com
+sudo ln -sfn /etc/nginx/sites-available/development.adastrarp.com /etc/nginx/sites-enabled/development.adastrarp.com
 sudo /usr/sbin/nginx -t && sudo /usr/bin/systemctl reload nginx
 ```
 
