@@ -94,7 +94,7 @@ Cómo se enchufa, sin tocar el componente:
 1. Un proveedor `semantic` con `order` 45 (justo después de Documentación) que consulta el índice y devuelve ítems con `id: 'doc:<slug>'` y `to: '/docs/<slug>'`.
 2. `buildSections` descarta los ítems cuyo `id` ya apareció en una sección anterior, así un doc que encuentran ambos proveedores se muestra una sola vez, en la sección léxica.
 3. `search` es asíncrono y respeta `signal`: los resultados léxicos aparecen al instante y los semánticos llegan después, sin bloquear la lista. Conviene un retraso de unos 200 ms antes de consultar, para no pedir un embedding por tecla.
-4. Permiso: `public` o `subscriber` es una decisión de producto abierta (el embedding tiene costo de server). El registro lo resuelve solo con `permission`.
+4. Permiso: `public` (decidido por Faku, 2026-11-10). El embedding tiene costo de server, así que M3 debe traer rate limit y caché por IP; si más adelante se restringe, basta cambiar `permission` del proveedor.
 
 ## Archivos
 
