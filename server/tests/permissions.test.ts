@@ -218,3 +218,42 @@ describe('chat permission gating', () => {
     await ok.text()
   })
 })
+
+describe('graphql is same-origin only', () => {
+  const q = { query: '{ viewer { id handle role entitlements } }' }
+
+  test('a request from another site is refused and carries no CORS headers', async () => {
+    const h = await harness({ role: 'subscriber' })
+    const r = await h.call('/graphql', {
+      json: q,
+      headers: { origin: 'https://evil.example', cookie: 's=1' },
+    })
+    expect(r.status).toBe(403)
+    expect(r.headers.get('access-control-allow-origin')).toBeNull()
+    expect(r.headers.get('access-control-allow-credentials')).toBeNull()
+    expect(await r.text()).not.toContain('dev-subscriber')
+  })
+
+  test('preflight from another site gets no permission', async () => {
+    const h = await harness()
+    const r = await h.call('/graphql', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://evil.example',
+        'access-control-request-method': 'POST',
+      },
+    })
+    expect(r.headers.get('access-control-allow-origin')).toBeNull()
+  })
+
+  test('the site origin works, and so does a request without Origin', async () => {
+    const h = await harness({ role: 'subscriber' })
+    const ok = await h.call('/graphql', {
+      json: q,
+      headers: { origin: 'https://development.adastrarp.com' },
+    })
+    expect((await ok.json()).data.viewer.role).toBe('subscriber')
+    const none = await h.call('/graphql', { json: q })
+    expect(none.status).toBe(200)
+  })
+})

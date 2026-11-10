@@ -115,6 +115,9 @@ export function createGraphqlHandler(deps: AppDeps) {
     landingPage: false,
     logging: false,
     maskedErrors: true,
+    // Yoga's default CORS reflects any Origin with credentials, which would let any website read
+    // `viewer` with the visitor's cookie. The site calls /api/ same-origin, so no CORS at all.
+    cors: false,
   })
   return (request: Request, ip: string) => yoga.fetch(request, { ip })
 }

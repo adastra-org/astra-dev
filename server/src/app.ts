@@ -105,9 +105,15 @@ export function createApp(deps: AppDeps) {
       }
       return json(body, r ? 200 : 503)
     })
-    .all('/graphql', ({ request, server }) =>
-      graphql(request, clientIp(request, server, config.trustProxy)),
-    )
+    .all('/graphql', ({ request, server }) => {
+      // Same rule as /chat: a browser request from another site is refused before it is executed.
+      try {
+        checkOrigin(request, config.allowedOrigins)
+      } catch (e) {
+        return jsonError(toAppError(e))
+      }
+      return graphql(request, clientIp(request, server, config.trustProxy))
+    })
     .post('/chat', async ({ request, server }) => {
       const started = now()
       const requestId = crypto.randomUUID()
