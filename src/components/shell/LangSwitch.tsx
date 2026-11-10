@@ -7,9 +7,12 @@ export function LangSwitch() {
     <div
       role="group"
       aria-label="Idioma"
-      className="border-border-strong flex items-center gap-1 rounded-md border p-1"
+      className="bg-surface-raised rounded-pill flex shrink-0 items-center"
     >
-      <Languages className="text-ink-subtle mx-1 size-4" aria-hidden="true" />
+      <Languages
+        className="text-ink-subtle mr-1 ml-3 hidden size-4 md:block"
+        aria-hidden="true"
+      />
       {LANGS.map((l) => (
         <button
           key={l.code}
@@ -18,7 +21,7 @@ export function LangSwitch() {
           aria-pressed={l.code === 'es'}
           title={l.available ? undefined : 'Inglés llega con la traducción'}
           className={[
-            'text-data min-h-9 min-w-9 rounded-sm px-2 md:min-h-7 md:min-w-8',
+            'text-data rounded-pill min-h-11 min-w-11 px-3 lg:min-h-10',
             l.code === 'es'
               ? 'bg-accent-fill text-on-accent'
               : 'text-ink-subtle disabled:opacity-70',
