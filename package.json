@@ -1,7 +1,7 @@
 {
   "name": "astra-dev",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -39,11 +39,14 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "babel-plugin-react-compiler": "^1.0.0",
+    "marked": "^18.2.0",
     "oxfmt": "^0.78.0",
     "oxlint": "^1.90.0",
     "postcss": "^8.5.32",
+    "shiki": "^4.6.0",
     "tailwindcss": "^4.3.5",
     "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "yaml": "^2.9.1"
   }
 }

@@ -3,11 +3,13 @@ import { useState } from 'react'
 
 interface Props {
   code: string
-  /** Lenguaje, solo como etiqueta (el resaltado llega con M1). */
+  /** Lenguaje, como etiqueta. */
   lang?: string
+  /** HTML ya resaltado del interior de `<code>` (lo genera el build). Sin él, texto plano. */
+  html?: string
 }
 
-export function CodeBlock({ code, lang }: Props) {
+export function CodeBlock({ code, lang, html }: Props) {
   const [copied, setCopied] = useState(false)
 
   const copy = async () => {
@@ -21,7 +23,7 @@ export function CodeBlock({ code, lang }: Props) {
   }
 
   return (
-    <figure className="bg-surface-sunken border-border max-w-3xl overflow-hidden rounded-md border">
+    <figure className="bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
       <figcaption className="border-border flex min-h-11 items-center justify-between border-b px-4">
         <span className="text-data text-ink-subtle uppercase">
           {lang ?? 'texto'}
@@ -40,7 +42,11 @@ export function CodeBlock({ code, lang }: Props) {
         </button>
       </figcaption>
       <pre className="text-code text-ink overflow-x-auto p-4" tabIndex={0}>
-        <code>{code}</code>
+        {html === undefined ? (
+          <code>{code}</code>
+        ) : (
+          <code dangerouslySetInnerHTML={{ __html: html }} />
+        )}
       </pre>
       <span className="sr-only" role="status">
         {copied ? 'Código copiado al portapapeles' : ''}

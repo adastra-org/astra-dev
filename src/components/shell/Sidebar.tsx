@@ -2,6 +2,7 @@ import { BookOpen, House, Milestone, Orbit, Wrench, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { NAV, type NavIcon } from '@/config/nav'
+import { docs } from '@/lib/docs'
 import pkg from '../../../package.json'
 
 const ICONS: Record<NavIcon, LucideIcon> = {
@@ -10,6 +11,10 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   tools: Wrench,
   roadmap: Milestone,
 }
+
+const sortedDocs = [...docs].sort((a, b) =>
+  a.title.localeCompare(b.title, 'es'),
+)
 
 interface Props {
   open: boolean
@@ -77,6 +82,31 @@ export function Sidebar({ open, onClose }: Props) {
                     <Icon className="size-4 shrink-0" aria-hidden="true" />
                     {item.label}
                   </NavLink>
+                  {item.icon === 'docs' && (
+                    <ul
+                      aria-label="Documentos"
+                      className="border-border mt-1 mb-2 ml-5 flex flex-col border-l"
+                    >
+                      {sortedDocs.map((d) => (
+                        <li key={d.slug}>
+                          <NavLink
+                            to={`/docs/${d.slug}`}
+                            onClick={onClose}
+                            className={({ isActive }) =>
+                              [
+                                'text-body-sm -ml-px flex min-h-11 items-center border-l-2 px-3 transition-colors lg:min-h-8',
+                                isActive
+                                  ? 'text-ink border-accent'
+                                  : 'text-ink-muted hover:text-ink border-transparent',
+                              ].join(' ')
+                            }
+                          >
+                            {d.title}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               )
             })}

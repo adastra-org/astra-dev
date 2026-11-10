@@ -82,7 +82,9 @@ answers "is this the one" and the rest can wait.
 3. **Ejemplo mínimo** (`CodeBlock`): the smallest working snippet, before the explanation.
 4. **Detalle**, in collapsible sections (`Collapsible`, native `details`): Parámetros, Notas de Astra, Relacionados.
    Closed by default; the summary row is the whole target (44 px). Open only what the page needs at first glance.
-5. Long pages keep the sidebar sticky and get a back-to-top button (M1, with the real doc engine).
+5. Long pages keep the sidebar sticky and get a back-to-top button. From `xl` the table of contents is a sticky right
+   column; below it is a collapsible block above the content.
+6. After the sections: Relacionados, Usada por (backlinks) and Historial de cambios (collapsed).
 
 Density rules: one idea per paragraph, no paragraph over five lines, lists over prose for parameters, no more than
 three levels of heading, tables only for data that compares. Never use color alone to mark a state (icon + text).
@@ -96,9 +98,10 @@ three levels of heading, tables only for data that compares. Never use color alo
   (icon + text). On success the label changes to "Copiado", the icon to a check, and a `role="status"` region
   announces it. Resets after 1.5 s.
 - Body: `text-code`, `ink`, horizontal scroll (`overflow-x: auto`), never wrapped, `tabindex="0"` so keyboard users can
-  scroll it. Inline `code` (arrives with the Markdown renderer, M1) uses the same font on `surface-sunken`.
-- Syntax highlighting arrives in M1 with theme colors taken from tokens (no third-party theme that brings its own
-  palette). Until then the block is monochrome on purpose.
+  scroll it. Inline `code` in docs uses the same font on `surface-sunken` with a 1 px `border`.
+- Syntax highlighting (M1, build-time with shiki) uses theme colors taken from tokens: `--code-token-*` in
+  `src/styles/prose.css` map to roles (`accent`, `success`, `warning`, `info`, `ink-muted`, `ink-subtle`), and
+  `code-colors.test.ts` measures each at 4.5:1 on `surface-sunken`. No third-party theme palette.
 - The M4 "Ejecutar" button goes in the header next to Copiar; the output panel opens below the `pre`.
 
 ## Placeholders
