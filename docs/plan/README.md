@@ -42,6 +42,7 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M3 — Ask Ether (0.4.0)
 
+- [x] Búsqueda léxica sin IA: command palette Ctrl+K público (docs por título, resumen y tags, destinos, encabezados), publicado como 0.3.0. Detalle y extensión para IA en [`cmdk/README.md`](../cmdk/README.md). Verificado en navegador (escritorio y 375 px).
 - [ ] Índice de embeddings de todas las docs (WeKit `embed_text`), regenerado en build.
 - [ ] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto.
 - [ ] Respuesta redactada por LLM sobre los resultados (componente Ask Ether de WeKit), con citas a las páginas.

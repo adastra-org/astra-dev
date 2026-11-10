@@ -10,6 +10,7 @@ import { TocInline, TocSide } from '@/components/doc/Toc'
 import { docBySlug, docs, loadDocContent } from '@/lib/docs'
 import type { DocContent, DocMeta } from '@/lib/docs/types'
 import { resolveSlugs } from '@/lib/docs-query'
+import { usePublishHeadings } from '@/lib/palette/headings'
 import { useRevealHash } from '@/lib/reveal'
 import { useTitle } from '@/lib/title'
 
@@ -67,6 +68,7 @@ function DocView({ meta }: { meta: DocMeta }) {
 
   const content = state && 'content' in state ? state.content : null
   useRevealHash(content !== null)
+  usePublishHeadings(content ? content.toc : null)
 
   // Los enlaces del Markdown (`/docs/otro`) son `<a>` planos: se navegan sin recargar la página.
   const onClick = (e: MouseEvent) => {

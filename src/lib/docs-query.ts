@@ -50,3 +50,77 @@ export function resolveSlugs(
   const by = new Map(docs.map((d) => [d.slug, d]))
   return slugs.flatMap((s) => by.get(s) ?? [])
 }
+
+export interface MatchFields {
+  title: string
+  /** Etiquetas y sinónimos: pesan menos que el título y más que el cuerpo. */
+  keywords?: readonly string[]
+  /** Texto largo (resumen): último recurso. */
+  body?: string
+}
+
+/** Peso de cada nivel de coincidencia; el título más corto desempata dentro del nivel. */
+export const TIER = {
+  titlePrefix: 4000,
+  titleMatch: 3000,
+  keyword: 2000,
+  body: 1000,
+} as const
+
+/**
+ * Puntaje de una consulta contra los campos de un ítem; 0 si no coincide. Todas las palabras
+ * deben aparecer en algún campo. Orden: título que empieza con la consulta > título que la
+ * contiene (o contiene todas las palabras) > etiqueta > cuerpo. Sin tildes ni mayúsculas.
+ */
+export function scoreMatch(query: string, f: MatchFields): number {
+  const fq = fold(query).trim().replace(/\s+/g, ' ')
+  if (!fq) return 0
+  const words = fq.split(' ')
+  const title = fold(f.title)
+  const keywords = fold((f.keywords ?? []).join(' '))
+  const body = fold(f.body ?? '')
+  const inAny = (w: string) =>
+    title.includes(w) || keywords.includes(w) || body.includes(w)
+  if (!words.every(inAny)) return 0
+  const tier = title.startsWith(fq)
+    ? TIER.titlePrefix
+    : title.includes(fq) || words.every((w) => title.includes(w))
+      ? TIER.titleMatch
+      : words.every((w) => title.includes(w) || keywords.includes(w))
+        ? TIER.keyword
+        : TIER.body
+  return tier - Math.min(title.length, 999)
+}
+
+export interface RankedDoc {
+  doc: DocMeta
+  score: number
+  /** Tags (slugs) que coinciden con alguna palabra de la consulta, para mostrarlos como chips. */
+  matchedTags: string[]
+}
+
+/**
+ * Busca docs por título, tags y resumen, mejor coincidencia primero. Consulta vacía: todos, por
+ * título. Empates: orden alfabético.
+ */
+export function rankDocs(docs: readonly DocMeta[], query: string): RankedDoc[] {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  const ranked = docs.flatMap((doc): RankedDoc[] => {
+    const score = words.length
+      ? scoreMatch(query, {
+          title: doc.title,
+          keywords: [...doc.tags, ...doc.tags.map(tagLabel)],
+          body: doc.summary,
+        })
+      : 1
+    if (!score) return []
+    const matchedTags = doc.tags.filter((t) => {
+      const hay = fold(`${t} ${tagLabel(t)}`)
+      return words.some((w) => hay.includes(w))
+    })
+    return [{ doc, score, matchedTags }]
+  })
+  return ranked.sort(
+    (a, b) => b.score - a.score || collator.compare(a.doc.title, b.doc.title),
+  )
+}

@@ -25,8 +25,8 @@ Context: product UI, read-heavy tool for the Ad Astra dev team (not broadcast). 
   control/focus pair at 3:1, in both themes.
 - Components use **roles** through Tailwind (`bg-surface`, `bg-surface-raised`, `bg-surface-sunken`, `text-ink`,
   `text-ink-muted`, `text-ink-subtle`, `text-accent`, `border-border`, `border-border-strong`, `text-success`…), never
-  hex and never brand colors (`vibrant`, `pink`, `primary-dark`). The one exception is `bg-brand-dark/70` for the
-  scrim behind the mobile drawer. `public/favicon.svg` is an asset and carries hex values.
+  hex and never brand colors (`vibrant`, `pink`, `primary-dark`). The one exception is `bg-brand-dark/70` for any
+  scrim (behind the mobile drawer and behind the command palette). `public/favicon.svg` is an asset and carries hex values.
 - Opacity modifiers on role tokens are allowed only for scrims.
 
 ## Type
@@ -74,6 +74,19 @@ lg and up                         under lg (375 to 1023 px)
 - Touch targets are 44 px under `lg` and 32 to 40 px from `lg` up.
 - Motion: drawer, section open/close and chevron 180 ms (`--duration-panel`), card arrow. Nothing loops. `prefers-reduced-motion` removes the
   transitions.
+
+## Command palette
+
+`Ctrl+K` / `Cmd+K`, public, no AI. Behavior, shortcut rules and how to add a provider: `docs/cmdk/README.md`.
+
+- A native `<dialog>` (focus trap, inert page, Esc) with the combobox + listbox pattern. The panel is the only bordered
+  level (1 px `border`, `surface-raised`, `shadow-card`); nothing inside has a border. The selected option is a
+  `surface-overlay` fill with `ink` text and an `accent` icon, never a side stripe. Key caps and tag chips are fills.
+- Opens from the top bar button (search icon under `md`, field + key caps from `md`) and from the shortcut. Key caps are
+  hidden on touch (`pointer-fine`). Options, close button and trigger are 44 px under `lg`.
+- Esc closes the topmost layer only: with the palette over the mobile drawer, the first Esc closes the palette.
+- Motion: the panel and backdrop enter in `--duration-panel` with `--ease-out-brand`, only without `prefers-reduced-motion`.
+- Copy: empty state says what to try ("Prueba con otro término"), no exclamation marks.
 
 ## Docs reading layout
 

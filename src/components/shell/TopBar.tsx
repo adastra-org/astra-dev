@@ -1,14 +1,16 @@
 import { Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { navFor } from '@/config/nav'
+import { PaletteTrigger } from '@/components/palette/PaletteTrigger'
 import { LangSwitch } from './LangSwitch'
 
 interface Props {
   menuOpen: boolean
   onMenu: () => void
+  onSearch: () => void
 }
 
-export function TopBar({ menuOpen, onMenu }: Props) {
+export function TopBar({ menuOpen, onMenu, onSearch }: Props) {
   const { pathname } = useLocation()
   const section = navFor(pathname)
 
@@ -27,6 +29,7 @@ export function TopBar({ menuOpen, onMenu }: Props) {
       <p className="text-label text-ink-muted min-w-0 flex-1 truncate">
         {section?.label ?? 'Astra Dev'}
       </p>
+      <PaletteTrigger onOpen={onSearch} />
       <LangSwitch />
     </header>
   )
