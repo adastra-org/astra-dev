@@ -3,6 +3,7 @@
 @import './styles/fonts.css';
 @import './styles/theme.css';
 @import './styles/prose.css';
+@import './styles/palette.css';
 
 /* Base: tema Void (oscuro) por defecto. Nunca blanco ni negro puros (DS). */
 @layer base {
