@@ -1,0 +1,36 @@
+# Astra Dev
+
+Documentación, herramientas y sistemas para el desarrollo del servidor Ad Astra. Vive en `development.adastrarp.com`.
+
+Fuente de la idea: nota `astra_dev.md` (2026-11-09).
+
+## Índice
+
+- [plan/README.md](plan/README.md) — milestones M0–M5, estimaciones, decisiones abiertas.
+
+## Qué resuelve
+
+La documentación oficial de FiveM y sus natives:
+
+- No permite búsqueda en lenguaje natural ("la nativa para dibujar una UI").
+- Está solo en inglés.
+- Está sobrecargada de información; cuesta leerla sin entender todo el código, o con TDA.
+- No se puede adaptar al uso del equipo de Ad Astra.
+
+## Herramientas actuales
+
+| Herramienta                                               | Qué es                                      |
+| --------------------------------------------------------- | ------------------------------------------- |
+| [Astra](https://github.com/adastra-org/astra)             | Código fuente del servidor                  |
+| [AstraMapper](https://github.com/adastra-org/astramapper) | Port de CodeWalker a Tauri v2               |
+| [CodeWalker](https://github.com/adastra-org/CodeWalker)   | Fork con PRs propias                        |
+| [AstraParser](https://github.com/adastra-org/astraparser) | Parseo de vehículos; luego mapeos, texturas |
+| [Alchemist](https://docs.fivem.net/docs/alchemist/)       | Conversión GEN8 a GEN9 (Rockstar)           |
+
+## Prioridades
+
+1. MyChecklist + GitHub Projects para organización (como en WePanel).
+2. Búsqueda semántica con Ask Ether (componente de WeKit).
+3. i18n EN / ES.
+4. Docs propias en Markdown: sandbox de código, estilo del DS de Astra, historial de cambios, referencias cruzadas.
+5. Visualización de la evolución del proyecto (issues, commits, complejidad, burndown).
