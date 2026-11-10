@@ -6,7 +6,7 @@ import { createYoga } from 'graphql-yoga'
 import type { AppDeps } from './context.ts'
 import { AppError } from './errors.ts'
 import type { Hit } from './index/search.ts'
-import type { Viewer } from './viewer.ts'
+import type { Entitlement, Viewer } from './viewer.ts'
 
 export interface GqlContext {
   request: Request
@@ -32,12 +32,25 @@ const asGraphQLError = (e: unknown): GraphQLError => {
 export function createSchema(deps: AppDeps) {
   const builder = new SchemaBuilder<{ Context: GqlContext }>({})
 
+  const EntitlementRef = builder
+    .objectRef<Entitlement>('Entitlement')
+    .implement({
+      fields: (t) => ({
+        kind: t.exposeString('kind'),
+        validUntil: t.string({ nullable: true, resolve: (e) => e.validUntil }),
+      }),
+    })
+
   const ViewerRef = builder.objectRef<Viewer>('Viewer').implement({
     fields: (t) => ({
       id: t.string({ nullable: true, resolve: (v) => v.id }),
       handle: t.string({ nullable: true, resolve: (v) => v.handle }),
       role: t.string({ resolve: (v) => v.role }),
-      entitlements: t.stringList({ resolve: (v) => v.entitlements }),
+      emailVerified: t.boolean({ resolve: (v) => v.emailVerified }),
+      entitlements: t.field({
+        type: [EntitlementRef],
+        resolve: (v) => v.entitlements,
+      }),
     }),
   })
 

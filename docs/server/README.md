@@ -44,12 +44,12 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 
 ## Endpoints
 
-| Ruta       | Método | Acceso                       | Qué                                                                                                                                      |
-| ---------- | ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                            |
-| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                     |
-| `/graphql` | POST   | público                      | `viewer { id handle role entitlements }`, `searchDocs(q, limit) { mode degraded hits { slug title heading anchor path excerpt score } }` |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?}`. Respuesta SSE                                                                                             |
+| Ruta       | Método | Acceso                       | Qué                                                                                                                                                                        |
+| ---------- | ------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                              |
+| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                       |
+| `/graphql` | POST   | público                      | `viewer { id handle role emailVerified entitlements { kind validUntil } }`, `searchDocs(q, limit) { mode degraded hits { slug title heading anchor path excerpt score } }` |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?}`. Respuesta SSE                                                                                                                               |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
@@ -84,12 +84,28 @@ La respuesta cita con `[n]`; `n` indexa `sources`. `path` es el enlace al sitio 
 
 ## Permisos
 
-`Viewer = { id, handle, role: 'public' | 'subscriber' | 'staff', entitlements }`, resuelto por el puerto `ViewerPort` (`server/src/viewer.ts`):
+`Viewer = { id, handle, role: 'public' | 'subscriber' | 'staff', emailVerified, entitlements: [{ kind, validUntil }] }`, resuelto por el puerto `ViewerPort` (`server/src/viewer.ts`). El contrato de cuentas está en `docs/accounts/README.md` de `adastra-site` (PR #21):
 
-- **`HttpViewerPort`** (producción): reenvía solo la cabecera `Cookie` a `GET {ACCOUNTS_BASE_URL}{ACCOUNTS_VIEWER_PATH}` (por defecto `https://adastrarp.com/api/auth/viewer`). `401/403/404` = anónimo. Error de red o 5xx = `viewer_unavailable`. Caché en memoria de 30 s por cookie (una sesión revocada puede seguir 30 s). Rol: `staff|admin|owner` → `staff`; `subscriber` (o entitlement `subscriber`) → `subscriber`; cualquier otro valor → `public`.
+- **`HttpViewerPort`** (producción): reenvía solo la cabecera `Cookie` a `GET {ACCOUNTS_BASE_URL}{ACCOUNTS_VIEWER_PATH}` (por defecto `https://adastrarp.com/api/auth/viewer`). `401/403/404` = anónimo. Error de red o 5xx = `viewer_unavailable`. Caché en memoria de 5 s por cookie (cuentas pide pocos segundos como máximo: una sesión o entitlement revocado puede seguir 5 s).
 - **`DevStubViewerPort`**: `ASTRA_DEV_VIEWER=public|subscriber|staff`. Ignorado en producción.
 
-> **Supuesto a confirmar con `adastra-accounts`:** ese endpoint todavía no existe. El contrato asumido es `{ id, handle, role, entitlements }` y los valores de `role` de arriba. Si difieren, solo cambia `parseViewer`.
+Respuesta real de cuentas y cómo se mapea (`parseViewer`, falla cerrado):
+
+```
+200 { "id": "…", "handle": "ana", "role": "member", "emailVerified": true,
+      "entitlements": [ { "kind": "tebex-subscriber", "validUntil": "2026-12-10T00:00:00.000Z" } ] }
+401 { "error": "…" }      sin cookie, sesión inválida o vencida, cuenta suspendida
+```
+
+| Condición                                                                                                                                                              | `role` del Viewer |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `role === 'staff'`                                                                                                                                                     | `staff`           |
+| entitlement `kind === 'tebex-subscriber'` con `validUntil` `null` o futura                                                                                             | `subscriber`      |
+| todo lo demás: `member` sin entitlement, entitlement vencido o con fecha ilegible, otros `kind`, otros valores de `role`, entitlements como texto, payload mal formado | `public`          |
+
+Cuentas solo lista entitlements activos; aun así se descartan los vencidos. `emailVerified` se conserva pero el acceso al chat no depende de él.
+
+> El contrato sale del doc de cuentas (PR #21 de `adastra-site`, aún abierto). Si cambia, solo cambia `parseViewer`.
 
 Hoy `subscriber` y `staff` pueden chatear. `staff` read-write queda para cuando haya herramientas de escritura (no las hay: el chat es de solo lectura).
 
@@ -211,19 +227,19 @@ bun run check                                              # typecheck + tests (
 
 Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. El server no habla con Vite: la UI en dev debe apuntar a `http://127.0.0.1:4100` (el origen `localhost:5173` ya está permitido en dev).
 
-## Pruebas (`bun test`, 80)
+## Pruebas (`bun test`, 87)
 
 `chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
 
 ## Estado de verificación
 
-| Qué                                                                                  | Estado                                                                                            |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Typecheck + 80 tests del server, `bun run check` de la raíz                          | Verificado                                                                                        |
-| Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL            | Verificado a mano                                                                                 |
-| Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401     | Verificado a mano                                                                                 |
-| Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable | Verificado                                                                                        |
-| DeepSeek real: respuesta con citas y rechazo fuera del tema                          | Verificado a mano contra la API (índice por palabras clave)                                       |
-| Índice semántico y ranking con el embedder real                                      | **No verificado**: el embedder solo existe en el VPS                                              |
-| Endpoint real de cuentas (`/api/auth/viewer`)                                        | **No verificado**: todavía no existe; solo el puerto y el stub                                    |
-| Unidad systemd, vhost `/api/`, script y workflow                                     | **No verificado**: sin aplicar en el VPS (el script pasa `bash -n`; el workflow parsea como YAML) |
+| Qué                                                                                  | Estado                                                                                                              |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Typecheck + 87 tests del server, `bun run check` de la raíz                          | Verificado                                                                                                          |
+| Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL            | Verificado a mano                                                                                                   |
+| Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401     | Verificado a mano                                                                                                   |
+| Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable | Verificado                                                                                                          |
+| DeepSeek real: respuesta con citas y rechazo fuera del tema                          | Verificado a mano contra la API (índice por palabras clave)                                                         |
+| Índice semántico y ranking con el embedder real                                      | **No verificado**: el embedder solo existe en el VPS                                                                |
+| Contrato de `/api/auth/viewer`                                                       | Tests con el payload real documentado por cuentas. **No verificado** contra el endpoint desplegado (PR #21 abierto) |
+| Unidad systemd, vhost `/api/`, script y workflow                                     | **No verificado**: sin aplicar en el VPS (el script pasa `bash -n`; el workflow parsea como YAML)                   |

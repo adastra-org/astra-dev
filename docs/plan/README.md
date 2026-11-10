@@ -53,7 +53,7 @@ Estado del server de Ask Ether (v0.4.0, [server/README](../server/README.md)). M
 - [~] Búsqueda en lenguaje natural: `searchDocs` (GraphQL) y recuperación del chat verificados con embedder simulado; falta el ranking con el embedder real.
 - [~] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y a mano contra DeepSeek; falta el panel en la UI.
 - [~] Rate limit y caché: rate limit por viewer e IP y presupuesto diario de tokens hechos (en memoria); **falta la caché**.
-- [ ] Permisos por `Viewer` con el endpoint real de cuentas (`GET /api/auth/viewer`): hoy puerto tipado + stub de dev.
+- [~] Permisos por `Viewer`: mapeo del payload real de cuentas (`staff` por `role`, `subscriber` por entitlement `tebex-subscriber` vigente) probado con fixtures; falta probarlo contra el endpoint desplegado.
 
 ## M4 — Sandbox de código (0.5.0)
 

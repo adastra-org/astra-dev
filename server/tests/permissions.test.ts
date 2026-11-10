@@ -11,23 +11,110 @@ import {
 } from '../src/viewer.ts'
 import { harness } from './helpers.ts'
 
-describe('parseViewer', () => {
-  test('maps accounts roles onto public | subscriber | staff', () => {
-    const v = (role: string, entitlements: string[] = []) =>
-      parseViewer({ id: 'u1', handle: 'ana', role, entitlements }).role
-    expect(v('staff')).toBe('staff')
-    expect(v('admin')).toBe('staff')
-    expect(v('subscriber')).toBe('subscriber')
-    expect(v('member', ['subscriber'])).toBe('subscriber')
-    expect(v('member')).toBe('public')
-    expect(v('SUPERUSER')).toBe('public') // unknown roles fail closed
+// Payload shape of GET /api/auth/viewer (adastra-site docs/accounts/README.md).
+const NOW = Date.parse('2026-11-10T12:00:00Z')
+const payload = (over: Record<string, unknown> = {}) => ({
+  id: 'u1',
+  handle: 'ana',
+  role: 'member',
+  emailVerified: true,
+  entitlements: [],
+  ...over,
+})
+const tebex = (validUntil: string | null) => ({
+  kind: 'tebex-subscriber',
+  validUntil,
+})
+
+describe('parseViewer (real accounts payload)', () => {
+  test('member without entitlements is public', () => {
+    expect(parseViewer(payload(), NOW)).toEqual({
+      id: 'u1',
+      handle: 'ana',
+      role: 'public',
+      emailVerified: true,
+      entitlements: [],
+    })
   })
 
-  test('garbage and anonymous payloads are the anonymous viewer', () => {
-    expect(parseViewer(null)).toEqual(ANONYMOUS)
-    expect(parseViewer('x')).toEqual(ANONYMOUS)
-    expect(parseViewer({ role: 'staff' })).toEqual(ANONYMOUS) // no id
-    expect(parseViewer({ id: 7, role: 'staff' })).toEqual(ANONYMOUS)
+  test('member with an active tebex-subscriber is subscriber (dated or open-ended)', () => {
+    const dated = parseViewer(
+      payload({ entitlements: [tebex('2026-12-10T00:00:00.000Z')] }),
+      NOW,
+    )
+    expect(dated.role).toBe('subscriber')
+    expect(dated.entitlements).toEqual([tebex('2026-12-10T00:00:00.000Z')])
+    expect(
+      parseViewer(payload({ entitlements: [tebex(null)] }), NOW).role,
+    ).toBe('subscriber')
+  })
+
+  test('an expired tebex-subscriber is ignored even if accounts listed it', () => {
+    const v = parseViewer(
+      payload({ entitlements: [tebex('2026-11-10T11:59:59Z')] }),
+      NOW,
+    )
+    expect(v.role).toBe('public')
+    expect(v.entitlements).toEqual([])
+    // Exactly now counts as expired.
+    expect(
+      parseViewer(
+        payload({ entitlements: [tebex('2026-11-10T12:00:00Z')] }),
+        NOW,
+      ).role,
+    ).toBe('public')
+  })
+
+  test('role staff is staff, with or without entitlements', () => {
+    expect(parseViewer(payload({ role: 'staff' }), NOW).role).toBe('staff')
+    expect(
+      parseViewer(payload({ role: 'staff', entitlements: [tebex(null)] }), NOW)
+        .role,
+    ).toBe('staff')
+  })
+
+  test('other entitlement kinds and other roles never grant access', () => {
+    expect(
+      parseViewer(
+        payload({ entitlements: [{ kind: 'beta', validUntil: null }] }),
+        NOW,
+      ).role,
+    ).toBe('public')
+    for (const role of ['admin', 'owner', 'subscriber', 'STAFF', '', null, 7])
+      expect(parseViewer(payload({ role }), NOW).role).toBe('public')
+  })
+
+  test('malformed payloads fail closed', () => {
+    for (const bad of [
+      null,
+      'x',
+      42,
+      [],
+      {},
+      { role: 'staff' },
+      { id: 7, role: 'staff' },
+    ])
+      expect(parseViewer(bad, NOW)).toEqual(ANONYMOUS)
+    // Legacy string entitlements and junk entries do not count.
+    for (const entitlements of [
+      ['subscriber'],
+      ['tebex-subscriber'],
+      'tebex-subscriber',
+      [null, 7, {}, { kind: 7 }, { kind: 'tebex-subscriber', validUntil: 12 }],
+      [{ kind: 'tebex-subscriber', validUntil: 'not a date' }],
+      { kind: 'tebex-subscriber', validUntil: null },
+    ])
+      expect(parseViewer(payload({ entitlements }), NOW).role).toBe('public')
+  })
+
+  test('emailVerified is true only for a literal true', () => {
+    expect(
+      parseViewer(payload({ emailVerified: true }), NOW).emailVerified,
+    ).toBe(true)
+    for (const emailVerified of ['true', 1, null, undefined])
+      expect(parseViewer(payload({ emailVerified }), NOW).emailVerified).toBe(
+        false,
+      )
   })
 })
 
@@ -43,16 +130,17 @@ describe('HttpViewerPort', () => {
       timeoutMs: 1000,
       fetch: (async (url: string, init: RequestInit) => {
         seen = { url, cookie: new Headers(init.headers).get('cookie') }
-        return Response.json({
-          id: 'u1',
-          handle: 'ana',
-          role: 'subscriber',
-          entitlements: ['tebex'],
-        })
+        return Response.json(
+          payload({ entitlements: [tebex('2099-01-01T00:00:00Z')] }),
+        )
       }) as unknown as typeof fetch,
     })
     const v = await port.resolve(req('sid=abc'))
-    expect(v).toMatchObject({ id: 'u1', role: 'subscriber' })
+    expect(v).toMatchObject({
+      id: 'u1',
+      role: 'subscriber',
+      emailVerified: true,
+    })
     expect(seen).toEqual({
       url: 'https://accounts.example/api/auth/viewer',
       cookie: 'sid=abc',
@@ -170,6 +258,7 @@ describe('chat permission gating', () => {
           id: 'u9',
           handle: 'x',
           role: 'public',
+          emailVerified: true,
           entitlements: [],
         }),
       },
@@ -220,7 +309,10 @@ describe('chat permission gating', () => {
 })
 
 describe('graphql is same-origin only', () => {
-  const q = { query: '{ viewer { id handle role entitlements } }' }
+  const q = {
+    query:
+      '{ viewer { id handle role emailVerified entitlements { kind validUntil } } }',
+  }
 
   test('a request from another site is refused and carries no CORS headers', async () => {
     const h = await harness({ role: 'subscriber' })
@@ -255,5 +347,45 @@ describe('graphql is same-origin only', () => {
     expect((await ok.json()).data.viewer.role).toBe('subscriber')
     const none = await h.call('/graphql', { json: q })
     expect(none.status).toBe(200)
+  })
+})
+
+describe('chat access with the real accounts payload end to end', () => {
+  const viaAccounts = (body: unknown, status = 200) =>
+    new HttpViewerPort({
+      baseUrl: 'https://accounts.example',
+      path: '/api/auth/viewer',
+      timeoutMs: 1000,
+      fetch: (async () =>
+        Response.json(body, { status })) as unknown as typeof fetch,
+    })
+  const chat = async (port: HttpViewerPort) => {
+    const h = await harness({ viewers: port })
+    const r = await h.call('/chat', {
+      json: { question: 'como hago un deploy' },
+      headers: { cookie: 'sid=abc' },
+    })
+    await r.text()
+    return r.status
+  }
+
+  test('member + active tebex-subscriber chats; plain member gets 403; expired gets 403; staff chats', async () => {
+    expect(
+      await chat(
+        viaAccounts(payload({ entitlements: [tebex('2099-01-01T00:00:00Z')] })),
+      ),
+    ).toBe(200)
+    expect(await chat(viaAccounts(payload()))).toBe(403)
+    expect(
+      await chat(
+        viaAccounts(payload({ entitlements: [tebex('2020-01-01T00:00:00Z')] })),
+      ),
+    ).toBe(403)
+    expect(await chat(viaAccounts(payload({ role: 'staff' })))).toBe(200)
+  })
+
+  test('401 from accounts is 401 here; a malformed payload is 401, not access', async () => {
+    expect(await chat(viaAccounts({ error: 'no session' }, 401))).toBe(401)
+    expect(await chat(viaAccounts({ nope: true }))).toBe(401)
   })
 })

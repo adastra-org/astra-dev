@@ -1,6 +1,7 @@
 // Viewer port: who is asking. Accounts is a shared system living in the adastra-site server
 // (session cookie on `.adastrarp.com`); this service only asks it `GET /api/auth/viewer` with the
-// incoming cookie. Until that endpoint exists, `DevStubViewerPort` stands in (dev only).
+// incoming cookie (contract: adastra-site docs/accounts/README.md). `DevStubViewerPort` stands in
+// for it in dev only.
 import type { Config, Role } from './config.ts'
 import { AppError } from './errors.ts'
 
@@ -10,14 +11,28 @@ export interface Viewer {
   /** `null` for an anonymous visitor. */
   id: string | null
   handle: string | null
+  /** Our permission level, derived from the accounts payload (never taken from it verbatim). */
   role: Role
-  entitlements: string[]
+  /** Accounts says the email is verified. Informational: chat access does not depend on it. */
+  emailVerified: boolean
+  /** Active entitlements as accounts reports them, expired ones dropped. */
+  entitlements: Entitlement[]
 }
+
+export interface Entitlement {
+  kind: string
+  /** ISO date the entitlement ends, `null` when it does not expire. */
+  validUntil: string | null
+}
+
+/** Accounts entitlement that makes someone a subscriber (Tebex). */
+export const SUBSCRIBER_KIND = 'tebex-subscriber'
 
 export const ANONYMOUS: Viewer = {
   id: null,
   handle: null,
   role: 'public',
+  emailVerified: false,
   entitlements: [],
 }
 
@@ -26,28 +41,48 @@ export interface ViewerPort {
   resolve(request: Request): Promise<Viewer>
 }
 
-const STAFF_ROLES = new Set(['staff', 'admin', 'owner'])
+/**
+ * An entitlement entry from accounts, or `null` when it is malformed or already expired.
+ * `validUntil: null` means it does not expire. An unparseable date counts as expired (fail closed).
+ */
+function parseEntitlement(raw: unknown, now: number): Entitlement | null {
+  if (raw === null || typeof raw !== 'object') return null
+  const e = raw as Record<string, unknown>
+  if (typeof e.kind !== 'string' || !e.kind) return null
+  const until = e.validUntil
+  if (until === null || until === undefined)
+    return { kind: e.kind.slice(0, 64), validUntil: null }
+  if (typeof until !== 'string') return null
+  const t = Date.parse(until)
+  if (!Number.isFinite(t) || t <= now) return null
+  return { kind: e.kind.slice(0, 64), validUntil: until }
+}
 
-/** Map the accounts payload onto our three roles. Anything unknown is `public` (fail closed). */
-export function parseViewer(payload: unknown): Viewer {
+/**
+ * Map the accounts payload onto our three roles. Anything unknown is `public` (fail closed):
+ * `role === 'staff'` is staff; an active `tebex-subscriber` entitlement is subscriber.
+ * Accounts only lists active entitlements, but we check `validUntil` too.
+ */
+export function parseViewer(payload: unknown, now = Date.now()): Viewer {
   if (payload === null || typeof payload !== 'object') return ANONYMOUS
   const p = payload as Record<string, unknown>
   const id = typeof p.id === 'string' && p.id ? p.id : null
   if (!id) return ANONYMOUS
   const entitlements = Array.isArray(p.entitlements)
     ? p.entitlements
-        .filter((e): e is string => typeof e === 'string')
         .slice(0, 50)
+        .map((e) => parseEntitlement(e, now))
+        .filter((e): e is Entitlement => e !== null)
     : []
-  const role = typeof p.role === 'string' ? p.role.toLowerCase() : ''
-  let mapped: Role = 'public'
-  if (STAFF_ROLES.has(role)) mapped = 'staff'
-  else if (role === 'subscriber' || entitlements.includes('subscriber'))
-    mapped = 'subscriber'
+  let role: Role = 'public'
+  if (p.role === 'staff') role = 'staff'
+  else if (entitlements.some((e) => e.kind === SUBSCRIBER_KIND))
+    role = 'subscriber'
   return {
     id,
     handle: typeof p.handle === 'string' ? p.handle.slice(0, 64) : null,
-    role: mapped,
+    role,
+    emailVerified: p.emailVerified === true,
     entitlements,
   }
 }
@@ -61,7 +96,7 @@ export interface HttpViewerOptions {
   baseUrl: string
   path: string
   timeoutMs: number
-  /** Short cache so a burst of requests does not hit accounts each time. A revoked session lingers this long. */
+  /** Short cache (accounts advises a few seconds at most). A revoked session or entitlement lingers this long. */
   cacheMs?: number
   fetch?: typeof fetch
   now?: () => number
@@ -74,7 +109,7 @@ export class HttpViewerPort implements ViewerPort {
   readonly #cache = new Map<string, { viewer: Viewer; until: number }>()
 
   constructor(opts: HttpViewerOptions) {
-    this.#opts = { cacheMs: 30_000, ...opts }
+    this.#opts = { cacheMs: 5_000, ...opts }
     this.#fetch = opts.fetch ?? fetch
     this.#now = opts.now ?? Date.now
   }
@@ -112,7 +147,7 @@ export class HttpViewerPort implements ViewerPort {
       )
     } else {
       try {
-        viewer = parseViewer(await res.json())
+        viewer = parseViewer(await res.json(), now)
       } catch {
         throw new AppError(
           'viewer_unavailable',
@@ -138,7 +173,11 @@ export class DevStubViewerPort implements ViewerPort {
             id: `dev-${role}`,
             handle: `dev-${role}`,
             role,
-            entitlements: role === 'subscriber' ? ['subscriber'] : [],
+            emailVerified: true,
+            entitlements:
+              role === 'subscriber'
+                ? [{ kind: SUBSCRIBER_KIND, validUntil: null }]
+                : [],
           }
   }
   resolve(): Promise<Viewer> {
