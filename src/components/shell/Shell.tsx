@@ -1,0 +1,47 @@
+import { useEffect, useState } from 'react'
+import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import { Sidebar } from './Sidebar'
+import { TopBar } from './TopBar'
+
+/** Sidebar + barra superior + contenido. Bajo `lg` el sidebar es un cajón. */
+export function Shell() {
+  // El cajón guarda la ruta en la que se abrió: al navegar deja de coincidir y se cierra.
+  const [openAt, setOpenAt] = useState<string | null>(null)
+  const { pathname } = useLocation()
+  const open = openAt === pathname
+  const setOpen = (v: boolean) => setOpenAt(v ? pathname : null)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenAt(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  return (
+    <div className="min-h-svh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <a
+        href="#main"
+        className="text-label bg-accent-fill text-on-accent sr-only rounded-md px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
+      >
+        Saltar al contenido
+      </a>
+      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <div className="flex min-w-0 flex-col">
+        <TopBar menuOpen={open} onMenu={() => setOpen(!open)} />
+        <main
+          id="main"
+          tabIndex={-1}
+          className="flex-1 px-4 py-6 outline-none md:px-8 md:py-10"
+        >
+          <div className="mx-auto w-full max-w-5xl">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+      <ScrollRestoration />
+    </div>
+  )
+}

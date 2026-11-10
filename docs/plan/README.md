@@ -1,0 +1,77 @@
+# Plan — Astra Dev
+
+Estimaciones en días de trabajo efectivo de una persona con asistencia de Claude. Cada milestone cierra con `bun run check` verde, PR y deploy verificado.
+
+## Orden
+
+Se prioriza lo que entrega valor visible rápido: sitio publicado, luego contenido, luego búsqueda. El sandbox va tarde porque es lo más riesgoso.
+
+| #   | Milestone                       | Versión | Estimación | Depende de |
+| --- | ------------------------------- | ------- | ---------- | ---------- |
+| M0  | Base y deploy                   | 0.1.0   | 1 día      | —          |
+| M1  | Motor de docs                   | 0.2.0   | 3-4 días   | M0         |
+| M2  | Contenido y traducción          | 0.3.0   | 2-3 días   | M1         |
+| M3  | Ask Ether (búsqueda semántica)  | 0.4.0   | 3 días     | M2         |
+| M4  | Sandbox de código               | 0.5.0   | 5-7 días   | M1         |
+| M5  | Proyecto: checklist y evolución | 0.6.0   | 3 días     | M0         |
+
+M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
+
+## M0 — Base y deploy (0.1.0)
+
+- [ ] Tokens del DS de Ad Astra (`design/tokens.json` copiado del DS, nunca editado acá) y `DESIGN.md` que extiende el de `adastra-site`.
+- [ ] Shell: layout con sidebar, router, tema oscuro.
+- [ ] Repo `adastra-org/astra-dev` en GitHub, ramas `main` + `dev`, branch protection.
+- [ ] Nginx `development.adastrarp.com` + workflow `deploy.yml` en el runner `adastra-org`, blue/green, health check 200 real.
+- [ ] `ARCHITECTURE.md` del proyecto.
+
+## M1 — Motor de docs (0.2.0)
+
+- [ ] Docs en Markdown con frontmatter (título, tags, `related`, `since`).
+- [ ] Render con estilos del DS; bloques de código con resaltado.
+- [ ] Historial de cambios por documento (git log del archivo, mostrado en la página).
+- [ ] Referencias cruzadas: `related` en frontmatter + backlinks calculados en build ("usada con X", "uso específico para Y").
+- [ ] Vista TDA: resumen arriba, secciones colapsables, ejemplo mínimo primero.
+
+## M2 — Contenido y traducción (0.3.0)
+
+- [ ] Importar natives desde `citizenfx/natives` (JSON) a docs generadas en build.
+- [ ] Capa propia: notas de Astra sobre cada native (override sin tocar la fuente).
+- [ ] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`.
+- [ ] i18n EN/ES en la UI y selector de idioma.
+
+## M3 — Ask Ether (0.4.0)
+
+- [ ] Índice de embeddings de todas las docs (WeKit `embed_text`), regenerado en build.
+- [ ] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto.
+- [ ] Respuesta redactada por LLM sobre los resultados (componente Ask Ether de WeKit), con citas a las páginas.
+- [ ] Rate limit y caché de consultas.
+
+## M4 — Sandbox de código (0.5.0)
+
+Es código no confiable del usuario: revisión de seguridad antes de merge.
+
+- [ ] Decidir runtime (ver decisiones abiertas).
+- [ ] Ejecución aislada con límites de tiempo y memoria; sin red ni filesystem.
+- [ ] Salida: stdout, errores, tiempo de ejecución.
+- [ ] Lint y format del snippet (Lua).
+- [ ] Botón "Ejecutar" en bloques de código marcados en el Markdown.
+
+## M5 — Proyecto: checklist y evolución (0.6.0)
+
+- [ ] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel.
+- [ ] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server).
+- [ ] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal.
+- [ ] Más adelante: WeGraph para pesos y relaciones entre decisiones.
+
+## Decisiones abiertas
+
+1. **Sitio estático o con server.** Recomendado: estático (docs generadas en build) más un server mínimo solo para Ask Ether y sandbox. Simplifica M0-M2.
+2. **Runtime del sandbox.** Lua es el lenguaje de los resources de FiveM. Opciones: Lua compilado a WASM en el navegador (aísla del server, sin costo de infra) o contenedor Podman rootless con límites (más fiel, más superficie de ataque). Recomendado: WASM primero.
+3. **Dónde vive el contenido.** Recomendado: en este repo (`content/`), así el historial es el de git.
+4. **Acceso.** Público o solo staff. Afecta rate limit de Ask Ether.
+
+## Fuera de alcance por ahora
+
+- Apolo y WeGraph para hábitos del personal: otro producto.
+- Ether dentro del servidor de juego.
