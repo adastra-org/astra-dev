@@ -42,12 +42,17 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M3 — Ask Ether (0.4.0)
 
-Mitad servidor hecha en v0.3.0 ([server/README](../server/README.md)); falta la UI (paleta Ctrl+K y panel del chat) y verificar contra el embedder real y las cuentas reales.
+- [ ] Índice de embeddings de todas las docs (WeKit `embed_text`), regenerado en build.
+- [ ] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto.
+- [ ] Respuesta redactada por LLM sobre los resultados (componente Ask Ether de WeKit), con citas a las páginas.
+- [ ] Rate limit y caché de consultas.
 
-- [~] Índice de embeddings de todas las docs (`@wefaber/embed`), regenerado en build. `bun run index` y degradado a palabras clave verificados; el índice semántico real **no** (el embedder solo existe en el VPS). `deploy.yml` lo regenera, sin aplicar.
-- [~] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto. Server (`searchDocs` en GraphQL y recuperación del chat) verificado con embedder simulado; falta la UI y el ranking con el embedder real.
-- [~] Respuesta redactada por LLM sobre los resultados, con citas a las páginas. `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y a mano contra DeepSeek; falta el panel en la UI.
-- [~] Rate limit y caché de consultas. Rate limit por viewer e IP y presupuesto diario de tokens hechos (en memoria); **falta la caché**.
+Estado del server de Ask Ether (v0.4.0, [server/README](../server/README.md)). Mitad servidor hecha; falta la UI del chat y verificar contra el embedder real y las cuentas reales. Se ticka el ítem de arriba cuando esté completo (servidor + UI):
+
+- [~] Índice de embeddings: `bun run index` y degradado a palabras clave verificados; el índice semántico real **no** (el embedder solo existe en el VPS). `deploy.yml` lo regenera, sin aplicar.
+- [~] Búsqueda en lenguaje natural: `searchDocs` (GraphQL) y recuperación del chat verificados con embedder simulado; falta el ranking con el embedder real.
+- [~] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y a mano contra DeepSeek; falta el panel en la UI.
+- [~] Rate limit y caché: rate limit por viewer e IP y presupuesto diario de tokens hechos (en memoria); **falta la caché**.
 - [ ] Permisos por `Viewer` con el endpoint real de cuentas (`GET /api/auth/viewer`): hoy puerto tipado + stub de dev.
 
 ## M4 — Sandbox de código (0.5.0)

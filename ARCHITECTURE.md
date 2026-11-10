@@ -12,7 +12,7 @@ Open decision 1 of the plan, resolved as recommended:
 
 - **Now (M0-M2, M4 client side):** a static site. Docs are Markdown in `content/` (this repo, so the history is git's),
   rendered to the SPA at build time. Nginx serves `dist/`. No process to run, nothing to keep alive.
-- **M3 Ask Ether (v0.3.0, `server/`):** a Bun server (Elysia shell, Yoga + Pothos at `/graphql`, SSE for the streamed
+- **M3 Ask Ether (v0.4.0, `server/`):** a Bun server (Elysia shell, Yoga + Pothos at `/graphql`, SSE for the streamed
   chat answer, `/health` and `/ready`) behind `/api/`, loopback only, as a systemd user template unit
   `astra-dev@.service`. It is a retrieval-augmented completion with **no tools** (the public chat is never connected to
   Ether/Hermes). Design, security model and env vars: [docs/server/README.md](docs/server/README.md). Deploy pieces exist

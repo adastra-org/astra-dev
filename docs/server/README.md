@@ -1,4 +1,4 @@
-# Server de Ask Ether (M3, v0.3.0)
+# Server de Ask Ether (M3, v0.4.0)
 
 Mitad servidor del chat de solo lectura sobre la documentación. Vive en [`server/`](../../server/) como paquete Bun aparte (su propio `package.json` y `bun.lock`). La UI (paleta Ctrl+K, panel del chat) es otra tarea y consume los endpoints de abajo.
 
