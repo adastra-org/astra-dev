@@ -23,5 +23,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # The server is its own Bun package (own lockfile); `bun run check` also checks it.
+      - run: bun install --frozen-lockfile
+        working-directory: server
+
       # typecheck + lint + format:check + test (same as local `bun run check`)
       - run: bun run check

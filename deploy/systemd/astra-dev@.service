@@ -1,0 +1,34 @@
+# Astra Dev API server (Bun). One instance per blue/green slot: astra-dev@blue, astra-dev@green.
+# USER unit of `hermes` (no sudo needed to restart it from the deploy workflow).
+#
+# Install ONCE by hand (docs/server/README.md, "Deploy"):
+#   install -Dm644 deploy/systemd/astra-dev@.service ~/.config/systemd/user/astra-dev@.service
+#   systemctl --user daemon-reload
+#   loginctl enable-linger hermes          # keep user units running without a login session
+#   systemctl --user enable astra-dev@blue astra-dev@green
+# The workflow only warns (::warning::) when the installed file differs from this one.
+#
+# Ports are derived from the slot in server/src/config.ts: blue 4101, green 4102 (loopback only).
+# Secrets live in ~/deploy/env/astra-dev.env (mode 600, outside the repo), never in this file.
+
+[Unit]
+Description=Astra Dev API server (%i)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/deploy/astra-dev-server/%i
+EnvironmentFile=%h/deploy/env/astra-dev.env
+Environment=NODE_ENV=production
+Environment=ASTRA_SLOT=%i
+ExecStart=/opt/bun/bun src/main.ts
+Restart=on-failure
+RestartSec=2
+
+# The server only needs loopback (embedder), the LLM API and the accounts service. No tools, no shell.
+NoNewPrivileges=yes
+MemoryMax=512M
+TasksMax=128
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,27 @@
+{
+  "name": "astra-dev-server",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "index": "bun scripts/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run typecheck && bun run test"
+  },
+  "dependencies": {
+    "@pothos/core": "^4.17.0",
+    "@wefaber/embed": "^0.1.1",
+    "elysia": "^1.4.30",
+    "graphql": "^16.14.0",
+    "graphql-yoga": "^5.24.6",
+    "marked": "^18.2.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "typescript": "~7.0.2"
+  }
+}
