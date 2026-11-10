@@ -38,6 +38,7 @@ jobs:
           set -eu
           export PATH="/opt/bun:$PATH"
           bun install --frozen-lockfile
+          (cd server && bun install --frozen-lockfile)
           bun run check
           bun run build
           test -f dist/index.html
