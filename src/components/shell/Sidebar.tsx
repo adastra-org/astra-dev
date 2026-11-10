@@ -2,6 +2,7 @@ import { BookOpen, House, Milestone, Orbit, Wrench, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { NAV, type NavIcon } from '@/config/nav'
+import { docs } from '@/lib/docs'
 import pkg from '../../../package.json'
 
 const ICONS: Record<NavIcon, LucideIcon> = {
@@ -10,6 +11,10 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   tools: Wrench,
   roadmap: Milestone,
 }
+
+const sortedDocs = [...docs].sort((a, b) =>
+  a.title.localeCompare(b.title, 'es'),
+)
 
 interface Props {
   open: boolean
@@ -32,7 +37,7 @@ export function Sidebar({ open, onClose }: Props) {
         aria-label="Navegación principal"
         className={[
           'bg-surface-sunken border-border fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r',
-          'transition-[transform,visibility] duration-200 ease-out motion-reduce:transition-none',
+          'transition-[transform,visibility] duration-(--duration-panel) ease-out motion-reduce:transition-none',
           'lg:sticky lg:top-0 lg:h-svh lg:translate-x-0',
           open ? 'translate-x-0' : 'invisible -translate-x-full lg:visible',
         ].join(' ')}
@@ -67,23 +72,55 @@ export function Sidebar({ open, onClose }: Props) {
                     onClick={onClose}
                     className={({ isActive }) =>
                       [
-                        'text-label flex min-h-11 items-center gap-3 rounded-md border-l-2 px-3 transition-colors lg:min-h-10',
+                        'text-label flex min-h-11 items-center gap-3 rounded-md px-3 transition-colors duration-(--duration-fast) lg:min-h-10',
                         isActive
-                          ? 'bg-surface-raised text-ink border-accent'
-                          : 'text-ink-muted hover:bg-surface-raised hover:text-ink border-transparent',
+                          ? 'bg-surface-raised text-ink'
+                          : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
                       ].join(' ')
                     }
                   >
-                    <Icon className="size-4 shrink-0" aria-hidden="true" />
-                    {item.label}
+                    {({ isActive }) => (
+                      <>
+                        <Icon
+                          className={`size-4 shrink-0 ${isActive ? 'text-accent' : ''}`}
+                          aria-hidden="true"
+                        />
+                        {item.label}
+                      </>
+                    )}
                   </NavLink>
+                  {item.icon === 'docs' && (
+                    <ul
+                      aria-label="Documentos"
+                      className="mt-1 mb-2 ml-4 flex flex-col gap-0.5"
+                    >
+                      {sortedDocs.map((d) => (
+                        <li key={d.slug}>
+                          <NavLink
+                            to={`/docs/${d.slug}`}
+                            onClick={onClose}
+                            className={({ isActive }) =>
+                              [
+                                'text-body-sm flex min-h-11 items-center rounded-md px-3 transition-colors duration-(--duration-fast) lg:min-h-8',
+                                isActive
+                                  ? 'bg-surface-raised text-ink'
+                                  : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
+                              ].join(' ')
+                            }
+                          >
+                            {d.title}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               )
             })}
           </ul>
         </nav>
 
-        <div className="border-border text-caption text-ink-subtle border-t px-4 py-3">
+        <div className="text-caption text-ink-subtle px-4 py-4">
           <span className="text-data">v{pkg.version}</span>
           <span className="mx-2" aria-hidden="true">
             ·

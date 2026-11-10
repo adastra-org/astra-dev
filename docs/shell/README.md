@@ -7,8 +7,8 @@ Layout base de Astra Dev: sidebar, barra superior y área de contenido, con rout
 | Ruta          | Página               | Estado                         |
 | ------------- | -------------------- | ------------------------------ |
 | `/`           | `pages/Home.tsx`     | Portada                        |
-| `/docs`       | `pages/Docs.tsx`     | Placeholder                    |
-| `/docs/:slug` | `pages/Doc.tsx`      | Ejemplo del formato de lectura |
+| `/docs`       | `pages/Docs.tsx`     | Índice por tag con filtro (M1) |
+| `/docs/:slug` | `pages/Doc.tsx`      | Doc real o 404 de doc (M1)     |
 | `/tools`      | `pages/Tools.tsx`    | Placeholder                    |
 | `/roadmap`    | `pages/Roadmap.tsx`  | Placeholder                    |
 | `*`           | `pages/NotFound.tsx` | 404                            |
@@ -56,6 +56,5 @@ Placeholder. ES activo, EN deshabilitado. No guarda estado ni cambia textos; la 
 
 ## Pendiente
 
-- Resaltado de sintaxis y render de Markdown: M1.
-- Botón de volver arriba en páginas largas: M1, junto con el motor de docs.
+- Resaltado de sintaxis, render de Markdown y botón de volver arriba: hechos en M1, ver [`docs-engine/README.md`](../docs-engine/README.md).
 - Búsqueda en la barra superior: M3 (Ask Ether).

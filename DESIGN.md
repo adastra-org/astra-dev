@@ -19,6 +19,8 @@ Context: product UI, read-heavy tool for the Ad Astra dev team (not broadcast). 
 
 - `design/tokens.json` is a **copy** of the one in `adastra-site` (which copies the DS). Never edit it here: change it
   in the DS, copy it, then `bun run tokens` writes `src/styles/tokens.css`. Never edit `tokens.css` by hand.
+- Motion durations (`--duration-fast` 120 ms, `--duration-panel` 180 ms, `--duration-reflow` 240 ms) are the house scale and
+  live in `src/styles/theme.css`; they are not in the DS `tokens.json`.
 - `src/lib/tokens.ts` + `tokens.test.ts` are copied from adastra-site: every text pair is checked at 4.5:1 and every
   control/focus pair at 3:1, in both themes.
 - Components use **roles** through Tailwind (`bg-surface`, `bg-surface-raised`, `bg-surface-sunken`, `text-ink`,
@@ -56,7 +58,9 @@ lg and up                         under lg (375 to 1023 px)
 +---------+-----------------+     +-----------------------+
 ```
 
-- **Sidebar**: brand, four destinations (`config/nav.ts` is the only source), version at the bottom. Sticky full height
+- **Sidebar**: brand, four destinations (`config/nav.ts` is the only source), version at the bottom (separated by
+  space, no top border). The selected item (destination or nested doc) is marked with a `surface-raised` fill and `ink`
+  text; never a left bar or any single-side border. Sticky full height
   on `lg+`. Under `lg` it is a drawer over the content with a scrim; it never pushes the content. Esc, the scrim, the
   close button and any navigation close it. Closed, it is `visibility: hidden`, so it is out of the tab order.
 - **Top bar**: sticky, 56 px, solid `surface` (no glass). Left: menu button (under `lg`) and the current section.
@@ -68,7 +72,7 @@ lg and up                         under lg (375 to 1023 px)
 - **Skip link** to `#main` is the first tab stop. Route changes restore scroll (`ScrollRestoration`) and update
   `document.title` as `Page · Astra Dev`.
 - Touch targets are 44 px under `lg` and 32 to 40 px from `lg` up.
-- Motion: drawer 200 ms ease-out, chevron rotation, card arrow. Nothing loops. `prefers-reduced-motion` removes the
+- Motion: drawer, section open/close and chevron 180 ms (`--duration-panel`), card arrow. Nothing loops. `prefers-reduced-motion` removes the
   transitions.
 
 ## Docs reading layout
@@ -77,28 +81,58 @@ The reader is a developer in the middle of a task, possibly with ADHD. A doc pag
 answers "is this the one" and the rest can wait.
 
 1. **Eyebrow + title + lead.** The lead is one or two lines: what it is and when to use it (`PageHeader`).
-2. **Resumen box** (`Summary`): what it does, the parameters that matter, the most common mistake. Accent left border,
+2. **Resumen box** (`Summary`): what it does, the parameters that matter, the most common mistake. Full 1 px `border-accent` (never a side stripe),
    `surface-raised`. Always before any section.
 3. **Ejemplo mínimo** (`CodeBlock`): the smallest working snippet, before the explanation.
 4. **Detalle**, in collapsible sections (`Collapsible`, native `details`): Parámetros, Notas de Astra, Relacionados.
    Closed by default; the summary row is the whole target (44 px). Open only what the page needs at first glance.
-5. Long pages keep the sidebar sticky and get a back-to-top button (M1, with the real doc engine).
+5. Long pages keep the sidebar sticky and get a back-to-top button. From `xl` the table of contents is a sticky right
+   column; below it is a one-row strip of chips above the content that scrolls sideways. The table of contents has a
+   fixed structure: opening a section never adds rows or moves it, it only changes the fill and color of the active
+   item. It is never a dropdown that grows and pushes the content.
+6. After the sections: Relacionados, Usada por (backlinks) and Historial de cambios (collapsed).
 
 Density rules: one idea per paragraph, no paragraph over five lines, lists over prose for parameters, no more than
 three levels of heading, tables only for data that compares. Never use color alone to mark a state (icon + text).
+
+## Surfaces and text (explicit rules)
+
+The house rules (`~/.claude/standards/DESIGN.md`, "Surfaces and text") that this project already broke once, written
+here so they are checked in review. The Ad Astra DS README does not state them; the house file is the source.
+
+- **No single-side borders.** No left or top stripe on a selected item, callout, card or the version block. Selection =
+  fill + text color. A callout = full 1 px border in the role color (`Summary` uses `border-accent`). Separate groups
+  with space.
+- **One border per visible level.** A container inside a bordered container has no border: it is told apart by fill and
+  space. In practice `Collapsible`, `Summary` and tables are the frame; code blocks, inline `code`, `pre.code-plain`
+  and tag chips inside them lose their border (`prose.css`, "Un borde por nivel visible"). Tag chips are always a fill,
+  never a border. The `CodeBlock` header is not divided from the code by a border.
+- **Wrapping.** Prose moves a whole word to the next line: `hyphens: manual`, `overflow-wrap: normal`, no `break-all` or
+  `word-break`. Inline `code`, chips and slugs are `white-space: nowrap`. Only an inline token over 36 characters
+  without spaces (`code-long`, set by the build) may break, as a last resort. Paragraphs use `text-wrap: pretty`;
+  headings `balance`. `overflow-wrap: anywhere` is allowed only for user-supplied tokens (the 404 slug) and `code-long`.
+- **Justified prose.** `.doc-prose p` is `text-align: justify` from `md` (768 px) up, with the right `lang` (the `<article>`
+  carries the doc's `lang`). Under `md` the column is about 38 characters and justifying opens gaps, so it is
+  `start`. Not justified: tables, lists, code, headings, the Resumen box.
+- **Expandable sections animate.** `Collapsible` (`details`) animates height and opacity on open and on close with
+  `::details-content` and `interpolate-size`, using `--duration-panel` (180 ms) and `--ease-out-brand`; the chevron uses
+  the same duration. Browsers without `::details-content` open instantly. `prefers-reduced-motion` removes the animation.
+  A hash link that opens a section re-aligns the scroll once the animation ends (`reveal.ts`).
 
 ## Code blocks
 
 `CodeBlock`: a figure with a header row and a `pre`.
 
-- Surface `surface-sunken`, 1 px `border`, radius `rounded-md`, header separated by a 1 px `border`.
+- Surface `surface-sunken`, 1 px `border` (none when it sits inside a bordered container), radius `rounded-md`. The
+  header is not divided from the code by a border.
 - Header: language label in `text-data` uppercase `ink-subtle` on the left; **Copiar** button on the right
   (icon + text). On success the label changes to "Copiado", the icon to a check, and a `role="status"` region
   announces it. Resets after 1.5 s.
 - Body: `text-code`, `ink`, horizontal scroll (`overflow-x: auto`), never wrapped, `tabindex="0"` so keyboard users can
-  scroll it. Inline `code` (arrives with the Markdown renderer, M1) uses the same font on `surface-sunken`.
-- Syntax highlighting arrives in M1 with theme colors taken from tokens (no third-party theme that brings its own
-  palette). Until then the block is monochrome on purpose.
+  scroll it. Inline `code` in docs uses the same font on `surface-sunken` with a 1 px `border`.
+- Syntax highlighting (M1, build-time with shiki) uses theme colors taken from tokens: `--code-token-*` in
+  `src/styles/prose.css` map to roles (`accent`, `success`, `warning`, `info`, `ink-muted`, `ink-subtle`), and
+  `code-colors.test.ts` measures each at 4.5:1 on `surface-sunken`. No third-party theme palette.
 - The M4 "Ejecutar" button goes in the header next to Copiar; the output panel opens below the `pre`.
 
 ## Placeholders
@@ -115,6 +149,8 @@ event) stay in English; the surrounding sentence is Spanish. Strings are inline 
 
 - [ ] Works at 375 px: no horizontal scroll on the page (code blocks scroll inside themselves).
 - [ ] Drawer: Esc, scrim and navigation close it; closed it is not focusable.
+- [ ] No single-side borders and no box inside a box (see "Surfaces and text").
+- [ ] Nothing wraps mid-token; page has no horizontal scroll at 375 px even with every section open.
 - [ ] New doc-style page has lead, Resumen, Ejemplo mínimo first, and collapsible detail.
 - [ ] Tokens only. `bun run tokens` produces no diff.
 - [ ] `bun run check` is green.

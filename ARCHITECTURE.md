@@ -47,7 +47,8 @@ GitOps, blue/green, per the house delivery rules. Nothing is deployed by hand.
 
 Flow of a deploy:
 
-1. `bun install --frozen-lockfile`, `bun run check`, `bun run build` on the runner.
+1. Checkout with full history (`fetch-depth: 0`, so each doc can show its `git log`), `bun install --frozen-lockfile`,
+   `bun run check`, `bun run build` on the runner.
 2. `astra-dev.sh deploy <sha> dist <version>`: clear the idle slot, copy `dist/`, write `ready.json` with the sha.
 3. Probe the idle slot through the **real vhost** (TLS, server_name, root): the request goes to local nginx with
    `X-Deploy-Slot: next`, honoured only from loopback. `/ready.json` must contain the sha (the SPA fallback answers 200

@@ -6,7 +6,7 @@ export function Summary({ children }: { children: ReactNode }) {
   return (
     <section
       aria-labelledby="resumen"
-      className="bg-surface-raised border-border border-l-accent max-w-prose rounded-md border border-l-4 p-4"
+      className="doc-summary bg-surface-raised border-accent max-w-prose rounded-md border p-4"
     >
       <h2
         id="resumen"
@@ -15,7 +15,9 @@ export function Summary({ children }: { children: ReactNode }) {
         <Info className="text-accent size-4" aria-hidden="true" />
         Resumen
       </h2>
-      <div className="text-body text-ink-muted">{children}</div>
+      <div className="text-body text-ink-muted [text-wrap:pretty]">
+        {children}
+      </div>
     </section>
   )
 }
