@@ -27,11 +27,11 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M1 — Motor de docs (0.2.0)
 
-- [ ] Docs en Markdown con frontmatter (título, tags, `related`, `since`).
-- [ ] Render con estilos del DS; bloques de código con resaltado.
-- [ ] Historial de cambios por documento (git log del archivo, mostrado en la página).
-- [ ] Referencias cruzadas: `related` en frontmatter + backlinks calculados en build ("usada con X", "uso específico para Y").
-- [ ] Vista TDA: resumen arriba, secciones colapsables, ejemplo mínimo primero.
+- [x] Docs en Markdown con frontmatter (título, tags, `related`, `since`). Validado en build; detalle en [`docs-engine/README.md`](../docs-engine/README.md).
+- [x] Render con estilos del DS; bloques de código con resaltado (shiki en build, colores por roles) y botón Copiar.
+- [x] Historial de cambios por documento (git log del archivo, mostrado en la página). Verificado en dev; `deploy.yml` usa `fetch-depth: 0`, falta comprobarlo en el primer deploy real.
+- [x] Referencias cruzadas: `related` en frontmatter + backlinks calculados en build ("Relacionados" y "Usada por"). Los backlinks salen solo de `related`; "uso específico para Y" queda para M2.
+- [x] Vista TDA: resumen arriba, secciones colapsables, ejemplo mínimo primero.
 
 ## M2 — Contenido y traducción (0.3.0)
 

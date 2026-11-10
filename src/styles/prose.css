@@ -143,3 +143,9 @@
 .table-wrap tr:last-child td {
   border-bottom: 0;
 }
+
+/* En celdas el código en línea no se parte a mitad de palabra: la tabla ya se desplaza. */
+.table-wrap code {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
