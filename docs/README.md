@@ -10,6 +10,7 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 - [docs-engine/README.md](docs-engine/README.md) — motor de docs (M1): frontmatter, build, vista TDA, cómo agregar un doc. Contenido en [`content/`](../content/README.md).
 - [fixes-2026-11-10-v0.2.0/README.md](fixes-2026-11-10-v0.2.0/README.md) — correcciones de diseño al motor de docs (bordes, texto, animación, TOC), con su estado.
 - [shell/README.md](shell/README.md) — shell de la app (sidebar, barra superior, rutas, tokens). Reglas visuales en [`DESIGN.md`](../DESIGN.md).
+- [server/README.md](server/README.md) — server de Ask Ether (M3): chat de solo lectura con citas, índice semántico, permisos, límites, modelo de seguridad y diseño de deploy.
 - [deploy/README.md](deploy/README.md) — pasos manuales en el VPS (DNS, cert, nginx, env) y operación del deploy blue/green. Arquitectura: [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Qué resuelve
