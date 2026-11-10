@@ -62,6 +62,9 @@ interface Draft {
   subs: TocItem[]
 }
 
+/** Largo (en caracteres) desde el que un código en línea sin espacios puede partirse. */
+export const LONG_INLINE_CODE = 36
+
 export function renderMarkdown(
   file: string,
   body: string,
@@ -76,6 +79,10 @@ export function renderMarkdown(
       // Código anidado (en listas o citas): resaltado, sin cabecera ni botón.
       code: ({ text, lang }) =>
         `<pre class="code-plain" tabindex="0"><code>${highlight(text, langOf(lang))}</code></pre>\n`,
+      // Código en línea: no se parte (prose.css). Un token largo sin espacios puede no caber
+      // en el renglón de un móvil: ese sí puede partirse, como último recurso (`code-long`).
+      codespan: ({ text }) =>
+        `<code${text.length > LONG_INLINE_CODE && !/\s/.test(text) ? ' class="code-long"' : ''}>${escapeHtml(text)}</code>`,
       link({ href, title, tokens }) {
         links.push(href)
         const t = title ? ` title="${escapeHtml(title)}"` : ''

@@ -10,7 +10,12 @@ import {
   readSources,
   type SourceFile,
 } from './loader.ts'
-import { COLLAPSE_WORDS, renderMarkdown, slugifyHeading } from './markdown.ts'
+import {
+  COLLAPSE_WORDS,
+  LONG_INLINE_CODE,
+  renderMarkdown,
+  slugifyHeading,
+} from './markdown.ts'
 
 const doc = (path: string, fm: string, body = 'Texto.\n'): SourceFile => ({
   path,
@@ -332,6 +337,19 @@ describe('markdown', () => {
     const html = firstHtml(r.sections)
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;')
+  })
+
+  test('código en línea: escapado; solo el token largo sin espacios puede partirse', () => {
+    const long = 'x'.repeat(LONG_INLINE_CODE + 1)
+    const html = firstHtml(
+      render(`## S
+
+\`<b>\` y \`${long}\` y \`${long} ${long}\`
+`).sections,
+    )
+    expect(html).toContain('<code>&lt;b&gt;</code>')
+    expect(html).toContain(`<code class="code-long">${long}</code>`)
+    expect(html).toContain(`<code>${long} ${long}</code>`)
   })
 
   test('un # en el cuerpo es un error', () => {

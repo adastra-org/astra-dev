@@ -23,8 +23,8 @@ export function CodeBlock({ code, lang, html }: Props) {
   }
 
   return (
-    <figure className="bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
-      <figcaption className="border-border flex min-h-11 items-center justify-between border-b px-4">
+    <figure className="code-fig bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
+      <figcaption className="flex min-h-11 items-center justify-between px-4">
         <span className="text-data text-ink-subtle uppercase">
           {lang ?? 'texto'}
         </span>

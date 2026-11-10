@@ -24,6 +24,27 @@
 .doc-prose > * + * {
   margin-top: 1rem;
 }
+/* Prosa: pasa la palabra entera al renglón siguiente (sin partir ni guionar), párrafos
+   justificados con lang="es" (lo pone <article lang>) y sin viudas. Solo `p`: no listas, tablas,
+   código ni títulos. Bajo md la columna es angosta y el justificado abre huecos: alineado al inicio. */
+.doc-prose {
+  min-width: 0;
+  hyphens: manual;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.doc-prose p,
+.doc-prose li {
+  text-wrap: pretty;
+}
+@media (width >= 48rem) {
+  .doc-prose p {
+    text-align: justify;
+  }
+}
+.doc-prose :is(h2, h3, h4) {
+  text-wrap: balance;
+}
 .doc-prose strong {
   color: var(--ink);
   font-weight: 600;
@@ -81,7 +102,13 @@
   color: var(--ink);
   font: 400 0.875em/1 var(--font-mono);
   padding: 0.125em 0.375em;
+  /* Un token (slug, ruta, clave) nunca se parte: baja entero al renglón siguiente. */
+  white-space: nowrap;
+}
+/* Token muy largo sin espacios (JSON, ruta): puede partirse, solo como último recurso. */
+.doc-prose :not(pre) > code.code-long {
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 /* Código anidado (listas, citas): sin cabecera, mismo aspecto. */
@@ -93,6 +120,34 @@
   overflow-x: auto;
   padding: 1rem;
   @apply text-code;
+}
+
+/* Un borde por nivel visible: lo que vive dentro de un contenedor con borde (sección plegable,
+   resumen, tabla) se distingue por fondo y espacio, no por otro borde. */
+:is(details, .doc-summary, .table-wrap) :is(.code-fig, pre.code-plain),
+:is(details, .doc-summary, .table-wrap) :not(pre) > code {
+  border-color: transparent;
+}
+
+/* Secciones plegables: alto y opacidad animados al abrir y al cerrar. `interpolate-size` permite
+   animar hacia `auto`; sin `::details-content` (Firefox, Safari antiguos) abre al instante. */
+@media (prefers-reduced-motion: no-preference) {
+  details {
+    interpolate-size: allow-keywords;
+  }
+  details::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      block-size var(--duration-panel) var(--ease-out-brand),
+      opacity var(--duration-panel) var(--ease-out-brand),
+      content-visibility var(--duration-panel) allow-discrete;
+  }
+  details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
 }
 
 /* Ancla de encabezado: aparece al pasar el cursor o al enfocar; en táctil siempre visible. */
@@ -142,10 +197,4 @@
 }
 .table-wrap tr:last-child td {
   border-bottom: 0;
-}
-
-/* En celdas el código en línea no se parte a mitad de palabra: la tabla ya se desplaza. */
-.table-wrap code {
-  overflow-wrap: normal;
-  white-space: nowrap;
 }

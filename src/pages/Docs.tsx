@@ -75,7 +75,7 @@ export default function Docs() {
                       to={`/docs/${d.slug}`}
                       className="bg-surface-raised border-border hover:border-border-strong flex h-full flex-col gap-3 rounded-md border p-4"
                     >
-                      <span className="text-h4 [overflow-wrap:anywhere]">
+                      <span className="text-h4 [text-wrap:balance]">
                         {d.title}
                       </span>
                       <span className="text-body-sm text-ink-muted line-clamp-3">

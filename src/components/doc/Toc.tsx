@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { TocItem } from '@/lib/docs/types'
-import { Collapsible } from './Collapsible'
 
 /** Índice con el ítem visible resaltado (IntersectionObserver sobre los encabezados). */
 function useActiveId(items: TocItem[]): string | undefined {
@@ -29,20 +28,24 @@ function useActiveId(items: TocItem[]): string | undefined {
   return active
 }
 
+/**
+ * Lista del índice. Altura y estructura fijas: abrir una sección no agrega ni quita filas, solo
+ * cambia el fondo y el color del ítem activo. Sin borde lateral (DESIGN.md, "Bordes").
+ */
 function List({ items, active }: { items: TocItem[]; active?: string }) {
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col gap-0.5">
       {items.map((i) => (
         <li key={i.id}>
           <a
             href={`#${i.id}`}
             aria-current={active === i.id ? 'location' : undefined}
             className={[
-              'text-body-sm flex min-h-11 items-center border-l-2 py-1 xl:min-h-8',
-              i.depth === 3 ? 'pl-6' : 'pl-3',
+              'text-body-sm flex min-h-8 items-center rounded-md px-3 py-1 transition-colors duration-(--duration-fast)',
+              i.depth === 3 ? 'pl-6' : '',
               active === i.id
-                ? 'border-accent text-ink'
-                : 'border-border text-ink-muted hover:text-ink',
+                ? 'bg-surface-raised text-ink'
+                : 'text-ink-muted hover:text-ink',
             ].join(' ')}
           >
             {i.title}
@@ -53,17 +56,29 @@ function List({ items, active }: { items: TocItem[]; active?: string }) {
   )
 }
 
-/** Índice plegable para menos de `xl`: va arriba del contenido. Se omite con menos de tres entradas. */
+/**
+ * Índice para menos de `xl`: una fila de chips que se desplaza en horizontal, siempre de la
+ * misma altura. Antes era un desplegable que crecía y empujaba el contenido al abrirlo.
+ * Se omite con menos de tres entradas.
+ */
 export function TocInline({ items }: { items: TocItem[] }) {
   if (items.length < 3) return null
   return (
-    <div className="xl:hidden">
-      <Collapsible title="En esta página">
-        <nav aria-label="En esta página">
-          <List items={items} />
-        </nav>
-      </Collapsible>
-    </div>
+    <nav aria-label="En esta página" className="xl:hidden">
+      <p className="text-eyebrow mb-2">En esta página</p>
+      <ul className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:thin] md:mx-0 md:px-0">
+        {items.map((i) => (
+          <li key={i.id} className="shrink-0">
+            <a
+              href={`#${i.id}`}
+              className="text-body-sm text-ink-muted bg-surface-raised hover:text-ink flex min-h-11 items-center rounded-md px-3 whitespace-nowrap"
+            >
+              {i.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
   )
 }
 
@@ -74,9 +89,9 @@ export function TocSide({ items }: { items: TocItem[] }) {
   return (
     <nav
       aria-label="En esta página"
-      className="sticky top-20 hidden max-h-[calc(100svh-6rem)] overflow-y-auto xl:block"
+      className="sticky top-20 hidden max-h-[calc(100svh-6rem)] self-start overflow-y-auto xl:block"
     >
-      <p className="text-eyebrow mb-3">En esta página</p>
+      <p className="text-eyebrow mb-3 px-3">En esta página</p>
       <List items={items} active={active} />
     </nav>
   )

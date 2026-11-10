@@ -88,7 +88,11 @@ function DocView({ meta }: { meta: DocMeta }) {
 
   return (
     <div className="xl:grid xl:grid-cols-[minmax(0,44rem)_13rem] xl:gap-8">
-      <article className="flex min-w-0 flex-col gap-6" onClick={onClick}>
+      <article
+        lang={meta.lang}
+        className="flex min-w-0 flex-col gap-6"
+        onClick={onClick}
+      >
         <PageHeader eyebrow="Documento" title={meta.title}>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             <TagList tags={meta.tags} />

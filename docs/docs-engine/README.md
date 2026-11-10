@@ -71,8 +71,8 @@ Pensada para leer en medio de una tarea:
 
 1. **Resumen primero**: el `summary` del frontmatter va en un recuadro antes de cualquier sección.
 2. **Ejemplo mínimo primero**: la sección `## Ejemplo mínimo` se sube justo después de la introducción y va siempre abierta, esté donde esté en el archivo. Ver la convención abajo.
-3. **Secciones largas plegadas**: cada `##` de más de 120 palabras (`COLLAPSE_WORDS` en `markdown.ts`) llega cerrada y se abre con un clic; las cortas se muestran directas.
-4. **Índice**: columna fija a la derecha desde 1280 px; debajo, un bloque plegable "En esta página". Se omite con menos de tres entradas.
+3. **Secciones largas plegadas**: cada `##` de más de 120 palabras (`COLLAPSE_WORDS` en `markdown.ts`) llega cerrada y se abre con un clic, animando alto y opacidad (sin animación con `prefers-reduced-motion`); las cortas se muestran directas.
+4. **Índice**: columna fija a la derecha desde 1280 px; debajo, una fila de chips con desplazamiento horizontal, de altura fija. Nunca crece ni empuja el contenido al abrir una sección. Se omite con menos de tres entradas.
 5. **Al final**: Relacionados, Usada por e Historial de cambios (plegado).
 
 Un enlace con ancla (`/docs/x#seccion`) abre las secciones plegadas que contienen el encabezado.

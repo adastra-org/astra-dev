@@ -13,7 +13,7 @@ export function PageHeader({ eyebrow, title, lead, children }: Props) {
   return (
     <header className="mb-8 max-w-prose">
       <p className="text-eyebrow mb-3">{eyebrow}</p>
-      <h1 className="text-h1 mb-4 [overflow-wrap:anywhere]">{title}</h1>
+      <h1 className="text-h1 mb-4 [text-wrap:balance]">{title}</h1>
       {lead && <p className="text-body-lg text-ink-muted">{lead}</p>}
       {children}
     </header>

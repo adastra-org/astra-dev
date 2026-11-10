@@ -45,7 +45,7 @@ export function DocSection({ section }: { section: Section }) {
 
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
-      <h2 id={id} className="text-h3 scroll-mt-20 [overflow-wrap:anywhere]">
+      <h2 id={id} className="text-h3 scroll-mt-20 [text-wrap:balance]">
         {title}
         <a className="anchor" href={`#${id}`} aria-label={`Enlace a ${title}`}>
           #

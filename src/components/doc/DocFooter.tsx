@@ -90,7 +90,7 @@ export function DocHistory({
                   {e.sha}
                 </a>
               </span>
-              <span className="text-body-sm text-ink [overflow-wrap:anywhere]">
+              <span className="text-body-sm text-ink [text-wrap:pretty]">
                 {e.subject}
               </span>
             </li>

@@ -9,7 +9,12 @@ interface Props {
   headingId?: string
 }
 
-/** Sección colapsable nativa (`details`): teclado y lector de pantalla sin código extra. */
+/**
+ * Sección colapsable nativa (`details`): teclado y lector de pantalla sin código extra.
+ * Abre y cierra animando alto y opacidad con `::details-content` (prose.css); sin soporte
+ * o con `prefers-reduced-motion` cambia al instante. El cuerpo no lleva borde propio: el
+ * contenedor ya enmarca (DESIGN.md, "Bordes").
+ */
 export function Collapsible({
   title,
   children,
@@ -30,11 +35,11 @@ export function Collapsible({
           title
         )}
         <ChevronDown
-          className="text-ink-subtle size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+          className="text-ink-subtle size-4 shrink-0 transition-transform duration-(--duration-panel) ease-(--ease-out-brand) group-open:rotate-180 motion-reduce:transition-none"
           aria-hidden="true"
         />
       </summary>
-      <div className="border-border text-body text-ink-muted flex flex-col gap-4 border-t px-4 py-4">
+      <div className="text-body text-ink-muted flex flex-col gap-4 px-4 pt-1 pb-4">
         {children}
       </div>
     </details>
