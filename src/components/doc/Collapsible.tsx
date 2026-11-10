@@ -26,7 +26,7 @@ export function Collapsible({
       open={defaultOpen}
       className="group bg-surface-raised border-border max-w-prose rounded-md border"
     >
-      <summary className="text-label flex min-h-11 list-none items-center justify-between gap-3 px-4 [&::-webkit-details-marker]:hidden">
+      <summary className="text-label flex min-h-11 list-none select-none items-center justify-between gap-3 px-4 [&::-webkit-details-marker]:hidden">
         {headingId ? (
           <h2 id={headingId} className="text-h4 scroll-mt-20 py-2">
             {title}
