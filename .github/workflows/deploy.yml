@@ -1,0 +1,86 @@
+name: Deploy development.adastrarp.com
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits instead of cancelling a half-switched deploy.
+concurrency:
+  group: deploy-astra-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # adastra-org self-hosted runner (same labels as adastra-site).
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    environment: development
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Locate bun
+        run: |
+          set -eu
+          if ! command -v bun >/dev/null 2>&1; then
+            [ -x /opt/bun/bun ] || { echo "bun not found on the runner"; exit 1; }
+            echo /opt/bun >> "$GITHUB_PATH"
+          fi
+
+      - name: Install, check and build
+        run: |
+          set -eu
+          export PATH="/opt/bun:$PATH"
+          bun install --frozen-lockfile
+          bun run check
+          bun run build
+          test -f dist/index.html
+
+      - name: Check nginx vhost drift
+        # The vhost is installed by hand once (docs/deploy/README.md). This only warns
+        # when the live file differs from the repo copy.
+        run: |
+          live=/etc/nginx/sites-available/development.adastrarp.com
+          if ! diff -q deploy/nginx/development.adastrarp.com.conf "$live" >/dev/null 2>&1; then
+            echo "::warning::Live nginx vhost differs from deploy/nginx/development.adastrarp.com.conf (or is missing)"
+          fi
+
+      - name: Deploy to idle slot, health check, switch
+        # deploy/astra-dev.sh: copy dist to the idle slot, probe it through the real
+        # vhost (sha in /ready.json), switch the `current` symlink, reload nginx, probe
+        # again, roll back automatically if the post-switch probe fails.
+        run: |
+          set -eu
+          export PATH="/opt/bun:$PATH"
+          version=$(bun -e "console.log(require('./package.json').version)")
+          install -m 755 deploy/astra-dev.sh /home/hermes/deploy/astra-dev.sh
+          /home/hermes/deploy/astra-dev.sh deploy "$GITHUB_SHA" "$PWD/dist" "$version"
+
+      - name: Verify public domain
+        id: verify
+        # Real domain, real DNS, whatever sits in front of nginx. /ready.json must carry
+        # this commit's sha (the SPA fallback would answer 200 for anything).
+        run: |
+          set -eu
+          for _ in $(seq 1 15); do
+            body=$(curl -fsS --max-time 10 https://development.adastrarp.com/ready.json 2>/dev/null || true)
+            if printf '%s' "$body" | grep -q "\"sha\":\"$GITHUB_SHA\""; then
+              echo "public ok: $body"
+              curl -fsS --max-time 10 -o /dev/null -w 'GET / -> %{http_code}\n' https://development.adastrarp.com/
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "public /ready.json does not carry $GITHUB_SHA: last body: ${body:-<none>}"
+          exit 1
+
+      - name: Roll back on failed public verification
+        # Only after the switch happened: a failed check/build must not flip the live slot.
+        if: failure() && steps.verify.conclusion == 'failure'
+        run: |
+          /home/hermes/deploy/astra-dev.sh status || true
+          /home/hermes/deploy/astra-dev.sh rollback || echo "rollback not possible (first deploy or no previous slot)"
