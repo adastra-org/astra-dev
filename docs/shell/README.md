@@ -59,4 +59,3 @@ Placeholder. ES activo, EN deshabilitado. No guarda estado ni cambia textos; la 
 - Resaltado de sintaxis y render de Markdown: M1.
 - Botón de volver arriba en páginas largas: M1, junto con el motor de docs.
 - Búsqueda en la barra superior: M3 (Ask Ether).
-- El hosting debe devolver `index.html` para cualquier ruta (fallback de SPA) o las rutas `/docs/...` darán 404 al recargar. Es parte del nginx de M0.
