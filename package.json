@@ -1,7 +1,7 @@
 {
   "name": "astra-dev",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "tokens": "bun scripts/tokens.ts && oxfmt src/styles/tokens.css",
+    "import": "bun scripts/import/run.ts",
+    "import:update": "bun scripts/import/run.ts update",
     "test": "bun test --pass-with-no-tests src scripts",
     "check:server": "bun run --cwd server check",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:server"

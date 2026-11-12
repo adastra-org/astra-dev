@@ -1,0 +1,27 @@
+{
+  "since": "0.5.0",
+  "sources": {
+    "natives": {
+      "repo": "https://github.com/citizenfx/natives",
+      "ref": "master",
+      "sha": "c00e0ed83d06dcba2457424ba254fbaa7a05bf7e",
+      "paths": ["/*/*.md"]
+    },
+    "cfx-natives": {
+      "repo": "https://github.com/citizenfx/fivem",
+      "ref": "master",
+      "sha": "5412ed86f9eff1b81d2afb10cff85153b043d3b8",
+      "paths": ["/ext/native-decls/"]
+    },
+    "fivem-docs": {
+      "repo": "https://github.com/citizenfx/fivem-docs",
+      "ref": "master",
+      "sha": "90a2ef280be7f3001564d69ab870415319772535",
+      "paths": [
+        "/content/docs/",
+        "/static/examples/",
+        "/static/resource_manifest_version*.txt"
+      ]
+    }
+  }
+}

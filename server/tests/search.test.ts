@@ -30,9 +30,8 @@ describe('index build', () => {
       true,
     )
     // Survives a JSON round trip through the strict parser.
-    expect(parseIndex(JSON.parse(JSON.stringify(index))).chunks).toHaveLength(
-      chunks.length,
-    )
+    const onDisk = JSON.stringify(index)
+    expect(parseIndex(JSON.parse(onDisk)).chunks).toHaveLength(chunks.length)
   })
 
   test('unreachable embedder: keyword-only index, no throw', async () => {
@@ -49,7 +48,7 @@ describe('index build', () => {
   })
 
   test('parseIndex rejects wrong version, bad vectors and duplicate ids', async () => {
-    const good = JSON.parse(JSON.stringify(await semanticIndex()))
+    const good = structuredClone(await semanticIndex()) as any
     expect(() => parseIndex({ ...good, version: 99 })).toThrow(IndexFormatError)
     const bad = structuredClone(good)
     bad.chunks[0].vector = [1, 2]
