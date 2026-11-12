@@ -50,6 +50,8 @@ jobs:
         run: |
           set -eu
           export PATH="/opt/bun:$PATH"
+          # Natives and fivem-docs at the shas pinned in content-sources.json (docs/import/README.md).
+          bun run import
           (cd server && bun run index)
           rm -rf server-dist
           mkdir -p server-dist/data

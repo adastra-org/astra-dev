@@ -361,6 +361,26 @@ describe('buildCorpus', () => {
     ])
     expect(c.docs[0]?.body).toContain('(/natives/set-vehicle-door-open-gta)')
   })
+  test('slug sin guion inicial; si choca, el nombre sin _ conserva el slug', () => {
+    const raw = (name: string) =>
+      `---\nns: PED\n---\n## ${name}\n\n\`\`\`c\n// 0x1\nvoid ${name}(int a);\n\`\`\`\n`
+    const c = buildCorpus(
+      input({
+        gta: [
+          { path: 'PED/A.md', raw: raw('_GET_X') },
+          { path: 'PED/B.md', raw: raw('GET_X') },
+          { path: 'PED/C.md', raw: raw('__ONLY_UNDERSCORE') },
+        ],
+        cfx: [],
+        docs: [],
+      }),
+    )
+    const slug = (name: string) => c.natives.find((n) => n.name === name)?.slug
+    expect(slug('GET_X')).toBe('get-x')
+    expect(slug('_GET_X')).toBe('get-x-2')
+    expect(slug('__ONLY_UNDERSCORE')).toBe('only-underscore')
+    expect(new Set(c.natives.map((n) => n.slug)).size).toBe(c.natives.length)
+  })
   test('overrides por nombre Lua o canónico; uno huérfano avisa', () => {
     const c = buildCorpus(
       input({

@@ -80,7 +80,7 @@ const CONCEPTS: string[][] = [
   ['slug', 'url', 'identificador', 'glosario'],
   ['lua', 'nativas', 'nativa', 'native'],
 ]
-const DIMS = CONCEPTS.length + 1
+export const DIMS = CONCEPTS.length + 1
 
 export function fakeVector(text: string): number[] {
   const v = new Array<number>(DIMS).fill(0)
