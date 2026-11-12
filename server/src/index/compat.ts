@@ -34,8 +34,10 @@ export async function compareEmbedders(
   const threshold = opts.threshold ?? 0.99
   const batchSize = opts.batchSize ?? 16
   const list = [...texts]
-  const va = await a.embedMany(list, { batchSize })
-  const vb = await b.embedMany(list, { batchSize })
+  const [va, vb] = await Promise.all([
+    a.embedMany(list, { batchSize }),
+    b.embedMany(list, { batchSize }),
+  ])
   const scores = list.map((text, i) => ({
     text,
     cosine: cosine(head(va[i]!, opts.dims), head(vb[i]!, opts.dims)),
