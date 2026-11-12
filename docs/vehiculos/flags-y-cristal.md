@@ -95,6 +95,8 @@ Lectura de las muestras con esos nombres:
 - Entonces el flag y el material son independientes: el material decide cómo toma la bala el cristal y el flag agrega su propio comportamiento encima. Una auditoría de cristal tiene que leer los dos.
 - El `.yft` también trae una tabla de ventanas de vehículo (`yft_glass` la imprime). Todavía no se sabe qué significan sus campos para el blindaje.
 
+Auditoría de todo el servidor (1.071 entradas): [auditoria-de-cristal.md](auditoria-de-cristal.md). Resumen: 5 autos llevan el flag `BULLETPROOF` sin ningún polígono irrompible, 10 tienen polígonos irrompibles sin ningún flag de cristal, y solo 2 tienen flag y material irrompibles a la vez. De los 7 con `BULLETPROOF`, 6 llevan también `BULLET_RESISTANT`: los dos flags no son grupos separados, como sugería el conteo de arriba (22 y 8 entradas).
+
 ## 3. Tintado en las luces
 
 Sin reproducir todavía. Hipótesis (detalle en [shaders-de-vehiculo.md](shaders-de-vehiculo.md)): las luces usan un shader de pintura, un nombre de material `[PAINT:X]` o `vehicle_vehglass` en vez de `vehicle_lightsemissive`, o comparten UV con una zona pintada. Se puede detectar desde el `.yft` listando el shader de cada geometría. Corregirlo implica editar materiales o geometría con el escritor C#, que tampoco está verificado en el juego.

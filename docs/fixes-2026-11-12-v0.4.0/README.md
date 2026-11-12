@@ -4,7 +4,7 @@
 
 ## Vehículos del servidor (reportado por Faku)
 
-- [~] **Blindar ventanas.** Dos partes: el flag (`FLAG_HAS_BULLET_RESISTANT_GLASS` vs `FLAG_HAS_BULLETPROOF_GLASS`) y el material de colisión del cristal (`CAR_GLASS_WEAK`/`MEDIUM`/`STRONG`/`BULLETPROOF`, tipos 120 a 123, nombrados desde `materials.dat`). Medido en 7 vehículos; todavía no hay herramienta que los cambie.
+- [~] **Blindar ventanas.** Dos partes: el flag (`FLAG_HAS_BULLET_RESISTANT_GLASS` vs `FLAG_HAS_BULLETPROOF_GLASS`) y el material de colisión del cristal (`CAR_GLASS_WEAK`/`MEDIUM`/`STRONG`/`BULLETPROOF`, tipos 120 a 123, nombrados desde `materials.dat`). Auditado en todo el servidor ([auditoria-de-cristal.md](../vehiculos/auditoria-de-cristal.md)): 5 con flag irrompible sin material, 10 con material irrompible sin flag. Todavía no hay herramienta que los cambie.
 - [ ] **Aplicar / quitar tintado.** Las luces se tiñen cuando las UV están mal. Hipótesis escrita ([shaders-de-vehiculo.md](../vehiculos/shaders-de-vehiculo.md)); falta un vehículo que lo muestre.
 - [~] **LODs inexistentes.** `yft_optimize --lods` los genera, con backup, rollback y reporte. Verificado sobre una copia en scratch; todavía no en el juego.
 - [~] **Flags mal configuradas.** 86 usos de 11 flags que la lista oficial no define, en 45 archivos (tabla en el doc de hallazgos). Informado; todavía no hay herramienta `vehicle_flags`.
