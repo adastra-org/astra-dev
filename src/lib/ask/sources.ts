@@ -2,10 +2,11 @@
 import type { AskSource } from './types'
 
 /**
- * Las páginas `/natives/<slug>` salen en M2 (fase 3, publicar los natives). Mientras no existan, una
- * cita a un native se muestra como texto con su nombre, sin enlace roto.
+ * Las páginas `/natives/<slug>` existen desde M2 (v0.7.0) y el slug es el del importador, el mismo
+ * que usa el índice del server. Si se quitan, una cita a un native vuelve a mostrarse como texto
+ * con su nombre, sin enlace roto.
  */
-export const NATIVE_PAGES_PUBLISHED = false
+export const NATIVE_PAGES_PUBLISHED = true
 
 export const isLinkable = (s: AskSource): boolean =>
   s.kind === 'doc' || NATIVE_PAGES_PUBLISHED

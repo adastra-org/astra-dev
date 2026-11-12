@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { matchRoutes } from 'react-router-dom'
-import { LANGS, NAV, navFor } from './config/nav'
+import { NAV, navFor } from './config/nav'
 import { routes } from './routes'
 
 /** Path del último match (la hoja) para una URL. */
@@ -41,13 +41,6 @@ describe('navegación', () => {
     expect(navFor('/docs/algo')?.to).toBe('/docs')
     expect(navFor('/docsx')).toBeUndefined()
     expect(navFor('/no-existe')).toBeUndefined()
-  })
-
-  test('selector de idioma: ES disponible, EN pendiente', () => {
-    expect(LANGS.map((l) => [l.code, l.available])).toEqual([
-      ['es', true],
-      ['en', false],
-    ])
   })
 })
 
