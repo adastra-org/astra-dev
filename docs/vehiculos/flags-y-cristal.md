@@ -11,7 +11,7 @@ Toda referencia del juego sale de la documentación oficial de Cfx, no de memori
 
 `MetaNames.cs` de CodeWalker es un registro de hashes y nombres. Incluye nombres que el juego nunca definió, así que no sirve para validar. La primera pasada de esta auditoría lo usó y dio por válido `FLAG_HAS_BULLETPROOF_GLASS` por casualidad; los números de abajo usan la lista oficial.
 
-Fuera de esa sección: los materiales de colisión no tienen página. Sus nombres salen del `materials.dat` del juego ([materiales-de-colision.md](materiales-de-colision.md)).
+Fuera de esa sección: los materiales de colisión no tienen página. Sus nombres salen del `materials.dat` del juego ([materiales-de-colision.md](../materiales/materiales-de-colision.md)).
 
 ## 1. Flags en `vehicles.meta`
 
@@ -71,7 +71,7 @@ Medido en 7 vehículos (sin conteo de polígonos; los tipos son el `material_typ
 | `hx58`        | RESISTANT       | 0, 70, 116, 117, 118, 122, 142 |
 | `bfdsuv`      | ninguno         | 116, 117, 120, 121, 122, 142   |
 
-Nombres de esos números, del `materials.dat` del juego (tabla completa en [materiales-de-colision.md](materiales-de-colision.md)):
+Nombres de esos números, del `materials.dat` del juego (tabla completa en [materiales-de-colision.md](../materiales/materiales-de-colision.md)):
 
 | Tipo | Nombre                  |
 | ---- | ----------------------- |

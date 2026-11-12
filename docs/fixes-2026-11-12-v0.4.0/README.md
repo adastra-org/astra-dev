@@ -12,7 +12,7 @@
 ## Referencias
 
 - [x] Toda referencia del juego sale de <https://docs.fivem.net/docs/game-references/>. La auditoría de flags se rehízo contra la página oficial (204 flags).
-- [x] Los materiales de colisión no tienen página en esa sección: los nombres salen del `materials.dat` del juego ([materiales-de-colision.md](../vehiculos/materiales-de-colision.md)).
+- [x] Los materiales de colisión no tienen página en esa sección: los nombres salen del `materials.dat` del juego ([materiales-de-colision.md](../materiales/materiales-de-colision.md)).
 - [ ] <https://gtaforums.com/topic/899267-entities-and-materials/> no se pudo leer (desafío de Cloudflare). Faku puede pegar la parte relevante si importa.
 
 ## Decisiones abiertas

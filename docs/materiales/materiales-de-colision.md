@@ -2,12 +2,20 @@
 
 El `material_type` que guarda cada polígono de colisión de un `.yft` / `.ybn` es un índice a `materials.dat`, el archivo propio del juego: la posición de la entrada contando solo las líneas de datos, desde 0. Esta página es esa tabla, para poder leer como nombre un número que muestra `yft_glass`.
 
-Fuente: `update/update.rpf/common/data/materials/materials.dat` de la instalación (213 entradas; la copia base de `common.rpf` tiene la misma cantidad y la del DLC `mpstunt` es una variante). Se extrajo con `rpf_extract` (AstraMapper):
+Fuente: `update/update.rpf/common/data/materials/materials.dat` de la instalación. Es la versión que usa el juego (y FiveM) y es la que describe esta tabla: 213 entradas. Se extrajo con `rpf_extract` (AstraMapper):
 
 ```bash
 cargo build --release -p cw-core --example rpf_extract
 ./target/release/examples/rpf_extract.exe E:/Proyectos/_scratch/gta-data materials.dat materialfx.dat
 ```
+
+Hay tres copias del archivo en el juego, y los índices no son los mismos en todas (ver [README.md](README.md)):
+
+| Copia                                     | Entradas |
+| ----------------------------------------- | -------- |
+| `common.rpf` (base)                       | 212      |
+| `update/update.rpf` (la que usa el juego) | 213      |
+| `update/x64/dlcpacks/mpstunt/dlc.rpf`     | 213      |
 
 El archivo es un asset de Rockstar y no se versiona. Las tablas de abajo son solo nombres y algunos números. Ninguna página de <https://docs.fivem.net/docs/game-references/> cubre materiales, así que la referencia es el archivo del juego.
 

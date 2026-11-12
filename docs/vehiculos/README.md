@@ -5,7 +5,7 @@ Auditoría y corrección de los vehículos del servidor: flags, cristal blindado
 | Documento                                                                    | Qué cubre                                                                                               |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [flags-y-cristal.md](flags-y-cristal.md)                                     | Flags de `vehicles.meta` contra la lista oficial, flag vs material de cristal, estado de tintado y LODs |
-| [materiales-de-colision.md](materiales-de-colision.md)                       | Tabla de materiales de colisión del juego (213, de `materials.dat`), cristal de vehículo en detalle     |
+| [materiales-de-colision.md](../materiales/materiales-de-colision.md)         | Tabla de materiales de colisión del juego (213, de `materials.dat`), cristal de vehículo en detalle     |
 | [shaders-de-vehiculo.md](shaders-de-vehiculo.md)                             | Shaders de vehículo y para qué sirve cada uno; hipótesis del tintado                                    |
 | [../fixes-2026-11-12-v0.4.0/README.md](../fixes-2026-11-12-v0.4.0/README.md) | Los cuatro problemas reportados, con estado                                                             |
 
