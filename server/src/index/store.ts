@@ -1,9 +1,9 @@
 // The versioned index file: chunks plus (optionally) their embeddings. Built by `bun run index`,
 // loaded by the server at boot. Embeddings are Matryoshka-truncated to `dims` and L2-normalised.
 import { readFile } from 'node:fs/promises'
-import type { Chunk } from '../docs/chunk.ts'
+import type { Chunk, NativeMeta } from '../docs/chunk.ts'
 
-export const INDEX_VERSION = 1
+export const INDEX_VERSION = 2
 
 export interface IndexedChunk extends Chunk {
   /** Absent when the index was built without the embedder (keyword-only index). */
@@ -31,6 +31,41 @@ export class IndexFormatError extends Error {
 }
 
 const isStr = (v: unknown): v is string => typeof v === 'string'
+const isStrArray = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every(isStr)
+
+function parseNativeMeta(v: unknown, chunkId: string): NativeMeta {
+  const m = v as Record<string, unknown> | null
+  if (
+    !m ||
+    !isStr(m.id) ||
+    !isStr(m.name) ||
+    !isStr(m.luaName) ||
+    !isStr(m.ns) ||
+    !isStr(m.signature) ||
+    (m.source !== 'gta' && m.source !== 'cfx') ||
+    !(
+      m.apiset === null ||
+      m.apiset === 'client' ||
+      m.apiset === 'server' ||
+      m.apiset === 'shared'
+    ) ||
+    !isStrArray(m.hashes) ||
+    !isStrArray(m.aliases)
+  )
+    throw new IndexFormatError(`chunk ${chunkId} has malformed native metadata`)
+  return {
+    id: m.id,
+    source: m.source,
+    name: m.name,
+    luaName: m.luaName,
+    ns: m.ns,
+    apiset: m.apiset,
+    hashes: m.hashes,
+    aliases: m.aliases,
+    signature: m.signature,
+  }
+}
 
 /** Validates untrusted JSON (a file on disk) into a `DocsIndex`. */
 export function parseIndex(json: unknown): DocsIndex {
@@ -53,6 +88,7 @@ export function parseIndex(json: unknown): DocsIndex {
     if (
       !c ||
       !isStr(c.id) ||
+      (c.kind !== 'doc' && c.kind !== 'native') ||
       !isStr(c.slug) ||
       !isStr(c.title) ||
       !isStr(c.text) ||
@@ -65,6 +101,7 @@ export function parseIndex(json: unknown): DocsIndex {
     ids.add(c.id)
     const out: IndexedChunk = {
       id: c.id,
+      kind: c.kind,
       slug: c.slug,
       title: c.title,
       heading: c.heading,
@@ -72,6 +109,7 @@ export function parseIndex(json: unknown): DocsIndex {
       text: c.text,
       excerpt: c.excerpt,
     }
+    if (c.kind === 'native') out.native = parseNativeMeta(c.native, c.id)
     if (semantic) {
       const v = c.vector
       if (

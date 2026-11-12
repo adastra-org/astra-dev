@@ -32,6 +32,8 @@ export interface Config {
     maxOutputTokens: number
     maxOutputChars: number
     topK: number
+    /** Natives added to the chat context on top of `topK` docs (0 = docs only). */
+    nativesTopK: number
     contextMaxChars: number
     minSemanticScore: number
     maxBodyBytes: number
@@ -161,6 +163,7 @@ export function loadConfig(env: Env = process.env): Config {
       maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 700, 50, 4000),
       maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 4000, 200, 20000),
       topK: int('CHAT_TOP_K', 5, 1, 12),
+      nativesTopK: int('CHAT_NATIVES_TOP_K', 3, 0, 8),
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
       minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.25, 0, 1),
       maxBodyBytes: int('CHAT_MAX_BODY_BYTES', 16384, 1024, 262144),

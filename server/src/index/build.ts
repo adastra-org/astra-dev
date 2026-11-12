@@ -8,7 +8,9 @@ import {
   truncate,
   type EmbedderClient,
 } from '@wefaber/embed'
+import { createHash } from 'node:crypto'
 import { chunkDoc, type Chunk } from '../docs/chunk.ts'
+import { hashNatives, nativeChunk, type NativeRecord } from '../docs/natives.ts'
 import { hashDocs, type SourceDoc } from '../docs/source.ts'
 import { documentPrompt } from './prompts.ts'
 import { INDEX_VERSION, roundVector, type DocsIndex } from './store.ts'
@@ -16,6 +18,8 @@ import { INDEX_VERSION, roundVector, type DocsIndex } from './store.ts'
 export interface BuildOptions {
   embedder: EmbedderClient | null
   dims: number
+  /** Natives from the importer (`readNatives`). One chunk each, after the docs. */
+  natives?: readonly NativeRecord[]
   now?: () => Date
   onWarn?: (message: string) => void
 }
@@ -24,12 +28,22 @@ export async function buildIndex(
   docs: readonly SourceDoc[],
   opts: BuildOptions,
 ): Promise<DocsIndex> {
-  const chunks: Chunk[] = docs.flatMap((d) => chunkDoc(d))
+  const natives = opts.natives ?? []
+  const chunks: Chunk[] = [
+    ...docs.flatMap((d) => chunkDoc(d)),
+    ...natives.map(nativeChunk),
+  ]
   if (!chunks.length) throw new Error('no chunks: content/docs is empty?')
+  const sourceHash = natives.length
+    ? createHash('sha256')
+        .update(`${hashDocs(docs)}\n${hashNatives(natives)}`)
+        .digest('hex')
+        .slice(0, 16)
+    : hashDocs(docs)
   const base = {
     version: INDEX_VERSION,
     builtAt: (opts.now?.() ?? new Date()).toISOString(),
-    sourceHash: hashDocs(docs),
+    sourceHash,
   } as const
 
   const keywordOnly = (reason: string): DocsIndex => {

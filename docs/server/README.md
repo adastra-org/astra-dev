@@ -44,12 +44,12 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 
 ## Endpoints
 
-| Ruta       | Método | Acceso                       | Qué                                                                                                                                                                        |
-| ---------- | ------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                              |
-| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                       |
-| `/graphql` | POST   | público                      | `viewer { id handle role emailVerified entitlements { kind validUntil } }`, `searchDocs(q, limit) { mode degraded hits { slug title heading anchor path excerpt score } }` |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?}`. Respuesta SSE                                                                                                                               |
+| Ruta       | Método | Acceso                       | Qué                                                                                                                                                                                                                                                                          |
+| ---------- | ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
+| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
+| `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?}`. Respuesta SSE                                                                                                                                                                                                                                 |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
@@ -115,16 +115,23 @@ Hoy `subscriber` y `staff` pueden chatear. `staff` read-write queda para cuando 
 cd server && bun run index        # o: bun --cwd server run index
 ```
 
-Lee `content/docs/**/*.md` (`DOCS_DIR`), parte cada doc por encabezado (`##` y `###`, con la introducción y el `summary` como primer fragmento; bloques largos se parten por bloque) y escribe `server/data/index.json` (`INDEX_PATH`, ignorado por git):
+Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/generated/` (`GENERATED_DIR`; los docs de fivem-docs y los natives, ver [import/README.md](../import/README.md); correr `bun run import` en la raíz antes. Si no existe, el índice sale solo con docs y avisa). Parte cada doc por encabezado (`##` y `###`, con la introducción y el `summary` como primer fragmento; bloques largos se parten por bloque), arma **un fragmento por native** y escribe `server/data/index.json` (`INDEX_PATH`, ignorado por git):
 
 ```
-{ version: 1, builtAt, sourceHash, model, dims, semantic, chunks: [{ id, slug, title, heading, anchor, text, excerpt, vector? }] }
+{ version: 2, builtAt, sourceHash, model, dims, semantic, chunks: [{ id, kind, native?, slug, title, heading, anchor, text, excerpt, vector? }] }
 ```
+
+- `kind` es `doc` (página bajo `/docs`, con `anchor`) o `native` (página `/natives/<slug>`, sin ancla). Un fragmento `native` lleva `native`: `id`, nombre, nombre Lua, `ns`, `apiset`, hashes, alias y firma. El texto empieza por los nombres y la firma, que es lo que se busca, y se corta a 2400 caracteres (los ejemplos largos primero).
+- Con 7.326 natives el índice completo tiene ~10.000 fragmentos y ~10 MB sin vectores. Se genera en menos de 1 s por palabras clave.
 
 - Los vectores salen de `@wefaber/embed` (`EmbedderClient`), truncados (Matryoshka) a `EMBEDDER_DIMS` (256) y normalizados. Documento y consulta usan los prefijos de tarea de EmbeddingGemma (`server/src/index/prompts.ts`); si cambia el modelo, se cambian ahí y se regenera.
 - **El embedder es local al VPS** (`http://127.0.0.1:8891/v1/embeddings`, unidad `embedder`). En otra máquina no responde: el índice sale **solo por palabras clave** (`semantic: false`), con un aviso, y el build **no falla**. Regenerarlo en el VPS (lo hace `deploy.yml`, el runner vive ahí) lo deja semántico.
 - `anchor` es el id del encabezado en la página renderizada. El test `scripts/docs/chunk-parity.test.ts` obliga a que coincida con el algoritmo del motor de docs.
 - El server carga el índice una vez al arrancar. Un doc nuevo requiere regenerar y desplegar (el deploy ya lo hace).
+
+**Natives por nombre o hash** (`server/src/index/lookup.ts`): los embeddings y BM25 son malos con identificadores, así que un native nombrado en la consulta se busca aparte y va **primero**, con `score: 1`, aunque el embedder esté caído. Coincide por nombre canónico, nombre Lua (`GetEntityCoords` = `GET_ENTITY_COORDS`), alias y hash de 64 o 32 bits. Una consulta de un solo token coincide por cualquier nombre (`wait`); dentro de una frase solo cuentan hashes e identificadores (con `_` o camelCase), para que "wait for the resource" no fije el native `WAIT`. Si GTA y CFX comparten nombre salen los dos, GTA primero. El tokenizador de BM25 separa camelCase, así que "open the door of a vehicle" encuentra `SetVehicleDoorOpen` por palabras.
+
+**Docs y natives por separado**: ~7.000 natives desplazarían a los docs de cualquier ranking conjunto. `Retriever.searchMany` hace una sola incrustación de la consulta y arma un ranking por tipo (`kind`); el chat pide `CHAT_TOP_K` docs más `CHAT_NATIVES_TOP_K` natives (3 por defecto, 0 = solo docs). El `<fuente>` del prompt lleva `tipo="doc|native"`.
 
 **Recuperación** (`server/src/index/search.ts`): coseno top-k con el embedder; si el embedder falla o tarda más de `EMBEDDER_TIMEOUT_MS`, o el índice no tiene vectores, o nada supera `CHAT_MIN_SEMANTIC_SCORE`, cae a BM25 por palabras clave (sin tildes, con plurales, título y encabezado pesan más). Tras un fallo del embedder se lo salta 30 s para no sumar timeouts. `meta.degraded` y `mode` informan qué pasó. Nunca lanza.
 
@@ -151,6 +158,7 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`       | 6, 800                                                          |                                                                          |
 | `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`             | 700, 4000                                                       |                                                                          |
 | `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                        | 5, 9000                                                         |                                                                          |
+| `CHAT_NATIVES_TOP_K`                                          | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs            |
 | `CHAT_MIN_SEMANTIC_SCORE`                                     | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`       |
 | `CHAT_MAX_BODY_BYTES`                                         | 16384                                                           |                                                                          |
 | `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                               |
@@ -227,7 +235,7 @@ bun run check                                              # typecheck + tests (
 
 Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. El server no habla con Vite: la UI en dev debe apuntar a `http://127.0.0.1:4100` (el origen `localhost:5173` ya está permitido en dev).
 
-## Pruebas (`bun test`, 87)
+## Pruebas (`bun test`, 112)
 
 `chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
 
@@ -235,7 +243,8 @@ Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa Deep
 
 | Qué                                                                                  | Estado                                                                                                              |
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Typecheck + 87 tests del server, `bun run check` de la raíz                          | Verificado                                                                                                          |
+| Typecheck + 112 tests del server, `bun run check` de la raíz                         | Verificado                                                                                                          |
+| Índice por palabras clave con el corpus real (338 docs, 7.326 natives) y consultas   | Verificado: 10.254 fragmentos, 3-7 ms por consulta; búsquedas por nombre y hash exactas                             |
 | Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL            | Verificado a mano                                                                                                   |
 | Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401     | Verificado a mano                                                                                                   |
 | Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable | Verificado                                                                                                          |

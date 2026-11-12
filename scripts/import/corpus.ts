@@ -103,7 +103,6 @@ export function buildCorpus(input: CorpusInput): Corpus {
   }
   // CFX redefine ~75 natives de GTA (variantes de servidor, etc.): con nombre repetido, ambos
   // llevan sufijo para que cada página tenga su propio slug estable.
-  const slugSeen = new Set<string>()
   for (const group of byName.values()) {
     for (const n of group) {
       const base = nativeSlug(n.name)
@@ -113,13 +112,21 @@ export function buildCorpus(input: CorpusInput): Corpus {
           : n.source === 'gta'
             ? `${base}-gta`
             : `${base}-cfx-${n.apiset ?? 'shared'}`
-      if (slugSeen.has(n.slug))
-        throw new ImportError(
-          n.upstream.path,
-          `slug de native repetido "${n.slug}"`,
-        )
-      slugSeen.add(n.slug)
     }
+  }
+  // Los slugs no llevan el `_` inicial (`_GET_PED_EYE_COLOR` → `get-ped-eye-color`), así que dos
+  // nombres pueden chocar. El nombre sin `_` conserva el slug; el otro suma `-2`, `-3`…
+  const slugSeen = new Set<string>()
+  const bySlugPriority = [...natives].sort(
+    (a, b) =>
+      Number(a.name.startsWith('_')) - Number(b.name.startsWith('_')) ||
+      a.id.localeCompare(b.id),
+  )
+  for (const n of bySlugPriority) {
+    let slug = n.slug
+    for (let i = 2; slugSeen.has(slug); i++) slug = `${n.slug}-${i}`
+    n.slug = slug
+    slugSeen.add(slug)
   }
   const nativeByName = new Map<string, { id: string; slug: string }>()
   for (const [name, group] of byName) {

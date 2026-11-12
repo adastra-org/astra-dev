@@ -53,7 +53,7 @@ Los docs de fivem-docs pierden los shortcodes de Hugo: `alert` pasa a cita, `nat
 
 ## Licencia
 
-Ninguno de los tres repos declara archivo de licencia (GitHub no detecta ninguna). Es contenido público, y cada registro conserva su procedencia (`upstream`, shas en el manifest). Pendiente: mail a los mantenedores de `citizenfx` para pedir confirmación de uso. Hasta tener respuesta, el sitio debe atribuir y enlazar al original en cada página.
+Ninguno de los tres repos declara archivo de licencia (GitHub no detecta ninguna). Es contenido público, y cada registro conserva su procedencia (`upstream`, shas en el manifest). **Decisión de Faku (2026-11-12): se asume abierta**, así que no bloquea publicar el contenido. Se mantiene la atribución y el enlace al original en cada página, y queda pendiente enviar el mail a los mantenedores de `citizenfx` para tener confirmación escrita.
 
 Borrador para el mail:
 
@@ -63,15 +63,24 @@ Borrador para el mail:
 
 ## Fases
 
-| #   | Qué                                                                                          | Estado       |
-| --- | -------------------------------------------------------------------------------------------- | ------------ |
-| 1   | Importador, conversión de shortcodes, overrides, pruebas                                     | hecha        |
-| 2   | CFX como tercera fuente                                                                      | hecha (en 1) |
-| 3   | Sitio: páginas y sidebar de natives por namespace (no un chunk de Vite por native)           | pendiente    |
-| 4   | Índice: un chunk por native, búsqueda exacta por nombre/hash + semántica, embeddings offline | pendiente    |
-| 5   | Export a WeGraph y acceso en Code Mode                                                       | pendiente    |
+| #   | Qué                                                                                                                                           | Estado       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | Importador, conversión de shortcodes, overrides, pruebas                                                                                      | hecha        |
+| 2   | CFX como tercera fuente                                                                                                                       | hecha (en 1) |
+| 3   | Sitio: páginas y sidebar de natives por namespace (no un chunk de Vite por native)                                                            | pendiente    |
+| 4a  | Índice del server: un fragmento por native, búsqueda exacta por nombre/hash, `searchDocs(kind)`, `native(q)`, natives en el contexto del chat | hecha        |
+| 4b  | Embeddings offline (PC o Cloudflare) subidos al VPS                                                                                           | pendiente    |
+| 5   | Export a WeGraph y acceso en Code Mode                                                                                                        | pendiente    |
 
-### Fase 4: embeddings fuera del VPS
+### Fase 4a: índice con natives
+
+Detalle en [server/README.md](../server/README.md#índice-semántico). Resultado con el corpus real (índice por palabras clave): 338 docs + 7.326 natives = 10.254 fragmentos, ~10 MB, consultas en 3-7 ms. `GetEntityCoords`, `SET_VEHICLE_DOOR_OPEN` y `0xBB75D38B` devuelven el native exacto primero; "open the door of a vehicle" encuentra `SET_VEHICLE_DOOR_OPEN` por palabras. Una pregunta en español contra docs en inglés **no** funciona por palabras clave: eso lo resuelve la fase 4b (semántica multilingüe).
+
+Cambio en el importador: los slugs de natives no llevan el `_` inicial (1.970 natives sin nombre empiezan por `_`); si dos chocan, el nombre sin `_` conserva el slug y el otro suma `-2`.
+
+`deploy.yml` corre `bun run import` antes de `bun run index`.
+
+### Fase 4b: embeddings fuera del VPS
 
 Decisión: los vectores se calculan en la PC de Faku o en Cloudflare Workers AI y se suben al VPS. El server ya carga un `index.json` con vectores; solo cambia quién lo genera.
 

@@ -46,7 +46,10 @@ export function docSlug(relPath: string): string {
 
 /** Slug de la página de un native: `SET_VEHICLE_DOOR_OPEN` → `set-vehicle-door-open`. */
 export const nativeSlug = (name: string): string =>
-  name.toLowerCase().replace(/_/g, '-')
+  name
+    .toLowerCase()
+    .replace(/_+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
 /** Sin barra final ni query; conserva el ancla aparte. */
 function splitUrl(href: string): { path: string; hash: string } {
