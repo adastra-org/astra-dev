@@ -199,7 +199,7 @@ export function loadConfig(env: Env = process.env): Config {
       topK: int('CHAT_TOP_K', 5, 1, 12),
       nativesTopK: int('CHAT_NATIVES_TOP_K', 3, 0, 8),
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
-      minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.25, 0, 1),
+      minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.69, 0, 1),
       maxBodyBytes: int('CHAT_MAX_BODY_BYTES', 16384, 1024, 262144),
     },
     limits: {

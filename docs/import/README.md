@@ -63,14 +63,14 @@ Borrador para el mail:
 
 ## Fases
 
-| #   | Qué                                                                                                                                           | Estado                                                                       |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1   | Importador, conversión de shortcodes, overrides, pruebas                                                                                      | hecha                                                                        |
-| 2   | CFX como tercera fuente                                                                                                                       | hecha (en 1)                                                                 |
-| 3   | Sitio: páginas y sidebar de natives por namespace (no un chunk de Vite por native)                                                            | pendiente                                                                    |
-| 4a  | Índice del server: un fragmento por native, búsqueda exacta por nombre/hash, `searchDocs(kind)`, `native(q)`, natives en el contexto del chat | hecha                                                                        |
-| 4b  | Embeddings offline (PC o Cloudflare) subidos al VPS                                                                                           | hecha (código); falta la prueba de compatibilidad contra el embedder del VPS |
-| 5   | Export a WeGraph y acceso en Code Mode                                                                                                        | pendiente                                                                    |
+| #   | Qué                                                                                                                                           | Estado                                                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 1   | Importador, conversión de shortcodes, overrides, pruebas                                                                                      | hecha                                                                                 |
+| 2   | CFX como tercera fuente                                                                                                                       | hecha (en 1)                                                                          |
+| 3   | Sitio: páginas y sidebar de natives por namespace (no un chunk de Vite por native)                                                            | pendiente                                                                             |
+| 4a  | Índice del server: un fragmento por native, búsqueda exacta por nombre/hash, `searchDocs(kind)`, `native(q)`, natives en el contexto del chat | hecha                                                                                 |
+| 4b  | Embeddings offline (PC o Cloudflare) subidos al VPS                                                                                           | hecha; falta confirmar que el GGUF de la PC coincide con el del VPS y subir el índice |
+| 5   | Export a WeGraph y acceso en Code Mode                                                                                                        | pendiente                                                                             |
 
 ### Fase 4a: índice con natives
 
@@ -90,26 +90,33 @@ Decisión: los vectores se calculan en la PC de Faku o en Cloudflare Workers AI 
 
 **Puerta de compatibilidad**: los vectores de documento (PC/Cloudflare) y la consulta (embebida en el VPS) deben ser intercambiables. Un índice ajeno solo se reutiliza si su `model` está en `EMBEDDER_ACCEPT_MODELS`; se declara ahí después de pasar `bun run embed:compat` (50 fragmentos reales + 10 consultas, coseno mínimo ≥ 0,99, mismo truncado a 256). Si no pasa: embeber también la consulta en Cloudflare, o generar el índice con el mismo GGUF en llama.cpp.
 
-Flujo (PC o Cloudflare):
+**Decisión (2026-11-12): los vectores se generan en la PC con el modelo local**, `embeddinggemma-2` Q8_0 en llama.cpp (`C:\Users\Father\llama.cpp\models\embeddinggemma-2\`), el mismo nombre de modelo que el VPS. Así la consulta (VPS) y los documentos (PC) salen del mismo modelo y no hace falta `EMBEDDER_ACCEPT_MODELS`. Cloudflare queda como alternativa si la PC no está.
+
+Flujo (PC, local):
 
 ```bash
-# 1. Compatibilidad (A = embedder del VPS por túnel/SSH a 127.0.0.1:8891, B = candidato)
-cd server
-EMBEDDER_URL=http://127.0.0.1:8891/v1/embeddings COMPAT_URL=https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1/embeddings COMPAT_MODEL=@cf/google/embeddinggemma-300m COMPAT_TOKEN=<token> bun run embed:compat
+# 1. Embedder local (embeddings, 768 dims; el server trunca a 256)
+C:/Users/Father/llama.cpp/bin/llama-server.exe -m C:/Users/Father/llama.cpp/models/embeddinggemma-2/embeddinggemma-2-Q8_0.gguf \
+  --embeddings --host 127.0.0.1 --port 8891 -c 8192 -b 2048 -ub 2048 -np 1 -ngl 99
 
-# 2. Generar (Cloudflare; EMBEDDER_TOKEN en el entorno, nunca en el repo)
-EMBEDDER_URL=https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1/embeddings EMBEDDER_MODEL=@cf/google/embeddinggemma-300m EMBEDDER_TOKEN=<token> EMBED_BATCH=50 bun run index
+# 2. Corpus + índice (en la raíz: bun run import; luego)
+cd server && bun run index          # ~6 min la primera vez; REUSE_FROM=data/index.json solo embebe lo que cambió
 
 # 3. Subir el par al VPS
 scp data/index.json data/index.vec <vps>:/home/hermes/deploy/index-prebuilt/
 ```
 
-4. En el entorno `development` de GitHub: variable `EMBEDDER_ACCEPT_MODELS=@cf/google/embeddinggemma-300m`. `deploy.yml` usa `~/deploy/index-prebuilt/index.json` si existe y copia `index.vec` al bundle; `astra-dev.sh` rechaza un bundle semántico sin `index.vec`.
+Para reutilizar un índice generado con el **mismo** modelo (`embeddinggemma-2`) no hace falta declarar nada: `deploy.yml` usa `~/deploy/index-prebuilt/index.json` si existe y copia `index.vec` al bundle; `astra-dev.sh` rechaza un bundle semántico sin `index.vec`. Los fragmentos que cambiaron desde la subida los embebe el embedder del VPS.
+
+**Riesgo restante**: que el GGUF de la PC no sea el mismo archivo que el del VPS (otra cuantización, por ejemplo). Se descarta comparando el `sha256` de los dos `.gguf`, o corriendo `bun run embed:compat` con `EMBEDDER_URL` (VPS, por túnel) y `COMPAT_URL=http://127.0.0.1:8891/v1/embeddings`.
+
+Alternativa Cloudflare (solo si se la usa): `EMBEDDER_URL=https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1/embeddings EMBEDDER_MODEL=@cf/google/embeddinggemma-300m EMBEDDER_TOKEN=<token> EMBED_BATCH=50 bun run index`, pasar antes `embed:compat` y declarar ese modelo en la variable `EMBEDDER_ACCEPT_MODELS` del entorno `development` de GitHub.
 
 - Los identificadores (`SET_VEHICLE_DOOR_OPEN`, hashes) no se buscan bien por embeddings: el índice combina coincidencia exacta de nombre/hash con la semántica (4a).
 - `EMBEDDER_TOKEN` exige `https` (salvo loopback), se manda como `Authorization: Bearer` y no se loguea (`describeConfig` solo dice `hasToken`). El build reintenta 429/5xx/red con backoff (`EMBED_RETRIES`, 3).
-- Verificado con el corpus real (10.254 fragmentos) y un embedder simulado: generar 4,7 s, reutilizar con el embedder caído deja el índice semántico con el `.vec` idéntico byte a byte; sin el modelo en `EMBEDDER_ACCEPT_MODELS` cae a keyword-only con aviso.
-- **No verificado**: contra Cloudflare real (el endpoint compatible con OpenAI y el nombre del modelo salen de su documentación, sin token no se probó) ni contra el embedder del VPS (la prueba de compatibilidad corre donde ambos son alcanzables). Es el paso pendiente antes de poner el modelo en `EMBEDDER_ACCEPT_MODELS`.
+- Verificado en la PC con llama.cpp y el GGUF local: 10.254 fragmentos (10.248 distintos) en 5 min 49 s, `index.json` 10,0 MB + `index.vec` 10,5 MB. "cómo abro la puerta de un vehículo" devuelve `SET_VEHICLE_DOOR_OPEN` primero entre los natives; "registrar un evento de red entre cliente y servidor" devuelve `TriggerClientEvent`, `RegisterNetEvent` y "Triggering Events"; "permisos ACE para un grupo" devuelve `add_ace`; `GetEntityCoords` sigue exacto con score 1. Consultas de 57 a 183 ms.
+- Con un embedder simulado: `REUSE_FROM` con el embedder caído deja el índice semántico con el `.vec` idéntico byte a byte; sin el modelo aceptado cae a keyword-only con aviso.
+- **No verificado**: que el GGUF de la PC sea idéntico al del VPS (ver riesgo), ni Cloudflare real.
 
 ### Fase 5: WeGraph y Code Mode
 
