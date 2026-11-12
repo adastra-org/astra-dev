@@ -3,6 +3,7 @@ import { EmbedderClient } from '@wefaber/embed'
 import { createApp } from '../src/app.ts'
 import { AnswerCache } from '../src/chat/cache.ts'
 import type { FollowUpDecider } from '../src/decision/followup.ts'
+import type { ContextGate } from '../src/decision/gate.ts'
 import { ChatService } from '../src/chat/service.ts'
 import { loadConfig, type Config, type Role } from '../src/config.ts'
 import type { AppDeps } from '../src/context.ts'
@@ -152,6 +153,7 @@ export async function harness(
     embedder?: EmbedderClient | null
     cache?: AnswerCache
     decider?: FollowUpDecider
+    gate?: ContextGate
   } = {},
 ): Promise<Harness> {
   const config = testConfig(opts.env)
@@ -179,6 +181,7 @@ export async function harness(
           ),
           settings: config.chat,
           decider: opts.decider,
+          gate: opts.gate,
           cache:
             opts.cache ??
             new AnswerCache({

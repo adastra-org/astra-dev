@@ -33,12 +33,18 @@ export interface Config {
     model: string
     apiKey: string
     timeoutMs: number
+    /** Optional local fallback when the primary fails before answering. */
+    fallback: { baseUrl: string; model: string } | null
   }
   /** Optional follow-up classifier (Liquid d1 on llama.cpp). Empty `url` = off. */
   decision: {
     url: string
     timeoutMs: number
     followUpThreshold: number
+    /** Context gate: fragments at or above `gateThreshold` enter the prompt; see decision/gate.ts. */
+    gateThreshold: number
+    gateFloor: number
+    gateMaxFragmentChars: number
   }
   chat: {
     maxQuestionChars: number
@@ -152,6 +158,31 @@ export function loadConfig(env: Env = process.env): Config {
       const host = new URL(llmBaseUrl).hostname
       if (!['localhost', '127.0.0.1', '[::1]'].includes(host))
         problems.push('LLM_PROVIDER=local needs a loopback LLM_BASE_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
+  // Optional local fallback for a hosted primary: same loopback rule, same text leaves nowhere new.
+  const fallbackName = str('LLM_FALLBACK_PROVIDER', '')
+  if (fallbackName && fallbackName !== 'local')
+    problems.push('LLM_FALLBACK_PROVIDER must be "local" or empty')
+  if (fallbackName === 'local' && provider !== 'deepseek')
+    problems.push(
+      'LLM_FALLBACK_PROVIDER only applies when LLM_PROVIDER=deepseek',
+    )
+  const fallbackBase = url(
+    'LLM_FALLBACK_BASE_URL',
+    'http://127.0.0.1:8080/v1',
+  ).replace(/\/+$/, '')
+  if (fallbackName === 'local') {
+    try {
+      if (
+        !['localhost', '127.0.0.1', '[::1]'].includes(
+          new URL(fallbackBase).hostname,
+        )
+      )
+        problems.push('LLM_FALLBACK_BASE_URL needs a loopback URL')
     } catch {
       // already reported by url()
     }
@@ -290,11 +321,26 @@ export function loadConfig(env: Env = process.env): Config {
       ),
       apiKey: provider === 'local' ? '' : apiKey,
       timeoutMs: int('LLM_TIMEOUT_MS', 60000, 1000, 300000),
+      fallback:
+        fallbackName === 'local'
+          ? {
+              baseUrl: fallbackBase,
+              model: str('LLM_FALLBACK_MODEL', 'local'),
+            }
+          : null,
     },
     decision: {
       url: decisionUrl,
       timeoutMs: int('DECISION_TIMEOUT_MS', 1500, 100, 10000),
       followUpThreshold: num('DECISION_FOLLOWUP_THRESHOLD', 0.25, 0.01, 0.99),
+      gateThreshold: num('DECISION_GATE_THRESHOLD', 0.5, 0.01, 0.99),
+      gateFloor: num('DECISION_GATE_FLOOR', 0.3, 0, 0.99),
+      gateMaxFragmentChars: int(
+        'DECISION_GATE_FRAGMENT_CHARS',
+        1500,
+        200,
+        6000,
+      ),
     },
     chat: {
       maxQuestionChars: int('CHAT_MAX_QUESTION_CHARS', 800, 50, 4000),

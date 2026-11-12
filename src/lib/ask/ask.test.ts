@@ -122,7 +122,23 @@ describe('streamChat', () => {
     expect(JSON.parse(String(sent!.init.body))).toEqual({
       question: 'hola',
       history: [{ role: 'user', content: 'antes' }],
+      lang: 'es',
     })
+  })
+
+  test('manda el idioma de la interfaz', async () => {
+    let body = ''
+    await streamChat({
+      question: 'hi',
+      history: [],
+      lang: 'en',
+      onEvent: () => {},
+      fetch: (async (_u: string, init: RequestInit) => {
+        body = String(init.body)
+        return new Response('event: done\ndata: {}\n\n')
+      }) as unknown as typeof fetch,
+    })
+    expect(JSON.parse(body).lang).toBe('en')
   })
 
   test('error JSON previo al stream: código, estado y Retry-After', async () => {

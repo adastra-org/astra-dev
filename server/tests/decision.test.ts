@@ -152,6 +152,9 @@ describe('decision config', () => {
       url: 'http://127.0.0.1:8081',
       timeoutMs: 1500,
       followUpThreshold: 0.25,
+      gateThreshold: 0.5,
+      gateFloor: 0.3,
+      gateMaxFragmentChars: 1500,
     })
     expect(() =>
       testConfig({ DECISION_URL: 'https://decide.example' }),

@@ -5,7 +5,10 @@ import { chunkPath, type ChunkKind } from '../docs/chunk.ts'
 import { AppError } from '../errors.ts'
 import type { Role } from '../config.ts'
 import type { Retriever, SearchMode } from '../index/search.ts'
+import type { ContextGate } from '../decision/gate.ts'
 import type { FollowUpDecider } from '../decision/followup.ts'
+import { renderEnv, type ChatLang } from './environment.ts'
+import type { HeadSource } from './head.ts'
 import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
@@ -67,6 +70,8 @@ export interface ChatRun {
   cacheHit?: boolean
   /** What the decision step said: true = used history, false = standalone, null = not asked or no answer. */
   usedHistory?: boolean | null
+  /** Context gate result: fragments kept out of those retrieved. Absent = no gate or it could not decide. */
+  gate?: { kept: number; total: number } | null
   events(signal?: AbortSignal): AsyncGenerator<ChatEvent>
 }
 
@@ -79,6 +84,13 @@ export interface ChatDeps {
   cache?: AnswerCache
   /** Optional: decides whether the previous turn goes into the retrieval query. */
   decider?: FollowUpDecider
+  /** Optional: drops retrieved fragments the question does not need before they reach the prompt. */
+  gate?: ContextGate
+  /** Optional: branch and last commit shown to the model in <entorno>. */
+  head?: HeadSource
+  /** Version of the running build, shown in <entorno>. */
+  version?: string
+  now?: () => Date
 }
 
 export interface ChatInput {
@@ -89,6 +101,10 @@ export interface ChatInput {
   role: Role
   question: string
   history: unknown
+  /** UI language of the visitor. */
+  lang?: ChatLang
+  /** Who asks. Only goes to the model inside <entorno>; never part of the cache key. */
+  user?: { handle: string | null }
 }
 
 /** Cached answers are replayed in a few deltas so the client path is the same as a live stream. */
@@ -131,21 +147,41 @@ export class ChatService {
         : question
     // Docs and natives are ranked apart: ~7,000 natives would otherwise crowd the docs out. A
     // native named in the question (by name or hash) always comes first.
-    const found = await this.#d.retriever.searchMany(
-      query.slice(0, s.maxQuestionChars * 2),
-      [
+    const [found, head] = await Promise.all([
+      this.#d.retriever.searchMany(query.slice(0, s.maxQuestionChars * 2), [
         { kind: 'doc', k: s.topK },
         ...(s.nativesTopK > 0
           ? [{ kind: 'native' as const, k: s.nativesTopK }]
           : []),
-      ],
-    )
+      ]),
+      this.#d.head?.get() ?? Promise.resolve(null),
+    ])
 
+    // The gate only removes fragments. null = it could not decide: everything stays.
+    let hits = found.hits
+    let gate: { kept: number; total: number } | null = null
+    if (this.#d.gate && hits.length) {
+      const kept = await this.#d.gate.select(question, hits)
+      if (kept) {
+        gate = { kept: kept.length, total: hits.length }
+        hits = kept
+      }
+    }
+
+    const now = (this.#d.now ?? (() => new Date()))()
+    const lang: ChatLang = input.lang ?? 'es'
     const built: BuiltPrompt = buildPrompt({
       question,
       history,
-      hits: found.hits,
+      hits,
       contextMaxChars: s.contextMaxChars,
+      env: renderEnv({
+        lang,
+        now,
+        head,
+        version: this.#d.version ?? 'dev',
+        user: { handle: input.user?.handle ?? null, role: input.role },
+      }),
     })
     const sources: Source[] = built.used.map((h, i) => ({
       n: i + 1,
@@ -164,6 +200,7 @@ export class ChatService {
       degraded: found.degraded,
       sources,
       usedHistory,
+      gate,
     }
 
     // Nothing retrieved: refuse without calling the model (and without spending budget).
@@ -199,6 +236,8 @@ export class ChatService {
           question,
           history,
           sourceIds: built.used.map((h) => h.id),
+          // The answer can depend on these, so they split the cache; the user does not.
+          context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}`,
         })
       : null
     const cached = key ? cache!.get(key) : null
@@ -294,6 +333,17 @@ export class ChatService {
           budget.settle(input.viewerKey, reserved, actual)
         }
         if (failed) return
+
+        // A small model can degenerate into whitespace. That is a failed answer, not an empty one:
+        // never show it as success and never cache it.
+        if (!truncated && !answer.trim()) {
+          yield {
+            type: 'error',
+            code: 'llm_unavailable',
+            message: 'The language model returned an empty answer.',
+          }
+          return
+        }
 
         const cited = citedNumbers(answer, sources.length)
         const refused = isRefusal(answer)

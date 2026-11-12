@@ -1,6 +1,7 @@
 // Cliente de `POST /chat`. nginx quita el prefijo `/api`: el navegador llama `/api/chat` y el
 // server recibe `/chat`. En desarrollo, Vite hace el mismo trabajo con un proxy (vite.config.ts),
 // así la cookie de sesión y el `Origin` son los del propio sitio.
+import { readStoredLang, type UiLang } from '@/lib/i18n'
 import { SseParser } from './sse'
 import { AskError, type AskEvent, type HistoryTurn } from './types'
 
@@ -12,6 +13,8 @@ export const API_BASE: string =
 export interface StreamOptions {
   question: string
   history: HistoryTurn[]
+  /** Idioma de la interfaz; por defecto el guardado. */
+  lang?: UiLang
   signal?: AbortSignal
   onEvent: (e: AskEvent) => void
   fetch?: typeof fetch
@@ -58,7 +61,11 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
         'content-type': 'application/json',
         accept: 'text/event-stream',
       },
-      body: JSON.stringify({ question: opts.question, history: opts.history }),
+      body: JSON.stringify({
+        question: opts.question,
+        history: opts.history,
+        lang: opts.lang ?? readStoredLang(),
+      }),
       ...(opts.signal ? { signal: opts.signal } : {}),
     })
   } catch (e) {
