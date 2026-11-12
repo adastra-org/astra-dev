@@ -50,6 +50,26 @@ export interface Config {
     cacheTtlSeconds: number
     cacheMaxEntries: number
   }
+  /** "Proyecto" (M5): GitHub data, plan and checklist. Staff only. */
+  project: {
+    /** Read-only token. Secret. Empty = the module is off and `project` answers `project_unavailable`. */
+    githubToken: string
+    githubApiUrl: string
+    /** `owner/name`. */
+    repo: string
+    /** Branch read for commits, the plan and the complexity series. */
+    ref: string
+    planPath: string
+    complexityPath: string
+    cacheTtlMs: number
+    viewerPerMin: number
+    myChecklist: {
+      baseUrl: string
+      /** `mck_…` in read mode. Secret. Empty = the external checklist is off. */
+      token: string
+      listName: string
+    }
+  }
   limits: {
     chatViewerPerMin: number
     chatIpPerMin: number
@@ -141,6 +161,37 @@ export function loadConfig(env: Env = process.env): Config {
     else problems.push('ASTRA_DEV_VIEWER must be public, subscriber or staff')
   }
 
+  const repo = str('PROJECT_REPO', 'adastra-org/astra-dev')
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo))
+    problems.push('PROJECT_REPO must look like owner/name')
+  const ref = str('PROJECT_REF', 'dev')
+  if (!/^[A-Za-z0-9_./-]{1,100}$/.test(ref) || ref.includes('..'))
+    problems.push('PROJECT_REF is not a valid branch name')
+  const repoPath = (key: string, fallback: string) => {
+    const v = str(key, fallback)
+    if (v.startsWith('/') || v.split('/').includes('..'))
+      problems.push(`${key} must be a relative path inside the repo`)
+    return v
+  }
+  const githubToken = env.ASTRA_GITHUB_TOKEN?.trim() ?? ''
+  if (/\s/.test(githubToken))
+    problems.push('ASTRA_GITHUB_TOKEN must not contain whitespace')
+  const checklistToken = env.MYCHECKLIST_TOKEN?.trim() ?? ''
+  const checklistUrl = url('MYCHECKLIST_URL', 'https://checklist.wefaber.net')
+  if (checklistToken) {
+    if (!checklistToken.startsWith('mck_'))
+      problems.push('MYCHECKLIST_TOKEN must start with mck_')
+    // A token never travels in clear over the network.
+    try {
+      const u = new URL(checklistUrl)
+      const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+      if (u.protocol !== 'https:' && !loopback)
+        problems.push('MYCHECKLIST_TOKEN needs an https MYCHECKLIST_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
   const config: Config = {
     production,
     slot,
@@ -207,6 +258,27 @@ export function loadConfig(env: Env = process.env): Config {
       cacheTtlSeconds: int('CHAT_CACHE_TTL_SECONDS', 3600, 0, 604800),
       cacheMaxEntries: int('CHAT_CACHE_MAX_ENTRIES', 500, 0, 5000),
     },
+    project: {
+      githubToken,
+      githubApiUrl: url('GITHUB_API_URL', 'https://api.github.com').replace(
+        /\/+$/,
+        '',
+      ),
+      repo,
+      ref,
+      planPath: repoPath('PROJECT_PLAN_PATH', 'docs/plan/README.md'),
+      complexityPath: repoPath(
+        'PROJECT_COMPLEXITY_PATH',
+        'docs/project/complexity.json',
+      ),
+      cacheTtlMs: int('PROJECT_CACHE_TTL_SECONDS', 300, 10, 3600) * 1000,
+      viewerPerMin: int('RATE_PROJECT_VIEWER_PER_MIN', 30, 1, 10000),
+      myChecklist: {
+        baseUrl: checklistUrl.replace(/\/+$/, ''),
+        token: checklistToken,
+        listName: str('MYCHECKLIST_LIST', 'Ad Astra'),
+      },
+    },
     limits: {
       chatViewerPerMin: int('RATE_CHAT_VIEWER_PER_MIN', 6, 1, 10000),
       chatIpPerMin: int('RATE_CHAT_IP_PER_MIN', 20, 1, 10000),
@@ -233,5 +305,11 @@ export const describeConfig = (c: Config) => ({
     hasToken: !!c.embedder.token,
   },
   accounts: c.accounts.baseUrl,
+  project: {
+    repo: c.project.repo,
+    ref: c.project.ref,
+    hasGithubToken: !!c.project.githubToken,
+    hasMyChecklistToken: !!c.project.myChecklist.token,
+  },
   devViewer: c.devViewer,
 })

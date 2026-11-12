@@ -68,9 +68,9 @@ Es código no confiable del usuario: revisión de seguridad antes de merge. Deta
 
 ## M5 — Proyecto: checklist y evolución (0.6.0)
 
-- [ ] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel.
-- [ ] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server).
-- [ ] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal.
+- [~] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel. Checklist del plan (`docs/plan/README.md`), milestones de GitHub y lista de MyChecklist por Code Mode hechos y probados con fixtures. GitHub verificado en vivo contra `adastra-org/astra-dev` (2026-11-12); **MyChecklist sin verificar contra el servicio real** (sin token). No se usa la API de GitHub Projects: ver [project/README.md](../project/README.md).
+- [x] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server por TTL con ETag y copia vieja). Página `/roadmap` solo para staff.
+- [x] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal en `docs/project/complexity.json`, generada por `bun run complexity`.
 - [ ] Más adelante: WeGraph para pesos y relaciones entre decisiones.
 
 ## Decisiones abiertas
