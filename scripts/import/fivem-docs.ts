@@ -2,6 +2,7 @@
 // enlaces a slugs propios, baja los H1 y arma título, resumen y tags. Puro: recibe el texto y un
 // contexto, no toca el disco (el runner lee y escribe).
 import { parse } from 'yaml'
+import { plainText } from '../docs/plain.ts'
 import { ImportError, type GeneratedDoc } from './types.ts'
 
 const ORIGIN = 'https://docs.fivem.net'
@@ -255,11 +256,7 @@ export function firstParagraph(body: string): string {
     else cur.push(line.trim())
   }
   flush()
-  const text = (paras[0] ?? '')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[`*_]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  const text = plainText(paras[0] ?? '')
   return text.length > SUMMARY_MAX
     ? `${text.slice(0, SUMMARY_MAX - 1).trimEnd()}…`
     : text
@@ -294,9 +291,7 @@ export function convertDoc(
   )
   const section = relPath.split('/')[0]?.replace(/\.md$/, '') ?? ''
   const desc =
-    typeof data.description === 'string'
-      ? data.description.replace(/\s+/g, ' ').trim()
-      : ''
+    typeof data.description === 'string' ? plainText(data.description) : ''
   const summary = desc || firstParagraph(converted.body) || title
   return {
     slug: docSlug(relPath),

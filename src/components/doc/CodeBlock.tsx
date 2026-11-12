@@ -1,5 +1,6 @@
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
+import { useLang } from '@/lib/use-lang'
 
 interface Props {
   code: string
@@ -7,10 +8,13 @@ interface Props {
   lang?: string
   /** HTML ya resaltado del interior de `<code>` (lo genera el build). Sin él, texto plano. */
   html?: string
+  /** Sin borde propio: el bloque vive dentro de un contenedor que ya lo tiene (un borde por nivel). */
+  bare?: boolean
 }
 
-export function CodeBlock({ code, lang, html }: Props) {
+export function CodeBlock({ code, lang, html, bare = false }: Props) {
   const [copied, setCopied] = useState(false)
+  const { tr } = useLang()
 
   const copy = async () => {
     try {
@@ -23,10 +27,15 @@ export function CodeBlock({ code, lang, html }: Props) {
   }
 
   return (
-    <figure className="code-fig bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
+    <figure
+      className={[
+        'code-fig bg-surface-sunken max-w-3xl min-w-0 overflow-hidden rounded-md',
+        bare ? '' : 'border-border border',
+      ].join(' ')}
+    >
       <figcaption className="flex min-h-11 items-center justify-between px-4">
         <span className="text-data text-ink-subtle uppercase">
-          {lang ?? 'texto'}
+          {lang ?? tr('code.text')}
         </span>
         <button
           type="button"
@@ -38,7 +47,7 @@ export function CodeBlock({ code, lang, html }: Props) {
           ) : (
             <Copy className="size-4" aria-hidden="true" />
           )}
-          {copied ? 'Copiado' : 'Copiar'}
+          {copied ? tr('code.copied') : tr('code.copy')}
         </button>
       </figcaption>
       <pre className="text-code text-ink overflow-x-auto p-4" tabIndex={0}>
@@ -49,7 +58,7 @@ export function CodeBlock({ code, lang, html }: Props) {
         )}
       </pre>
       <span className="sr-only" role="status">
-        {copied ? 'Código copiado al portapapeles' : ''}
+        {copied ? tr('code.copiedStatus') : ''}
       </span>
     </figure>
   )

@@ -1,7 +1,7 @@
 {
   "name": "astra-dev",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "tokens": "bun scripts/tokens.ts && oxfmt src/styles/tokens.css",
     "import": "bun scripts/import/run.ts",
     "import:update": "bun scripts/import/run.ts update",
+    "translate": "bun scripts/translate/run.ts",
     "test": "bun test --pass-with-no-tests src scripts",
     "check:server": "bun run --cwd server check",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:server"
@@ -25,6 +26,7 @@
     "@fontsource/space-mono": "^5.3.0",
     "animejs": "^4.5.0",
     "lucide-react": "^1.70.0",
+    "marked": "^18.2.0",
     "motion": "^14.11.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -42,7 +44,6 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "babel-plugin-react-compiler": "^1.0.0",
-    "marked": "^18.2.0",
     "oxfmt": "^0.78.0",
     "oxlint": "^1.90.0",
     "postcss": "^8.5.32",

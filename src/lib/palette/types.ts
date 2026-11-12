@@ -1,5 +1,6 @@
 // Tipos del command palette. Sin React: los proveedores y el registro se prueban con `bun test`.
 import type { DocMeta, TocItem } from '@/lib/docs/types'
+import type { UiLang } from '@/lib/i18n'
 
 /**
  * Quién puede ver los resultados de un proveedor. `public` es todo el sitio; `subscriber` (lectura)
@@ -14,6 +15,7 @@ export type PaletteIcon =
   | 'tools'
   | 'roadmap'
   | 'doc'
+  | 'natives'
   | 'heading'
   | 'recent'
   | 'sparkles'
@@ -41,11 +43,13 @@ export interface PaletteContext {
   headings: readonly TocItem[]
   pathname: string
   recents: readonly PaletteItem[]
+  /** Idioma de la interfaz: los proveedores devuelven los textos en ese idioma. */
+  lang: UiLang
 }
 
 export interface PaletteProvider {
   id: string
-  /** Encabezado del grupo en la lista. */
+  /** Encabezado del grupo: una clave del diccionario (`lib/i18n.ts`) o, si no lo es, el texto tal cual. */
   label: string
   /** Menor primero. Pública: 10 recientes, 20 página actual, 30 ir a, 40 docs. IA: 50 o más. */
   order: number

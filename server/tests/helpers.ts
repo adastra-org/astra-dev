@@ -1,6 +1,7 @@
 // Shared test fixtures: a tiny docs set, a deterministic fake embedder and a fully wired app.
 import { EmbedderClient } from '@wefaber/embed'
 import { createApp } from '../src/app.ts'
+import { AnswerCache } from '../src/chat/cache.ts'
 import { ChatService } from '../src/chat/service.ts'
 import { loadConfig, type Config, type Role } from '../src/config.ts'
 import type { AppDeps } from '../src/context.ts'
@@ -148,6 +149,7 @@ export async function harness(
     index?: DocsIndex | null
     logger?: Logger
     embedder?: EmbedderClient | null
+    cache?: AnswerCache
   } = {},
 ): Promise<Harness> {
   const config = testConfig(opts.env)
@@ -174,6 +176,12 @@ export async function harness(
             config.limits.dailyTokensGlobal,
           ),
           settings: config.chat,
+          cache:
+            opts.cache ??
+            new AnswerCache({
+              maxEntries: config.chat.cacheMaxEntries,
+              ttlMs: config.chat.cacheTtlSeconds * 1000,
+            }),
         })
       : null,
     limiters: {

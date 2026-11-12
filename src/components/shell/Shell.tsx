@@ -1,16 +1,26 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import { useAsk } from '@/components/ask/useAsk'
 import { CommandPalette } from '@/components/palette/CommandPalette'
+import '@/lib/ask/palette'
+import { askStore } from '@/lib/ask/store'
 import {
   describeTarget,
   isApple,
   isPaletteShortcut,
 } from '@/lib/palette/shortcut'
+import { useLang } from '@/lib/use-lang'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 
+// El chat (y el parser de Markdown) se descarga la primera vez que se abre.
+const AskPanel = lazy(() =>
+  import('@/components/ask/AskPanel').then((m) => ({ default: m.AskPanel })),
+)
+
 /** Sidebar + barra superior + contenido. Bajo `lg` el sidebar es un cajón. */
 export function Shell() {
+  const { tr } = useLang()
   // El cajón guarda la ruta en la que se abrió: al navegar deja de coincidir y se cierra.
   const [openAt, setOpenAt] = useState<string | null>(null)
   const { pathname } = useLocation()
@@ -27,6 +37,16 @@ export function Shell() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
+
+  // Quién es el visitante: decide si el palette ofrece "Preguntar a Ether".
+  useEffect(() => {
+    void askStore.loadViewer()
+  }, [])
+
+  // Se monta al abrirlo por primera vez y queda (la conversación vive en askStore).
+  const askOpen = useAsk().open
+  const [askLoaded, setAskLoaded] = useState(false)
+  if (askOpen && !askLoaded) setAskLoaded(true)
 
   // Palette: Ctrl+K / Cmd+K alterna desde cualquier página (reglas en lib/palette/shortcut.ts).
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -47,7 +67,7 @@ export function Shell() {
         href="#main"
         className="text-label bg-accent-fill text-on-accent sr-only rounded-md px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
       >
-        Saltar al contenido
+        {tr('shell.skip')}
       </a>
       <Sidebar open={open} onClose={() => setOpen(false)} />
       <div className="flex min-w-0 flex-col">
@@ -70,6 +90,11 @@ export function Shell() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
       />
+      {askLoaded && (
+        <Suspense fallback={null}>
+          <AskPanel />
+        </Suspense>
+      )}
       <ScrollRestoration />
     </div>
   )

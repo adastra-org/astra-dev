@@ -2,6 +2,29 @@
 
 export type DocLang = 'es' | 'en'
 
+/**
+ * Estado de una traducción: `auto` salió de un modelo y nadie la revisó; `reviewed` la leyó una
+ * persona (el pipeline nunca la pisa). Un texto escrito a mano en el idioma del doc no lleva flag.
+ */
+export type Translated = 'auto' | 'reviewed'
+
+/** Procedencia de un doc importado (fivem-docs): para atribuir y enlazar al original. */
+export interface DocOrigin {
+  /** Nombre de la fuente en `content-sources.json`. */
+  name: string
+  /** Página original, p. ej. `https://docs.fivem.net/docs/...`. */
+  url: string
+  /** Archivo en el repo de origen, fijado al sha importado. */
+  repoUrl: string
+}
+
+/** Versión traducida de un doc: lo que cambia en las listas (título y resumen). */
+export interface DocTranslationMeta {
+  title: string
+  summary: string
+  translated: Translated
+}
+
 /** Metadatos de un documento (frontmatter validado + datos calculados en build). */
 export interface DocMeta {
   /** Nombre del archivo sin `.md`. Único en todo `content/docs`. */
@@ -19,6 +42,12 @@ export interface DocMeta {
   backlinks: string[]
   /** Ruta del archivo desde la raíz del repo. */
   path: string
+  /** Solo si el propio texto del doc es una traducción (flag del frontmatter). */
+  translated?: Translated
+  /** Solo los docs importados. Los escritos en este repo no la llevan. */
+  origin?: DocOrigin
+  /** Traducciones disponibles de un doc cuyo `lang` es otro (hoy solo `es`). */
+  translations?: { es?: DocTranslationMeta }
 }
 
 export type Block =
@@ -63,4 +92,6 @@ export interface DocContent {
   sections: Section[]
   toc: TocItem[]
   history: History
+  /** Cuerpo de la traducción, cuando existe (los metadatos están en `DocMeta.translations`). */
+  es?: { sections: Section[]; toc: TocItem[] }
 }
