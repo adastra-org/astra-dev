@@ -87,9 +87,14 @@ export async function readNatives(
     for (const f of (await readdir(join(root, source.name))).sort())
       if (f.endsWith('.json')) files.push(join(root, source.name, f))
   }
+  const lists = await Promise.all(
+    files.map(
+      async (file) =>
+        [file, JSON.parse(await readFile(file, 'utf8')) as unknown] as const,
+    ),
+  )
   const out: NativeRecord[] = []
-  for (const file of files) {
-    const list = JSON.parse(await readFile(file, 'utf8')) as unknown
+  for (const [file, list] of lists) {
     if (!Array.isArray(list)) throw new Error(`${file}: expected an array`)
     for (const item of list) out.push(parseNativeRecord(item, file))
   }
