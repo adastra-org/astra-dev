@@ -11,6 +11,12 @@ import { DeepSeekProvider } from './llm/deepseek.ts'
 import { FakeLlmProvider } from './llm/fake.ts'
 import type { LlmProvider } from './llm/provider.ts'
 import type { Logger } from './log.ts'
+import { GithubClient } from './project/github.ts'
+import {
+  DisabledChecklistSource,
+  MyChecklistSource,
+} from './project/mychecklist.ts'
+import { ProjectService } from './project/service.ts'
 import { createViewerPort } from './viewer.ts'
 
 export interface EmbedderOverrides {
@@ -86,6 +92,35 @@ async function readBuildInfo(config: Config): Promise<BuildInfo> {
   }
 }
 
+export function createProject(
+  config: Config,
+  logger: Logger,
+): ProjectService | null {
+  const p = config.project
+  if (!p.githubToken) {
+    logger.warn('project_disabled', { reason: 'ASTRA_GITHUB_TOKEN is not set' })
+    return null
+  }
+  const mc = p.myChecklist
+  return new ProjectService({
+    github: new GithubClient({ token: p.githubToken, baseUrl: p.githubApiUrl }),
+    repo: p.repo,
+    ref: p.ref,
+    planPath: p.planPath,
+    complexityPath: p.complexityPath,
+    checklist: mc.token
+      ? new MyChecklistSource({
+          baseUrl: mc.baseUrl,
+          token: mc.token,
+          listName: mc.listName,
+        })
+      : new DisabledChecklistSource(mc.listName),
+    ttlMs: p.cacheTtlMs,
+    viewerPerMin: p.viewerPerMin,
+    logger,
+  })
+}
+
 export async function buildDeps(
   config: Config,
   logger: Logger,
@@ -127,6 +162,7 @@ export async function buildDeps(
     viewers: createViewerPort(config),
     retriever,
     chat,
+    project: createProject(config, logger),
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),

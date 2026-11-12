@@ -168,6 +168,13 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                                 |
 | `RATE_SEARCH_IP_PER_MIN`                                      | 60                                                              | `searchDocs` público                                                       |
 | `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                  | 40000, 1000000                                                  | Reset 00:00 UTC                                                            |
+| `ASTRA_GITHUB_TOKEN`                                          | —                                                               | Secreto, solo lectura. Sin él, `project` queda apagado                     |
+| `PROJECT_REPO`, `PROJECT_REF`                                 | `adastra-org/astra-dev`, `dev`                                  | Repo y rama de los que se leen plan, complejidad y commits                 |
+| `PROJECT_PLAN_PATH`, `PROJECT_COMPLEXITY_PATH`                | `docs/plan/README.md`, `docs/project/complexity.json`           | Relativos al repo                                                          |
+| `PROJECT_CACHE_TTL_SECONDS`, `RATE_PROJECT_VIEWER_PER_MIN`    | 300, 30                                                         | Caché de "Proyecto" y su rate limit por viewer                             |
+| `GITHUB_API_URL`                                              | `https://api.github.com`                                        | Para pruebas con un GitHub falso                                           |
+| `MYCHECKLIST_URL`, `MYCHECKLIST_LIST`                         | `https://checklist.wefaber.net`, `Ad Astra`                     | Lista externa que se muestra en el checklist                               |
+| `MYCHECKLIST_TOKEN`                                           | —                                                               | Secreto, `mck_…` en modo `read`. Sin él, la lista externa queda `disabled` |
 
 Un valor inválido hace fallar el arranque con el listado de problemas (un deploy mal configurado no llega a vivo: `/ready` no responde y el script no cambia el slot).
 
