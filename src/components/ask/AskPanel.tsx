@@ -4,6 +4,7 @@ import {
   FileText,
   Info,
   LockKeyhole,
+  LogIn,
   RotateCcw,
   Sparkles,
   SquarePen,
@@ -378,6 +379,17 @@ function TurnView({
               <p className="text-body-sm text-ink-muted mt-1">
                 {errorView.hint}
               </p>
+            )}
+            {errorView.action && (
+              <a
+                href={errorView.action.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-label text-ink hover:bg-surface-overlay bg-surface-raised -ml-1 mt-2 mr-2 inline-flex min-h-11 items-center gap-2 rounded-md px-3"
+              >
+                <LogIn className="size-4" aria-hidden="true" />
+                {errorView.action.label}
+              </a>
             )}
             {errorView.retry && isLast && (
               <button

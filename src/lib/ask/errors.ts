@@ -3,6 +3,11 @@
 import { t, type MessageKey, type Vars } from '@/lib/i18n'
 import { AskError } from './types'
 
+/** Sitio donde se inicia sesión: las cuentas viven en adastra-site y la cookie es de `.adastrarp.com`. */
+export const ACCOUNTS_URL: string =
+  (import.meta as { env?: Record<string, string | undefined> }).env
+    ?.VITE_ACCOUNTS_URL ?? 'https://adastrarp.com'
+
 export interface ErrorView {
   /** Qué pasó, en una frase. */
   title: string
@@ -10,6 +15,8 @@ export interface ErrorView {
   hint?: string
   /** Tiene sentido ofrecer "Reintentar". */
   retry: boolean
+  /** Enlace a donde se resuelve el problema (iniciar sesión). Se abre en otra pestaña. */
+  action?: { label: string; href: string }
 }
 
 /** Traductor de claves; por defecto español (para probar sin React). */
@@ -36,7 +43,9 @@ export function describeError(
       return {
         title: tr('ask.err.unauthenticated'),
         hint: tr('ask.err.unauthenticated.hint'),
-        retry: false,
+        // Tras iniciar sesión en la otra pestaña, "Reintentar" repite la pregunta con la cookie nueva.
+        retry: true,
+        action: { label: tr('ask.err.signin'), href: ACCOUNTS_URL },
       }
     case 'subscription_required':
       return {

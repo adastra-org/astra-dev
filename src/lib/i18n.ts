@@ -386,7 +386,8 @@ print(("%.2f"):format(math.pi))
   'ask.palette.openHint': 'Pregunta en lenguaje natural sobre la documentación',
   'ask.err.unauthenticated': 'Inicia sesión para usar Ask Ether.',
   'ask.err.unauthenticated.hint':
-    'La búsqueda en Ctrl+K sigue disponible sin cuenta.',
+    'Inicia sesión en adastrarp.com y vuelve a esta pestaña y reintenta. La búsqueda en Ctrl+K sigue disponible sin cuenta.',
+  'ask.err.signin': 'Iniciar sesión en adastrarp.com',
   'ask.err.subscription': 'Ask Ether es para suscriptores y staff de Ad Astra.',
   'ask.err.subscription.hint': 'Tu cuenta no tiene una suscripción activa.',
   'ask.err.rate': 'Hiciste demasiadas preguntas seguidas.',
@@ -788,7 +789,8 @@ print(("%.2f"):format(math.pi))
   'ask.palette.openHint': 'Ask in natural language about the documentation',
   'ask.err.unauthenticated': 'Sign in to use Ask Ether.',
   'ask.err.unauthenticated.hint':
-    'Search with Ctrl+K stays available without an account.',
+    'Sign in at adastrarp.com, come back to this tab and retry. Search with Ctrl+K stays available without an account.',
+  'ask.err.signin': 'Sign in at adastrarp.com',
   'ask.err.subscription': 'Ask Ether is for Ad Astra subscribers and staff.',
   'ask.err.subscription.hint': 'Your account has no active subscription.',
   'ask.err.rate': 'You asked too many questions in a row.',

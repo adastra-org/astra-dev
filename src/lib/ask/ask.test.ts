@@ -465,7 +465,10 @@ describe('markdown seguro', () => {
 
 describe('mensajes de error', () => {
   test('cada código tiene mensaje y si se puede reintentar', () => {
-    expect(describeError('unauthenticated').retry).toBe(false)
+    expect(describeError('unauthenticated').retry).toBe(true)
+    expect(describeError('unauthenticated').action?.href).toBe(
+      'https://adastrarp.com',
+    )
     expect(describeError('subscription_required').retry).toBe(false)
     expect(describeError('budget_exceeded', 7200).hint).toContain('2 h')
     expect(describeError('budget_exceeded').retry).toBe(false)
