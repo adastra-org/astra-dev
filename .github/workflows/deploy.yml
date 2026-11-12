@@ -46,17 +46,33 @@ jobs:
       - name: Build server bundle (API + semantic index)
         # The runner lives on the VPS, so the local embedder is reachable and the index is
         # semantic. If it is down the index is keyword-only: warn, the deploy still works.
+        # Vectors computed off the VPS (PC or Cloudflare) and uploaded to
+        # ~/deploy/index-prebuilt/ (index.json + index.vec) are reused for every chunk whose text
+        # is unchanged, so the embedder only sees what changed. They are accepted only for the
+        # models listed in the `development` environment variable EMBEDDER_ACCEPT_MODELS, which
+        # gets a model only after `bun run embed:compat` passed for it (docs/import/README.md, 4b).
         # The bundle is only src + production deps + the index (docs/server/README.md).
+        env:
+          EMBEDDER_ACCEPT_MODELS: ${{ vars.EMBEDDER_ACCEPT_MODELS }}
         run: |
           set -eu
           export PATH="/opt/bun:$PATH"
           # Natives and fivem-docs at the shas pinned in content-sources.json (docs/import/README.md).
           bun run import
+          prebuilt="$HOME/deploy/index-prebuilt/index.json"
+          if [ -f "$prebuilt" ]; then
+            echo "reusing vectors from $prebuilt"
+            export REUSE_FROM="$prebuilt"
+          fi
           (cd server && bun run index)
           rm -rf server-dist
           mkdir -p server-dist/data
           cp -r server/src server/package.json server/bun.lock server-dist/
           cp server/data/index.json server-dist/data/index.json
+          # Semantic indexes carry their vectors in a sibling file (Float32).
+          if grep -q '"semantic":true' server/data/index.json; then
+            cp server/data/index.vec server-dist/data/index.vec
+          fi
           (cd server-dist && bun install --frozen-lockfile --production)
           test -f server-dist/src/main.ts
           if ! grep -q '"semantic":true' server-dist/data/index.json; then

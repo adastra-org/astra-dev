@@ -14,7 +14,11 @@ import {
 import { buildIndex } from '../src/index/build.ts'
 import { NativeLookup, hashKey, nameKey } from '../src/index/lookup.ts'
 import { Retriever, tokenize } from '../src/index/search.ts'
-import { IndexFormatError, parseIndex } from '../src/index/store.ts'
+import {
+  IndexFormatError,
+  parseIndex,
+  serializeIndex,
+} from '../src/index/store.ts'
 import { DIMS, DOCS, fakeEmbedder, harness, parseSse } from './helpers.ts'
 
 const native = (o: Partial<NativeRecord> & { name: string }): NativeRecord => ({
@@ -185,19 +189,20 @@ describe('index with natives', () => {
   })
   test('survives the strict parser; malformed native metadata is rejected', async () => {
     const i = await index()
-    const round = parseIndex(JSON.parse(JSON.stringify(i)))
+    const { json, vectors } = serializeIndex(i)
+    const round = parseIndex(JSON.parse(json), vectors)
     const c = round.chunks.find(
       (x) => x.id === 'native:gta:SET_VEHICLE_DOOR_OPEN',
     )
     expect(c?.native?.hashes).toEqual(['0x7C65DAC73C35C862', '0xBB75D38B'])
 
-    const bad = JSON.parse(JSON.stringify(i))
+    const bad = JSON.parse(json)
     const target = bad.chunks.find((x: { kind: string }) => x.kind === 'native')
     delete target.native
-    expect(() => parseIndex(bad)).toThrow(IndexFormatError)
-    const noKind = JSON.parse(JSON.stringify(i))
+    expect(() => parseIndex(bad, vectors)).toThrow(IndexFormatError)
+    const noKind = JSON.parse(json)
     delete noKind.chunks[0].kind
-    expect(() => parseIndex(noKind)).toThrow(IndexFormatError)
+    expect(() => parseIndex(noKind, vectors)).toThrow(IndexFormatError)
   })
 })
 

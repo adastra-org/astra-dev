@@ -115,16 +115,18 @@ Hoy `subscriber` y `staff` pueden chatear. `staff` read-write queda para cuando 
 cd server && bun run index        # o: bun --cwd server run index
 ```
 
-Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/generated/` (`GENERATED_DIR`; los docs de fivem-docs y los natives, ver [import/README.md](../import/README.md); correr `bun run import` en la raíz antes. Si no existe, el índice sale solo con docs y avisa). Parte cada doc por encabezado (`##` y `###`, con la introducción y el `summary` como primer fragmento; bloques largos se parten por bloque), arma **un fragmento por native** y escribe `server/data/index.json` (`INDEX_PATH`, ignorado por git):
+Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/generated/` (`GENERATED_DIR`; los docs de fivem-docs y los natives, ver [import/README.md](../import/README.md); correr `bun run import` en la raíz antes. Si no existe, el índice sale solo con docs y avisa). Parte cada doc por encabezado (`##` y `###`, con la introducción y el `summary` como primer fragmento; bloques largos se parten por bloque), arma **un fragmento por native** y escribe `server/data/index.json` (`INDEX_PATH`, ignorado por git) más, si es semántico, `server/data/index.vec` con los vectores (Float32, orden de `chunks`, `dims` por fragmento; el hash del `.vec` está en el JSON y el server rechaza un par de generaciones distintas):
 
 ```
-{ version: 2, builtAt, sourceHash, model, dims, semantic, chunks: [{ id, kind, native?, slug, title, heading, anchor, text, excerpt, vector? }] }
+{ version: 3, builtAt, sourceHash, model, dims, semantic, vectors: { file, bytes, hash } | null,
+  chunks: [{ id, kind, native?, slug, title, heading, anchor, text, excerpt }] }
 ```
 
 - `kind` es `doc` (página bajo `/docs`, con `anchor`) o `native` (página `/natives/<slug>`, sin ancla). Un fragmento `native` lleva `native`: `id`, nombre, nombre Lua, `ns`, `apiset`, hashes, alias y firma. El texto empieza por los nombres y la firma, que es lo que se busca, y se corta a 2400 caracteres (los ejemplos largos primero).
 - Con 7.326 natives el índice completo tiene ~10.000 fragmentos y ~10 MB sin vectores. Se genera en menos de 1 s por palabras clave.
 
 - Los vectores salen de `@wefaber/embed` (`EmbedderClient`), truncados (Matryoshka) a `EMBEDDER_DIMS` (256) y normalizados. Documento y consulta usan los prefijos de tarea de EmbeddingGemma (`server/src/index/prompts.ts`); si cambia el modelo, se cambian ahí y se regenera.
+- Los vectores pueden calcularse fuera del VPS (PC o Cloudflare) y reutilizarse con `REUSE_FROM`, `EMBEDDER_TOKEN` y `EMBEDDER_ACCEPT_MODELS`: ver [import/README.md, fase 4b](../import/README.md#fase-4b-embeddings-fuera-del-vps). `bun run embed:compat` compara dos embedders.
 - **El embedder es local al VPS** (`http://127.0.0.1:8891/v1/embeddings`, unidad `embedder`). En otra máquina no responde: el índice sale **solo por palabras clave** (`semantic: false`), con un aviso, y el build **no falla**. Regenerarlo en el VPS (lo hace `deploy.yml`, el runner vive ahí) lo deja semántico.
 - `anchor` es el id del encabezado en la página renderizada. El test `scripts/docs/chunk-parity.test.ts` obliga a que coincida con el algoritmo del motor de docs.
 - El server carga el índice una vez al arrancar. Un doc nuevo requiere regenerar y desplegar (el deploy ya lo hace).
@@ -139,31 +141,33 @@ Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/g
 
 Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/astra-dev.env` (modo 600, formato `CLAVE=valor`).
 
-| Variable                                                      | Defecto                                                         | Notas                                                                    |
-| ------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `NODE_ENV`                                                    | (la unidad pone `production`)                                   | En producción: sin stub de viewer, sin proveedor `fake`, key obligatoria |
-| `DEEPSEEK_API_KEY`                                            | — **obligatoria en producción**                                 | Secreto                                                                  |
-| `ACCOUNTS_BASE_URL`                                           | `https://adastrarp.com`                                         | Servicio de cuentas (adastra-site)                                       |
-| `ALLOWED_ORIGINS`                                             | `https://development.adastrarp.com`                             | Coma separada. En dev suma `localhost:5173`                              |
-| `ASTRA_SLOT`                                                  | `dev` (la unidad pone `blue`/`green`)                           | Define el puerto: blue 4101, green 4102, otro 4100                       |
-| `PORT`, `HOST`                                                | por slot, `127.0.0.1`                                           | Solo loopback                                                            |
-| `TRUST_PROXY`                                                 | `true` en producción                                            | Confía en `X-Real-IP` de nginx                                           |
-| `INDEX_PATH`, `BUILD_INFO_PATH`                               | `data/index.json`, `build.json`                                 | `build.json` lo escribe el deploy (sha, versión)                         |
-| `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_MS`       | `127.0.0.1:8891/v1/embeddings`, `embeddinggemma-2`, 2500        | Local al VPS                                                             |
-| `EMBEDDER_DIMS`                                               | 256                                                             | Cambiarlo exige regenerar el índice                                      |
-| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción                                          |
-| `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                 | `/api/auth/viewer`, 3000                                        |                                                                          |
-| `ASTRA_DEV_VIEWER`                                            | —                                                               | Stub de dev. Ignorado en producción                                      |
-| `CHAT_MAX_QUESTION_CHARS`                                     | 800                                                             |                                                                          |
-| `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`       | 6, 800                                                          |                                                                          |
-| `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`             | 700, 4000                                                       |                                                                          |
-| `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                        | 5, 9000                                                         |                                                                          |
-| `CHAT_NATIVES_TOP_K`                                          | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs            |
-| `CHAT_MIN_SEMANTIC_SCORE`                                     | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`       |
-| `CHAT_MAX_BODY_BYTES`                                         | 16384                                                           |                                                                          |
-| `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                               |
-| `RATE_SEARCH_IP_PER_MIN`                                      | 60                                                              | `searchDocs` público                                                     |
-| `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                  | 40000, 1000000                                                  | Reset 00:00 UTC                                                          |
+| Variable                                                      | Defecto                                                         | Notas                                                                      |
+| ------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `NODE_ENV`                                                    | (la unidad pone `production`)                                   | En producción: sin stub de viewer, sin proveedor `fake`, key obligatoria   |
+| `DEEPSEEK_API_KEY`                                            | — **obligatoria en producción**                                 | Secreto                                                                    |
+| `ACCOUNTS_BASE_URL`                                           | `https://adastrarp.com`                                         | Servicio de cuentas (adastra-site)                                         |
+| `ALLOWED_ORIGINS`                                             | `https://development.adastrarp.com`                             | Coma separada. En dev suma `localhost:5173`                                |
+| `ASTRA_SLOT`                                                  | `dev` (la unidad pone `blue`/`green`)                           | Define el puerto: blue 4101, green 4102, otro 4100                         |
+| `PORT`, `HOST`                                                | por slot, `127.0.0.1`                                           | Solo loopback                                                              |
+| `TRUST_PROXY`                                                 | `true` en producción                                            | Confía en `X-Real-IP` de nginx                                             |
+| `INDEX_PATH`, `BUILD_INFO_PATH`                               | `data/index.json`, `build.json`                                 | `build.json` lo escribe el deploy (sha, versión)                           |
+| `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_MS`       | `127.0.0.1:8891/v1/embeddings`, `embeddinggemma-2`, 2500        | Local al VPS                                                               |
+| `EMBEDDER_DIMS`                                               | 256                                                             | Cambiarlo exige regenerar el índice                                        |
+| `EMBEDDER_TOKEN`                                              | —                                                               | Secreto. Bearer para un embedder hospedado (Cloudflare). Exige https       |
+| `EMBEDDER_ACCEPT_MODELS`                                      | — (siempre incluye `EMBEDDER_MODEL`)                            | Modelos cuyos vectores se aceptan de un índice ajeno (tras `embed:compat`) |
+| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción                                            |
+| `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                 | `/api/auth/viewer`, 3000                                        |                                                                            |
+| `ASTRA_DEV_VIEWER`                                            | —                                                               | Stub de dev. Ignorado en producción                                        |
+| `CHAT_MAX_QUESTION_CHARS`                                     | 800                                                             |                                                                            |
+| `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`       | 6, 800                                                          |                                                                            |
+| `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`             | 700, 4000                                                       |                                                                            |
+| `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                        | 5, 9000                                                         |                                                                            |
+| `CHAT_NATIVES_TOP_K`                                          | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs              |
+| `CHAT_MIN_SEMANTIC_SCORE`                                     | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`         |
+| `CHAT_MAX_BODY_BYTES`                                         | 16384                                                           |                                                                            |
+| `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                                 |
+| `RATE_SEARCH_IP_PER_MIN`                                      | 60                                                              | `searchDocs` público                                                       |
+| `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                  | 40000, 1000000                                                  | Reset 00:00 UTC                                                            |
 
 Un valor inválido hace fallar el arranque con el listado de problemas (un deploy mal configurado no llega a vivo: `/ready` no responde y el script no cambia el slot).
 
@@ -235,15 +239,15 @@ bun run check                                              # typecheck + tests (
 
 Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. El server no habla con Vite: la UI en dev debe apuntar a `http://127.0.0.1:4100` (el origen `localhost:5173` ya está permitido en dev).
 
-## Pruebas (`bun test`, 112)
+## Pruebas (`bun test`, 128)
 
-`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
+`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL), `offline-embeddings` (índice en dos archivos, reutilización de vectores, compatibilidad entre embedders, token y reintentos) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
 
 ## Estado de verificación
 
 | Qué                                                                                  | Estado                                                                                                              |
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Typecheck + 112 tests del server, `bun run check` de la raíz                         | Verificado                                                                                                          |
+| Typecheck + 128 tests del server, `bun run check` de la raíz                         | Verificado                                                                                                          |
 | Índice por palabras clave con el corpus real (338 docs, 7.326 natives) y consultas   | Verificado: 10.254 fragmentos, 3-7 ms por consulta; búsquedas por nombre y hash exactas                             |
 | Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL            | Verificado a mano                                                                                                   |
 | Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401     | Verificado a mano                                                                                                   |

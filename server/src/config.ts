@@ -17,7 +17,16 @@ export interface Config {
   accounts: { baseUrl: string; viewerPath: string; timeoutMs: number }
   /** Dev stub role. `null` means: use the accounts service. Always null in production. */
   devViewer: Role | null
-  embedder: { url: string; model: string; timeoutMs: number; dims: number }
+  embedder: {
+    url: string
+    model: string
+    timeoutMs: number
+    dims: number
+    /** Bearer token for a hosted embedder (Cloudflare Workers AI). Secret; empty = no auth header. */
+    token: string
+    /** Models whose vectors may be reused from a prebuilt index. Always includes `model`. */
+    acceptModels: string[]
+  }
   llm: {
     provider: 'deepseek' | 'fake'
     baseUrl: string
@@ -101,6 +110,21 @@ export function loadConfig(env: Env = process.env): Config {
   if (production && provider === 'deepseek' && !apiKey)
     problems.push('DEEPSEEK_API_KEY is required in production')
 
+  const embedderUrl = url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings')
+  const embedderModel = str('EMBEDDER_MODEL', 'embeddinggemma-2')
+  const embedderToken = env.EMBEDDER_TOKEN?.trim() ?? ''
+  if (embedderToken) {
+    // A token never travels in clear over the network.
+    try {
+      const u = new URL(embedderUrl)
+      const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+      if (u.protocol !== 'https:' && !loopback)
+        problems.push('EMBEDDER_TOKEN needs an https EMBEDDER_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
   const requestedStub = env.ASTRA_DEV_VIEWER?.trim()
   let devViewer: Role | null = null
   // In production the stub flag is ignored on purpose (main.ts logs a warning).
@@ -141,10 +165,20 @@ export function loadConfig(env: Env = process.env): Config {
     },
     devViewer,
     embedder: {
-      url: url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings'),
-      model: str('EMBEDDER_MODEL', 'embeddinggemma-2'),
+      url: embedderUrl,
+      model: embedderModel,
       timeoutMs: int('EMBEDDER_TIMEOUT_MS', 2500, 100, 60000),
       dims: int('EMBEDDER_DIMS', 256, 32, 768),
+      token: embedderToken,
+      acceptModels: [
+        ...new Set([
+          embedderModel,
+          ...str('EMBEDDER_ACCEPT_MODELS', '')
+            .split(',')
+            .map((m) => m.trim())
+            .filter(Boolean),
+        ]),
+      ],
     },
     llm: {
       provider: provider === 'fake' ? 'fake' : 'deepseek',
@@ -188,7 +222,11 @@ export const describeConfig = (c: Config) => ({
   host: c.host,
   port: c.port,
   llm: { provider: c.llm.provider, model: c.llm.model, hasKey: !!c.llm.apiKey },
-  embedder: c.embedder.url,
+  embedder: {
+    url: c.embedder.url,
+    model: c.embedder.model,
+    hasToken: !!c.embedder.token,
+  },
   accounts: c.accounts.baseUrl,
   devViewer: c.devViewer,
 })
