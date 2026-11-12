@@ -151,41 +151,42 @@ Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/g
 
 Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/astra-dev.env` (modo 600, formato `CLAVE=valor`).
 
-| Variable                                                      | Defecto                                                         | Notas                                                                      |
-| ------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `NODE_ENV`                                                    | (la unidad pone `production`)                                   | En producción: sin stub de viewer, sin proveedor `fake`, key obligatoria   |
-| `DEEPSEEK_API_KEY`                                            | — **obligatoria en producción**                                 | Secreto                                                                    |
-| `ACCOUNTS_BASE_URL`                                           | `https://adastrarp.com`                                         | Servicio de cuentas (adastra-site)                                         |
-| `ALLOWED_ORIGINS`                                             | `https://development.adastrarp.com`                             | Coma separada. En dev suma `localhost:5173`                                |
-| `ASTRA_SLOT`                                                  | `dev` (la unidad pone `blue`/`green`)                           | Define el puerto: blue 4101, green 4102, otro 4100                         |
-| `PORT`, `HOST`                                                | por slot, `127.0.0.1`                                           | Solo loopback                                                              |
-| `TRUST_PROXY`                                                 | `true` en producción                                            | Confía en `X-Real-IP` de nginx                                             |
-| `INDEX_PATH`, `BUILD_INFO_PATH`                               | `data/index.json`, `build.json`                                 | `build.json` lo escribe el deploy (sha, versión)                           |
-| `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_MS`       | `127.0.0.1:8891/v1/embeddings`, `embeddinggemma-2`, 2500        | Local al VPS                                                               |
-| `EMBEDDER_DIMS`                                               | 256                                                             | Cambiarlo exige regenerar el índice                                        |
-| `EMBEDDER_TOKEN`                                              | —                                                               | Secreto. Bearer para un embedder hospedado (Cloudflare). Exige https       |
-| `EMBEDDER_ACCEPT_MODELS`                                      | — (siempre incluye `EMBEDDER_MODEL`)                            | Modelos cuyos vectores se aceptan de un índice ajeno (tras `embed:compat`) |
-| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción; `local` ver abajo                         |
-| `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                 | `/api/auth/viewer`, 3000                                        |                                                                            |
-| `ASTRA_DEV_VIEWER`                                            | —                                                               | Stub de dev. Ignorado en producción                                        |
-| `CHAT_MAX_QUESTION_CHARS`                                     | 800                                                             |                                                                            |
-| `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`       | 6, 800                                                          |                                                                            |
-| `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`             | 700, 4000                                                       |                                                                            |
-| `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                        | 5, 9000                                                         |                                                                            |
-| `CHAT_NATIVES_TOP_K`                                          | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs              |
-| `CHAT_MIN_SEMANTIC_SCORE`                                     | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`         |
-| `CHAT_MAX_BODY_BYTES`                                         | 16384                                                           |                                                                            |
-| `CHAT_CACHE_TTL_SECONDS`, `CHAT_CACHE_MAX_ENTRIES`            | 3600, 500                                                       | Caché de respuestas. 0 en cualquiera = apagada                             |
-| `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                                 |
-| `RATE_SEARCH_IP_PER_MIN`                                      | 60                                                              | `searchDocs` público                                                       |
-| `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                  | 40000, 1000000                                                  | Reset 00:00 UTC                                                            |
-| `ASTRA_GITHUB_TOKEN`                                          | —                                                               | Secreto, solo lectura. Sin él, `project` queda apagado                     |
-| `PROJECT_REPO`, `PROJECT_REF`                                 | `adastra-org/astra-dev`, `dev`                                  | Repo y rama de los que se leen plan, complejidad y commits                 |
-| `PROJECT_PLAN_PATH`, `PROJECT_COMPLEXITY_PATH`                | `docs/plan/README.md`, `docs/project/complexity.json`           | Relativos al repo                                                          |
-| `PROJECT_CACHE_TTL_SECONDS`, `RATE_PROJECT_VIEWER_PER_MIN`    | 300, 30                                                         | Caché de "Proyecto" y su rate limit por viewer                             |
-| `GITHUB_API_URL`                                              | `https://api.github.com`                                        | Para pruebas con un GitHub falso                                           |
-| `MYCHECKLIST_URL`, `MYCHECKLIST_LIST`                         | `https://checklist.wefaber.net`, `Ad Astra`                     | Lista externa que se muestra en el checklist                               |
-| `MYCHECKLIST_TOKEN`                                           | —                                                               | Secreto, `mck_…` en modo `read`. Sin él, la lista externa queda `disabled` |
+| Variable                                                             | Defecto                                                         | Notas                                                                      |
+| -------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `NODE_ENV`                                                           | (la unidad pone `production`)                                   | En producción: sin stub de viewer, sin proveedor `fake`, key obligatoria   |
+| `DEEPSEEK_API_KEY`                                                   | — **obligatoria en producción**                                 | Secreto                                                                    |
+| `ACCOUNTS_BASE_URL`                                                  | `https://adastrarp.com`                                         | Servicio de cuentas (adastra-site)                                         |
+| `ALLOWED_ORIGINS`                                                    | `https://development.adastrarp.com`                             | Coma separada. En dev suma `localhost:5173`                                |
+| `ASTRA_SLOT`                                                         | `dev` (la unidad pone `blue`/`green`)                           | Define el puerto: blue 4101, green 4102, otro 4100                         |
+| `PORT`, `HOST`                                                       | por slot, `127.0.0.1`                                           | Solo loopback                                                              |
+| `TRUST_PROXY`                                                        | `true` en producción                                            | Confía en `X-Real-IP` de nginx                                             |
+| `INDEX_PATH`, `BUILD_INFO_PATH`                                      | `data/index.json`, `build.json`                                 | `build.json` lo escribe el deploy (sha, versión)                           |
+| `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_MS`              | `127.0.0.1:8891/v1/embeddings`, `embeddinggemma-2`, 2500        | Local al VPS                                                               |
+| `EMBEDDER_DIMS`                                                      | 256                                                             | Cambiarlo exige regenerar el índice                                        |
+| `EMBEDDER_TOKEN`                                                     | —                                                               | Secreto. Bearer para un embedder hospedado (Cloudflare). Exige https       |
+| `EMBEDDER_ACCEPT_MODELS`                                             | — (siempre incluye `EMBEDDER_MODEL`)                            | Modelos cuyos vectores se aceptan de un índice ajeno (tras `embed:compat`) |
+| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS`        | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción; `local` ver abajo                         |
+| `DECISION_URL`, `DECISION_TIMEOUT_MS`, `DECISION_FOLLOWUP_THRESHOLD` | — (apagado), 1500, 0,25                                         | Clasificador de follow-ups; ver "Decision model". Solo loopback            |
+| `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                        | `/api/auth/viewer`, 3000                                        |                                                                            |
+| `ASTRA_DEV_VIEWER`                                                   | —                                                               | Stub de dev. Ignorado en producción                                        |
+| `CHAT_MAX_QUESTION_CHARS`                                            | 800                                                             |                                                                            |
+| `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`              | 6, 800                                                          |                                                                            |
+| `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`                    | 700, 4000                                                       |                                                                            |
+| `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                               | 5, 9000                                                         |                                                                            |
+| `CHAT_NATIVES_TOP_K`                                                 | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs              |
+| `CHAT_MIN_SEMANTIC_SCORE`                                            | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`         |
+| `CHAT_MAX_BODY_BYTES`                                                | 16384                                                           |                                                                            |
+| `CHAT_CACHE_TTL_SECONDS`, `CHAT_CACHE_MAX_ENTRIES`                   | 3600, 500                                                       | Caché de respuestas. 0 en cualquiera = apagada                             |
+| `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`                   | 6, 20                                                           | Ventana deslizante de 60 s                                                 |
+| `RATE_SEARCH_IP_PER_MIN`                                             | 60                                                              | `searchDocs` público                                                       |
+| `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                         | 40000, 1000000                                                  | Reset 00:00 UTC                                                            |
+| `ASTRA_GITHUB_TOKEN`                                                 | —                                                               | Secreto, solo lectura. Sin él, `project` queda apagado                     |
+| `PROJECT_REPO`, `PROJECT_REF`                                        | `adastra-org/astra-dev`, `dev`                                  | Repo y rama de los que se leen plan, complejidad y commits                 |
+| `PROJECT_PLAN_PATH`, `PROJECT_COMPLEXITY_PATH`                       | `docs/plan/README.md`, `docs/project/complexity.json`           | Relativos al repo                                                          |
+| `PROJECT_CACHE_TTL_SECONDS`, `RATE_PROJECT_VIEWER_PER_MIN`           | 300, 30                                                         | Caché de "Proyecto" y su rate limit por viewer                             |
+| `GITHUB_API_URL`                                                     | `https://api.github.com`                                        | Para pruebas con un GitHub falso                                           |
+| `MYCHECKLIST_URL`, `MYCHECKLIST_LIST`                                | `https://checklist.wefaber.net`, `Ad Astra`                     | Lista externa que se muestra en el checklist                               |
+| `MYCHECKLIST_TOKEN`                                                  | —                                                               | Secreto, `mck_…` en modo `read`. Sin él, la lista externa queda `disabled` |
 
 Un valor inválido hace fallar el arranque con el listado de problemas (un deploy mal configurado no llega a vivo: `/ready` no responde y el script no cambia el slot).
 
@@ -283,6 +284,28 @@ LLM_PROVIDER=local LLM_MODEL=lfm ASTRA_DEV_VIEWER=staff bun run dev
 ```
 
 Alcanza para desarrollo sin red o sin saldo de DeepSeek. No lo tomamos como reemplazo en producción: un modelo de 2-3B se equivoca en detalles (cita de más, nombres de tokens) y no se midió con el índice completo de natives ni con embedder.
+
+### Decision model (`DECISION_URL`)
+
+Un clasificador chico decide si la pregunta nueva necesita el turno anterior para entenderse. Si no lo necesita, la búsqueda usa solo la pregunta; hoy (sin decisor) siempre se le suma el último turno del usuario y un tema anterior contamina los resultados. Los modelos `d1` de Liquid AI no generan texto: contestan sí/no o elegir-una-opción con probabilidades calibradas en un solo forward pass, por `/v1/systemone` de llama.cpp.
+
+```bash
+llama-server -m d1-Omni-2B-Q8_0.gguf --host 127.0.0.1 --port 8081 -ngl 99 -b 4096 -ub 4096
+DECISION_URL=http://127.0.0.1:8081 bun run dev
+```
+
+Reglas: `DECISION_URL` vacío = apagado (comportamiento de siempre) y debe ser loopback porque recibe el texto de la pregunta. Si el decisor falla, tarda más de `DECISION_TIMEOUT_MS` o contesta algo raro, se usa el historial como antes: el decisor solo puede **acortar** una búsqueda, nunca bloquear una pregunta. Con la sesión sin historial no se lo consulta. El log de `/chat` suma `usedHistory`.
+
+Medición (2026-11-12, llama.cpp b12314, RTX 5070, `Q8_0`, 36 casos propios en español y 18 de validación):
+
+| Modelo         | Tamaño | Follow-up (con historial)                              | `route` answer/clarify/offtopic | Latencia |
+| -------------- | ------ | ------------------------------------------------------ | ------------------------------- | -------- |
+| `d1-omni-600M` | 407 MB | 10/18 a 0,5; 12/18 en el mejor umbral                  | 21/34: contesta `answer` a todo | 12 ms    |
+| `d1-Omni-2B`   | 1,8 GB | 14/18 a 0,5; 18/18 a 0,20 (17/18 a 0,30 en validación) | 29/34                           | 37 ms    |
+
+- **El 600M no sirve** para esto. El **2B sí** para el follow-up, y con un umbral bajo: la probabilidad queda por debajo de 0,5 incluso en follow-ups reales. Por eso el umbral por defecto es 0,25 (perder contexto cuesta más que arrastrarlo).
+- **`route` no se usa.** El 2B marca `offtopic` en ~16 % de preguntas válidas con confianza 0,5-0,65 ("¿Qué es una native?" con historial, "¿Qué pasa si no hay saldo?"). Bloquear con eso rechazaría preguntas buenas. Hoy el rechazo sale del puntaje de retrieval.
+- **Efecto en la búsqueda, medido con el índice real (5 docs, solo palabras clave) y el 2B:** el decisor acertó 14/14 (8 independientes → `false`, 6 follow-ups → `true`, ~16 ms). El top-1 de las preguntas independientes tras un historial ajeno pasó de 4/8 a 5/8; los follow-ups quedaron en 6/6. La mejora es chica porque el buscador por palabras clave falla solo en varias de esas preguntas aun sin historial, y una (`¿Qué es un backlink?`) empeoró: el historial la ayudaba por casualidad. Falta medirlo con embedder y el índice de natives.
 
 ## Pruebas (`bun test`, 143)
 

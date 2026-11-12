@@ -154,6 +154,7 @@ export function createApp(deps: AppDeps) {
         log.degraded = run.degraded
         log.sources = run.sources.length
         log.cache = run.cacheHit ? 'hit' : 'miss'
+        if (run.usedHistory != null) log.usedHistory = run.usedHistory
 
         return sseResponse(
           async function* (signal) {
