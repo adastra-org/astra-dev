@@ -6,11 +6,20 @@ import type { RunOutcome } from './runner.ts'
 import { capWasmMemory } from './wasm-patch.ts'
 import wasmUrl from 'wasmoon/dist/glue.wasm?url'
 
+export type CrashReason = 'boot' | 'worker' | 'unreadable' | 'load'
+
 export type RunResult =
   | { status: 'finished'; outcome: RunOutcome; ms: number; lines: string[] }
   | { status: 'timeout'; ms: number; lines: string[] }
   | { status: 'cancelled'; ms: number; lines: string[] }
-  | { status: 'crash'; message: string; ms: number; lines: string[] }
+  | {
+      status: 'crash'
+      message: string
+      /** Causa conocida: la interfaz la traduce; sin ella se muestra `message`. */
+      reason?: CrashReason
+      ms: number
+      lines: string[]
+    }
 
 export interface RunHandle {
   result: Promise<RunResult>
@@ -80,6 +89,7 @@ export function runLua(
             finish({
               status: 'crash',
               message: 'El runtime no arrancó a tiempo',
+              reason: 'boot',
               ms: elapsed(),
               lines,
             }),
@@ -90,6 +100,7 @@ export function runLua(
           finish({
             status: 'crash',
             message: 'El worker falló',
+            reason: 'worker',
             ms: elapsed(),
             lines,
           })
@@ -98,6 +109,7 @@ export function runLua(
           finish({
             status: 'crash',
             message: 'Mensaje ilegible del worker',
+            reason: 'unreadable',
             ms: elapsed(),
             lines,
           })

@@ -17,14 +17,15 @@ import { describeError } from '@/lib/ask/errors'
 import { isLinkable, sourceLabel, visibleSources } from '@/lib/ask/sources'
 import { askStore, type Turn } from '@/lib/ask/store'
 import { ASK_MAX_QUESTION, type AskSource } from '@/lib/ask/types'
+import { useLang } from '@/lib/use-lang'
 import { AnswerBody } from './AnswerBody'
 import { useAsk } from './useAsk'
 
 const SUGGESTIONS = [
-  '¿Cómo funciona el deploy blue/green y cómo hago rollback?',
-  '¿Cómo dibujo texto en pantalla?',
-  '¿Qué es un native y cómo se llama desde Lua?',
-]
+  'ask.suggestion1',
+  'ask.suggestion2',
+  'ask.suggestion3',
+] as const
 
 /**
  * Panel del chat: `<dialog>` modal anclado a la derecha (foco atrapado, fondo inerte, Esc cierra).
@@ -32,6 +33,7 @@ const SUGGESTIONS = [
  */
 export function AskPanel() {
   const { open } = useAsk()
+  const { tr } = useLang()
   const ref = useRef<HTMLDialogElement>(null)
   // Tras seguir una cita el foco va al contenido; con Esc o el botón, vuelve a quien abrió.
   const toContent = useRef(false)
@@ -64,7 +66,7 @@ export function AskPanel() {
     <dialog
       ref={ref}
       data-palette=""
-      aria-label="Ask Ether"
+      aria-label={tr('ask.name')}
       onCancel={(e) => {
         e.preventDefault()
         askStore.close()
@@ -79,6 +81,7 @@ export function AskPanel() {
 
 function Body({ onNavigate }: { onNavigate: () => void }) {
   const { turns, draft, viewerRole } = useAsk()
+  const { tr } = useLang()
   const busy = turns.some(
     (t) => t.status === 'waiting' || t.status === 'streaming',
   )
@@ -112,24 +115,24 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
   const status = !last
     ? ''
     : last.status === 'waiting'
-      ? 'Buscando en la documentación'
+      ? tr('ask.status.waiting')
       : last.status === 'streaming'
-        ? 'Ether está respondiendo'
+        ? tr('ask.status.streaming')
         : last.status === 'error'
           ? '' // el aviso de error ya es un role=alert
           : last.status === 'stopped'
-            ? 'Respuesta detenida'
-            : `Respuesta lista${
-                last.cited.length
-                  ? `, ${last.cited.length} ${last.cited.length === 1 ? 'fuente citada' : 'fuentes citadas'}`
-                  : ''
-              }`
+            ? tr('ask.status.stopped')
+            : last.cited.length === 0
+              ? tr('ask.status.done')
+              : last.cited.length === 1
+                ? tr('ask.status.doneOne')
+                : tr('ask.status.doneMany', { n: last.cited.length })
 
   return (
     <>
       <header className="flex shrink-0 items-center gap-1 p-2 pl-4">
         <Sparkles className="text-accent size-5 shrink-0" aria-hidden="true" />
-        <h2 className="text-label min-w-0 flex-1 truncate">Ask Ether</h2>
+        <h2 className="text-label min-w-0 flex-1 truncate">{tr('ask.name')}</h2>
         {turns.length > 0 && (
           <button
             type="button"
@@ -137,8 +140,8 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
               askStore.reset()
               inputRef.current?.focus()
             }}
-            aria-label="Nueva conversación"
-            title="Nueva conversación"
+            aria-label={tr('ask.newChat')}
+            title={tr('ask.newChat')}
             className="text-ink-muted hover:bg-surface-overlay hover:text-ink grid size-11 shrink-0 place-items-center rounded-md"
           >
             <SquarePen className="size-5" aria-hidden="true" />
@@ -147,7 +150,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
         <button
           type="button"
           onClick={() => askStore.close()}
-          aria-label="Cerrar Ask Ether"
+          aria-label={tr('ask.close')}
           className="text-ink-muted hover:bg-surface-overlay hover:text-ink grid size-11 shrink-0 place-items-center rounded-md"
         >
           <X className="size-5" aria-hidden="true" />
@@ -166,7 +169,10 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
         {turns.length === 0 ? (
           <Empty gated={viewerRole === 'public'} />
         ) : (
-          <ol className="flex flex-col gap-6" aria-label="Conversación">
+          <ol
+            className="flex flex-col gap-6"
+            aria-label={tr('ask.conversation')}
+          >
             {turns.map((t) => (
               <li key={t.id} className="flex flex-col gap-3">
                 <TurnView
@@ -198,11 +204,11 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
         <div className="bg-surface-sunken has-[:focus-visible]:outline-focus flex items-end gap-1 rounded-lg p-1 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2">
           <textarea
             ref={inputRef}
-            aria-label="Tu pregunta"
+            aria-label={tr('ask.questionLabel')}
             rows={1}
             maxLength={ASK_MAX_QUESTION}
             value={draft}
-            placeholder="Haz una pregunta"
+            placeholder={tr('ask.placeholder')}
             enterKeyHint="send"
             onChange={(e) => askStore.setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -221,7 +227,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
             <button
               type="button"
               onClick={() => askStore.stop()}
-              aria-label="Detener la respuesta"
+              aria-label={tr('ask.stop')}
               className="bg-surface-overlay text-ink hover:bg-surface-raised grid size-11 shrink-0 place-items-center rounded-md"
             >
               <Square className="size-4 fill-current" aria-hidden="true" />
@@ -229,7 +235,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
           ) : (
             <button
               type="submit"
-              aria-label="Enviar pregunta"
+              aria-label={tr('ask.send')}
               className="bg-accent-fill text-on-accent hover:bg-accent-fill-hover grid size-11 shrink-0 place-items-center rounded-md"
             >
               <ArrowUp className="size-5" aria-hidden="true" />
@@ -237,9 +243,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
           )}
         </div>
         <p className="text-caption text-ink-subtle mt-2 flex justify-between gap-4 px-1">
-          <span className="hidden pointer-fine:inline">
-            Intro envía · Mayús + Intro salto de línea
-          </span>
+          <span className="hidden pointer-fine:inline">{tr('ask.keys')}</span>
           {draft.length > ASK_MAX_QUESTION * 0.75 && (
             <span className="ml-auto tabular-nums" aria-live="polite">
               {draft.length} / {ASK_MAX_QUESTION}
@@ -252,6 +256,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
 }
 
 function Empty({ gated }: { gated: boolean }) {
+  const { tr } = useLang()
   return (
     <div className="flex flex-col gap-4 pt-2">
       {gated ? (
@@ -261,36 +266,32 @@ function Empty({ gated }: { gated: boolean }) {
             aria-hidden="true"
           />
           <div>
-            <p className="text-label">
-              Ask Ether es para suscriptores y staff.
-            </p>
+            <p className="text-label">{tr('ask.gated.title')}</p>
             <p className="text-body-sm text-ink-muted mt-1">
-              Inicia sesión con una cuenta suscrita para preguntar. La búsqueda
-              con Ctrl+K sigue disponible para todos.
+              {tr('ask.gated.body')}
             </p>
           </div>
         </div>
       ) : (
         <>
           <div>
-            <p className="text-h4">Pregunta en lenguaje natural</p>
+            <p className="text-h4">{tr('ask.empty.title')}</p>
             <p className="text-body-sm text-ink-muted mt-2">
-              Ether responde solo con lo que dice la documentación de Astra Dev
-              y cita las páginas. Si no lo encuentra, te lo dice.
+              {tr('ask.empty.body')}
             </p>
           </div>
           <ul
             className="flex flex-col gap-2"
-            aria-label="Ejemplos de preguntas"
+            aria-label={tr('ask.suggestions')}
           >
-            {SUGGESTIONS.map((s) => (
-              <li key={s}>
+            {SUGGESTIONS.map((key) => (
+              <li key={key}>
                 <button
                   type="button"
-                  onClick={() => void askStore.ask(s)}
+                  onClick={() => void askStore.ask(tr(key))}
                   className="bg-surface-sunken hover:bg-surface-overlay text-body-sm text-ink min-h-11 w-full rounded-md px-4 py-2 text-left"
                 >
-                  {s}
+                  {tr(key)}
                 </button>
               </li>
             ))}
@@ -299,11 +300,7 @@ function Empty({ gated }: { gated: boolean }) {
       )}
       <p className="text-caption text-ink-subtle flex gap-2">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <span>
-          Tu pregunta y extractos de la documentación se envían al modelo de
-          lenguaje (DeepSeek). El servidor no guarda preguntas ni respuestas;
-          reutiliza respuestas repetidas durante una hora.
-        </span>
+        <span>{tr('ask.privacy')}</span>
       </p>
     </div>
   )
@@ -318,13 +315,14 @@ function TurnView({
   isLast: boolean
   onNavigate: () => void
 }) {
+  const { tr } = useLang()
   const settled = turn.status !== 'waiting' && turn.status !== 'streaming'
   const shown = settled
     ? visibleSources(turn.sources, turn.cited, turn.refused)
     : []
   const errorView =
     turn.status === 'error'
-      ? describeError(turn.error?.code ?? '', turn.error?.retryAfter)
+      ? describeError(turn.error?.code ?? '', turn.error?.retryAfter, tr)
       : null
 
   return (
@@ -339,7 +337,7 @@ function TurnView({
           aria-hidden="true"
         >
           <Sparkles className="text-accent size-4 motion-safe:animate-pulse" />
-          Buscando en la documentación…
+          {tr('ask.searching')}
         </p>
       )}
 
@@ -353,14 +351,13 @@ function TurnView({
 
       {turn.refused && settled && (
         <p className="text-body-sm text-ink-muted">
-          Ask Ether solo responde con lo que hay en la documentación. Prueba con
-          otras palabras o{' '}
+          {tr('ask.refused.lead')}{' '}
           <Link
             to="/docs"
             onClick={onNavigate}
             className="text-accent underline underline-offset-2"
           >
-            explora los documentos
+            {tr('ask.refused.link')}
           </Link>
           .
         </p>
@@ -389,7 +386,7 @@ function TurnView({
                 className="text-label text-ink hover:bg-surface-overlay bg-surface-raised -ml-1 mt-2 inline-flex min-h-11 items-center gap-2 rounded-md px-3"
               >
                 <RotateCcw className="size-4" aria-hidden="true" />
-                Reintentar
+                {tr('ask.retry')}
               </button>
             )}
           </div>
@@ -399,8 +396,11 @@ function TurnView({
       {settled && turn.status !== 'error' && <Notes turn={turn} />}
 
       {shown.length > 0 && (
-        <section aria-label="Fuentes citadas" className="flex flex-col gap-1">
-          <h3 className="text-eyebrow px-3">Fuentes</h3>
+        <section
+          aria-label={tr('ask.sourcesCited')}
+          className="flex flex-col gap-1"
+        >
+          <h3 className="text-eyebrow px-3">{tr('ask.sources')}</h3>
           <ul className="flex flex-col">
             {shown.map((s) => (
               <SourceRow key={s.n} source={s} onNavigate={onNavigate} />
@@ -414,14 +414,12 @@ function TurnView({
 
 /** Avisos de una respuesta terminada: qué tipo de búsqueda fue, corte por longitud, caché. */
 function Notes({ turn }: { turn: Turn }) {
+  const { tr } = useLang()
   const notes: string[] = []
-  if (turn.status === 'stopped') notes.push('Respuesta detenida.')
-  if (turn.truncated) notes.push('La respuesta se cortó por longitud.')
-  if (turn.degraded)
-    notes.push(
-      'Búsqueda por palabras clave: el índice semántico no está disponible.',
-    )
-  if (turn.cached) notes.push('Respuesta reutilizada, sin consultar al modelo.')
+  if (turn.status === 'stopped') notes.push(tr('ask.note.stopped'))
+  if (turn.truncated) notes.push(tr('ask.note.truncated'))
+  if (turn.degraded) notes.push(tr('ask.note.degraded'))
+  if (turn.cached) notes.push(tr('ask.note.cached'))
   if (!notes.length) return null
   return (
     <p className="text-caption text-ink-subtle flex gap-2">

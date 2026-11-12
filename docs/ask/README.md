@@ -58,7 +58,9 @@ La respuesta del modelo es texto no confiable (el server ya lo acota, esto es la
 
 Probado en `src/lib/ask/ask.test.ts`.
 
-Las citas a **natives** (`kind: "native"`) se muestran como texto con su nombre, sin enlace: las páginas `/natives/<slug>` salen con M2 fase 3. Al publicarlas, `NATIVE_PAGES_PUBLISHED` en `src/lib/ask/sources.ts` pasa a `true`.
+Las citas a **natives** (`kind: "native"`) enlazan a `/natives/<slug>` (páginas publicadas en M2, v0.7.0; el slug es el del importador, el mismo del índice del server). `NATIVE_PAGES_PUBLISHED` en `src/lib/ask/sources.ts` es el interruptor si hubiera que volver a texto plano.
+
+Textos del panel en el diccionario (`ask.*` en `src/lib/i18n.ts`, ES y EN, ver [i18n/README.md](../i18n/README.md)); los mensajes de error pasan por `describeError(code, retryAfter, tr)`. El idioma de la respuesta lo decide el server: el de la pregunta.
 
 ## Accesibilidad
 

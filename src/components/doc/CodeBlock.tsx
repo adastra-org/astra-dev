@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Diagnostic } from '@/lib/sandbox/lint'
 import type { RunResult } from '@/lib/sandbox/run'
+import { useLang } from '@/lib/use-lang'
 
 interface Props {
   code: string
@@ -27,18 +28,18 @@ interface Props {
 
 type ToolBusy = 'lint' | 'format' | null
 
-const LIMIT_TEXT = {
-  time: 'Se cortó por tiempo: el snippet pasó los 3 s.',
-  instructions:
-    'Se cortó por cantidad de instrucciones: parece un bucle infinito.',
-  memory: 'Se cortó por memoria: el snippet pidió más de lo permitido.',
-  output: 'Se cortó la salida: superó el máximo permitido.',
+const LIMIT_KEY = {
+  time: 'code.limit.time',
+  instructions: 'code.limit.instructions',
+  memory: 'code.limit.memory',
+  output: 'code.limit.output',
 } as const
 
 const ms = (n: number) => `${Math.round(n)} ms`
 
 /** El bloque de código. `CodeBlock` no sabe ejecutar: carga el sandbox solo al pulsar. */
 export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
+  const { tr } = useLang()
   const [copied, setCopied] = useState(false)
   const [edited, setEdited] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
@@ -91,8 +92,8 @@ export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
       if (alive.current)
         setResult({
           status: 'crash',
-          message:
-            e instanceof Error ? e.message : 'No se pudo cargar el sandbox',
+          message: e instanceof Error ? e.message : tr('code.crash.load'),
+          ...(e instanceof Error ? {} : { reason: 'load' as const }),
           ms: 0,
           lines: [],
         })
@@ -157,26 +158,30 @@ export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
     >
       <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-1">
         <span className="text-data text-ink-subtle uppercase">
-          {lang ?? 'texto'}
+          {lang ?? tr('code.text')}
         </span>
         <div className="flex flex-wrap items-center justify-end gap-1">
           {runnable &&
             (running ? (
-              <ToolButton icon={Square} label="Detener" onClick={stop} />
+              <ToolButton
+                icon={Square}
+                label={tr('code.stop')}
+                onClick={stop}
+              />
             ) : (
-              <ToolButton icon={Play} label="Ejecutar" onClick={run} />
+              <ToolButton icon={Play} label={tr('code.run')} onClick={run} />
             ))}
           {runnable && !running && (
             <>
               <ToolButton
                 icon={toolBusy === 'lint' ? LoaderCircle : ListChecks}
-                label="Revisar"
+                label={tr('code.lint')}
                 onClick={review}
                 busy={toolBusy === 'lint'}
               />
               <ToolButton
                 icon={toolBusy === 'format' ? LoaderCircle : Sparkles}
-                label="Formatear"
+                label={tr('code.format')}
                 onClick={format}
                 busy={toolBusy === 'format'}
               />
@@ -184,7 +189,7 @@ export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
           )}
           <ToolButton
             icon={copied ? Check : Copy}
-            label={copied ? 'Copiado' : 'Copiar'}
+            label={copied ? tr('code.copied') : tr('code.copy')}
             onClick={copy}
             tone={copied ? 'success' : undefined}
           />
@@ -200,7 +205,7 @@ export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
       {output && (
         <div
           role="region"
-          aria-label="Salida de la ejecución"
+          aria-label={tr('code.output')}
           className="border-border bg-surface border-t px-4 py-3"
         >
           <div role="status" aria-live="polite">
@@ -224,7 +229,7 @@ export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
         </p>
       )}
       <span className="sr-only" role="status">
-        {copied ? 'Código copiado al portapapeles' : ''}
+        {copied ? tr('code.copiedStatus') : ''}
       </span>
     </figure>
   )
@@ -268,6 +273,7 @@ function Status({
   result: RunResult | null
   running: boolean
 }): ReactNode {
+  const { tr } = useLang()
   if (running)
     return (
       <p className="text-body-sm text-ink-subtle flex items-center gap-2">
@@ -275,7 +281,7 @@ function Status({
           className="size-4 animate-spin motion-reduce:animate-none"
           aria-hidden="true"
         />
-        Ejecutando…
+        {tr('code.running')}
       </p>
     )
   if (result === null) return null
@@ -285,9 +291,9 @@ function Status({
       return (
         <p className="text-body-sm text-success flex items-center gap-2">
           <Check className="size-4" aria-hidden="true" />
-          Listo · {ms(result.ms)}
+          {tr('code.ok')} · {ms(result.ms)}
           {result.lines.length === 0 && (
-            <span className="text-ink-subtle">(sin salida)</span>
+            <span className="text-ink-subtle">{tr('code.noOutput')}</span>
           )}
         </p>
       )
@@ -298,14 +304,16 @@ function Status({
             className="mt-0.5 size-4 shrink-0"
             aria-hidden="true"
           />
-          {LIMIT_TEXT[o.reason]} · {ms(result.ms)}
+          {tr(LIMIT_KEY[o.reason])} · {ms(result.ms)}
         </p>
       )
     return (
       <div className="text-body-sm flex flex-col gap-1">
         <p className="text-warning flex items-center gap-2">
           <TriangleAlert className="size-4" aria-hidden="true" />
-          {o.line !== null ? `Error en la línea ${o.line}` : 'Error'}
+          {o.line !== null
+            ? tr('code.errorLine', { line: o.line })
+            : tr('code.error')}
           <span className="text-ink-subtle">· {ms(result.ms)}</span>
         </p>
         <pre className="text-code text-ink-muted overflow-x-auto whitespace-pre-wrap">
@@ -318,35 +326,36 @@ function Status({
     return (
       <p className="text-body-sm text-warning flex items-start gap-2">
         <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        No terminó a tiempo y se detuvo · {ms(result.ms)}
+        {tr('code.timeout')} · {ms(result.ms)}
       </p>
     )
   if (result.status === 'cancelled')
     return (
       <p className="text-body-sm text-ink-muted flex items-center gap-2">
         <Square className="size-3.5" aria-hidden="true" />
-        Detenido · {ms(result.ms)}
+        {tr('code.cancelled')} · {ms(result.ms)}
       </p>
     )
   return (
     <p className="text-body-sm text-warning flex items-start gap-2">
       <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      {result.message}
+      {result.reason ? tr(`code.crash.${result.reason}`) : result.message}
     </p>
   )
 }
 
 function Diagnostics({ list }: { list: Diagnostic[] }) {
+  const { tr } = useLang()
   return (
     <div
       role="region"
-      aria-label="Revisión del código"
+      aria-label={tr('code.review')}
       className="border-border bg-surface border-t px-4 py-3"
     >
       {list.length === 0 ? (
         <p className="text-body-sm text-success flex items-center gap-2">
           <Check className="size-4" aria-hidden="true" />
-          Sin observaciones.
+          {tr('code.noFindings')}
         </p>
       ) : (
         <ul className="text-body-sm flex flex-col gap-2">
@@ -360,10 +369,19 @@ function Diagnostics({ list }: { list: Diagnostic[] }) {
               />
               <span>
                 <span className="text-data text-ink-subtle mr-2 uppercase">
-                  {d.severity === 'error' ? 'Error' : 'Aviso'} · {d.line}:
-                  {d.column}
+                  {d.severity === 'error'
+                    ? tr('code.error')
+                    : tr('code.warning')}{' '}
+                  · {d.line}:{d.column}
                 </span>
-                {d.message}
+                {d.code && d.name
+                  ? tr(
+                      d.code === 'unavailable'
+                        ? 'code.lint.unavailable'
+                        : 'code.lint.unusedLocal',
+                      { name: d.name },
+                    )
+                  : d.message}
               </span>
             </li>
           ))}

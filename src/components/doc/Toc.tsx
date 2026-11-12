@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { TocItem } from '@/lib/docs/types'
+import { useLang } from '@/lib/use-lang'
 
 /** Índice con el ítem visible resaltado (IntersectionObserver sobre los encabezados). */
 function useActiveId(items: TocItem[]): string | undefined {
@@ -62,10 +63,11 @@ function List({ items, active }: { items: TocItem[]; active?: string }) {
  * Se omite con menos de tres entradas.
  */
 export function TocInline({ items }: { items: TocItem[] }) {
+  const { tr } = useLang()
   if (items.length < 3) return null
   return (
-    <nav aria-label="En esta página" className="xl:hidden">
-      <p className="text-eyebrow mb-2">En esta página</p>
+    <nav aria-label={tr('toc.thisPage')} className="xl:hidden">
+      <p className="text-eyebrow mb-2">{tr('toc.thisPage')}</p>
       <ul className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:thin] md:mx-0 md:px-0">
         {items.map((i) => (
           <li key={i.id} className="shrink-0">
@@ -84,14 +86,15 @@ export function TocInline({ items }: { items: TocItem[] }) {
 
 /** Índice fijo a la derecha desde `xl`, con el ítem visible resaltado. */
 export function TocSide({ items }: { items: TocItem[] }) {
+  const { tr } = useLang()
   const active = useActiveId(items)
   if (items.length < 3) return null
   return (
     <nav
-      aria-label="En esta página"
+      aria-label={tr('toc.thisPage')}
       className="sticky top-20 hidden max-h-[calc(100svh-6rem)] self-start overflow-y-auto xl:block"
     >
-      <p className="text-eyebrow mb-3 px-3">En esta página</p>
+      <p className="text-eyebrow mb-3 px-3">{tr('toc.thisPage')}</p>
       <List items={items} active={active} />
     </nav>
   )

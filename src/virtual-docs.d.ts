@@ -9,3 +9,9 @@ declare module 'virtual:astra-doc/*' {
   const content: DocContent
   export default content
 }
+
+declare module 'virtual:astra-natives' {
+  import type { NativeGroup } from '@/lib/natives/types'
+  export const groups: NativeGroup[]
+  export const total: number
+}

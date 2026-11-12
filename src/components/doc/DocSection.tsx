@@ -1,6 +1,7 @@
 import type { Block, Section } from '@/lib/docs/types'
 import { CodeBlock } from './CodeBlock'
 import { Collapsible } from './Collapsible'
+import { useLang } from '@/lib/use-lang'
 
 function Blocks({ blocks }: { blocks: Block[] }) {
   return blocks.map((b, i) =>
@@ -29,6 +30,7 @@ function Blocks({ blocks }: { blocks: Block[] }) {
  */
 export function DocSection({ section }: { section: Section }) {
   const { id, title, kind, collapsible, blocks } = section
+  const { tr } = useLang()
 
   if (kind === 'intro' || !id || !title)
     return (
@@ -48,7 +50,11 @@ export function DocSection({ section }: { section: Section }) {
     <section aria-labelledby={id} className="flex flex-col gap-3">
       <h2 id={id} className="text-h3 scroll-mt-20 [text-wrap:balance]">
         {title}
-        <a className="anchor" href={`#${id}`} aria-label={`Enlace a ${title}`}>
+        <a
+          className="anchor"
+          href={`#${id}`}
+          aria-label={tr('doc.anchor', { title })}
+        >
           #
         </a>
       </h2>
