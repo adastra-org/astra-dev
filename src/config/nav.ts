@@ -1,12 +1,14 @@
-// Navegación del shell: una sola fuente para sidebar, barra superior y tests.
+// Navegación del shell: una sola fuente para sidebar, barra superior y tests. Los textos salen del
+// diccionario (`lib/i18n.ts`) por clave: el idioma lo decide quien renderiza.
+import type { MessageKey } from '@/lib/i18n'
 
-export type NavIcon = 'home' | 'docs' | 'tools' | 'roadmap'
+export type NavIcon = 'home' | 'docs' | 'natives' | 'tools' | 'roadmap'
 
 export interface NavItem {
   to: string
-  label: string
+  label: MessageKey
   /** Una línea para la portada y el título de página. */
-  description: string
+  description: MessageKey
   icon: NavIcon
   /** `true` si el enlace solo está activo con coincidencia exacta (la portada). */
   end?: boolean
@@ -15,41 +17,35 @@ export interface NavItem {
 export const NAV: readonly NavItem[] = [
   {
     to: '/',
-    label: 'Inicio',
-    description: 'Punto de entrada al desarrollo de Ad Astra.',
+    label: 'nav.home',
+    description: 'nav.home.desc',
     icon: 'home',
     end: true,
   },
   {
     to: '/docs',
-    label: 'Documentación',
-    description: 'Natives, sistemas y guías del servidor, en español.',
+    label: 'nav.docs',
+    description: 'nav.docs.desc',
     icon: 'docs',
   },
   {
+    to: '/natives',
+    label: 'nav.natives',
+    description: 'nav.natives.desc',
+    icon: 'natives',
+  },
+  {
     to: '/tools',
-    label: 'Herramientas',
-    description: 'Utilidades del equipo para mapas, vehículos y conversión.',
+    label: 'nav.tools',
+    description: 'nav.tools.desc',
     icon: 'tools',
   },
   {
     to: '/roadmap',
-    label: 'Roadmap',
-    description: 'Estado del proyecto: tareas, issues y evolución.',
+    label: 'nav.roadmap',
+    description: 'nav.roadmap.desc',
     icon: 'roadmap',
   },
-]
-
-export interface Lang {
-  code: 'es' | 'en'
-  label: string
-  available: boolean
-}
-
-/** Placeholder del selector de idioma: solo ES por ahora (EN llega con M2). */
-export const LANGS: readonly Lang[] = [
-  { code: 'es', label: 'ES', available: true },
-  { code: 'en', label: 'EN', available: false },
 ]
 
 /** Item de navegación que contiene `pathname` (el más específico gana). */

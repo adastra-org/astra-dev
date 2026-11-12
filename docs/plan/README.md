@@ -35,10 +35,10 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M2 — Contenido y traducción (0.3.0)
 
-- [~] Importar natives desde `citizenfx/natives`, los natives de CFX (`fivem/ext/native-decls`) y `fivem-docs`: importador hecho (7.326 natives, 333 docs, [import/README.md](../import/README.md)); falta publicarlos en el sitio (fase 3).
+- [x] Importar natives desde `citizenfx/natives`, los natives de CFX (`fivem/ext/native-decls`) y `fivem-docs`: importador (7.326 natives, 333 docs, [import/README.md](../import/README.md)) y publicación en el sitio bajo `/natives` ([natives/README.md](../natives/README.md)). Build verificado; falta la pasada en navegador.
 - [x] Capa propia: notas de Astra sobre cada native (`content/overrides/natives/`, sin tocar la fuente).
-- [ ] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`.
-- [ ] i18n EN/ES en la UI y selector de idioma.
+- [~] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`: pipeline hecho y probado ([translate/README.md](../translate/README.md)); **sin traducciones generadas** (la cuenta de DeepSeek no tiene saldo) y sin revisar.
+- [x] i18n EN/ES en la UI y selector de idioma ([i18n/README.md](../i18n/README.md)). Tests de paridad y de render; falta la pasada en navegador.
 
 ## M3 — Ask Ether (0.4.0)
 

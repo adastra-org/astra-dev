@@ -165,7 +165,10 @@ A section that does not exist yet shows `Placeholder`: dashed `border-strong` bo
 ## Copy
 
 Neutral Spanish, tú, no exclamation marks, no emojis, no hype. Sentence-case titles. Technical terms (native, resource,
-event) stay in English; the surrounding sentence is Spanish. Strings are inline for now; M2 moves them to i18n.
+event) stay in English; the surrounding sentence is Spanish. Every string lives in the dictionary (`src/lib/i18n.ts`,
+ES and EN, same keys); components call `tr('area.clave')`, never inline copy. English is plain and literal, same rules
+(no exclamation marks, no hype). The language switch is two pills (ES / EN) with `aria-pressed`; the choice persists.
+`?lang=en|es` overrides it for a shared link.
 
 ## Done checklist additions
 
