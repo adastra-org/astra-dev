@@ -65,6 +65,8 @@ Módulos virtuales (`scripts/docs/plugin.ts`):
 
 Lenguajes resaltados: `lua`, `bash`, `typescript`, `tsx`, `javascript`, `json`, `yaml`, `markdown`, `sql`, `css`, `html`, `diff`, `toml`, `csharp` (y sus alias `sh`, `ts`, `js`, `yml`, `md`, `cs`). Para agregar uno, súmalo a `LANGS` en `highlight.ts`.
 
+Un bloque `lua` con el flag `run` en la línea del fence (` ```lua run `) se marca como ejecutable y la página muestra Ejecutar, Revisar y Formatear ([sandbox](../sandbox/README.md)). El idioma se sigue leyendo de la primera palabra del fence; el flag solo se mira en `lua`.
+
 ## Vista TDA
 
 Pensada para leer en medio de una tarea:

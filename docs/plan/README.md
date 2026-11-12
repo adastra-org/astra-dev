@@ -58,13 +58,13 @@ Estado del server de Ask Ether (v0.4.0, [server/README](../server/README.md)). M
 
 ## M4 — Sandbox de código (0.5.0)
 
-Es código no confiable del usuario: revisión de seguridad antes de merge.
+Es código no confiable del usuario: revisión de seguridad antes de merge. Detalle en [sandbox/README.md](../sandbox/README.md). Publicado como v0.9.0.
 
-- [ ] Decidir runtime (ver decisiones abiertas).
-- [ ] Ejecución aislada con límites de tiempo y memoria; sin red ni filesystem.
-- [ ] Salida: stdout, errores, tiempo de ejecución.
-- [ ] Lint y format del snippet (Lua).
-- [ ] Botón "Ejecutar" en bloques de código marcados en el Markdown.
+- [x] Decidir runtime: Lua 5.4 en WASM (wasmoon) en un Web Worker, sin server ni contenedor.
+- [x] Ejecución aislada con límites de tiempo, memoria, instrucciones y salida; sin red ni filesystem.
+- [x] Salida: stdout, errores con línea, tiempo de ejecución, límites alcanzados y crashes.
+- [x] Lint y format del snippet (Lua): luaparse con reglas propias y StyLua `CfxLua`.
+- [~] Botón "Ejecutar" en bloques de código marcados en el Markdown (```lua run): implementado con Revisar, Formatear y panel de salida; **falta la pasada en navegador real y la revisión de seguridad** antes de merge.
 
 ## M5 — Proyecto: checklist y evolución (0.6.0)
 
