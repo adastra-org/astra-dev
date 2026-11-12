@@ -160,6 +160,8 @@ cmd_deploy() {
       log "WARNING: API stage skipped: ${UNIT_FILE} is not installed (docs/server/README.md, Deploy)"
     elif [ ! -f "${server_src}/src/main.ts" ] || [ ! -f "${server_src}/data/index.json" ]; then
       die "server bundle in ${server_src} is incomplete (needs src/main.ts and data/index.json)"
+    elif grep -q '"semantic":true' "${server_src}/data/index.json" && [ ! -f "${server_src}/data/index.vec" ]; then
+      die "server bundle in ${server_src} has a semantic index.json without data/index.vec"
     else
       API=1
     fi

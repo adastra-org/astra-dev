@@ -7,6 +7,7 @@
     "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "index": "bun scripts/index.ts",
+    "embed:compat": "bun scripts/embed-compat.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "bun run typecheck && bun run test"

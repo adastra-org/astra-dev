@@ -10,6 +10,7 @@ import {
   INDEX_VERSION,
   IndexFormatError,
   parseIndex,
+  serializeIndex,
 } from '../src/index/store.ts'
 import {
   DOCS,
@@ -29,9 +30,17 @@ describe('index build', () => {
     expect(index.chunks.every((c) => c.vector?.length === index.dims)).toBe(
       true,
     )
-    // Survives a JSON round trip through the strict parser.
-    const onDisk = JSON.stringify(index)
-    expect(parseIndex(JSON.parse(onDisk)).chunks).toHaveLength(chunks.length)
+    // Survives the two-file round trip through the strict parser.
+    const { json, vectors } = serializeIndex(index)
+    expect(json).not.toContain('"vector"')
+    expect(vectors?.byteLength).toBe(chunks.length * index.dims! * 4)
+    const back = parseIndex(JSON.parse(json), vectors)
+    expect(back.chunks).toHaveLength(chunks.length)
+    // Float32 storage: same ranking, vectors equal to ~1e-7.
+    expect(back.chunks[0]!.vector![0]).toBeCloseTo(
+      index.chunks[0]!.vector![0]!,
+      6,
+    )
   })
 
   test('unreachable embedder: keyword-only index, no throw', async () => {
@@ -48,14 +57,24 @@ describe('index build', () => {
   })
 
   test('parseIndex rejects wrong version, bad vectors and duplicate ids', async () => {
-    const good = structuredClone(await semanticIndex()) as any
-    expect(() => parseIndex({ ...good, version: 99 })).toThrow(IndexFormatError)
-    const bad = structuredClone(good)
-    bad.chunks[0].vector = [1, 2]
-    expect(() => parseIndex(bad)).toThrow('bad vector')
+    const { json, vectors } = serializeIndex(await semanticIndex())
+    const good = JSON.parse(json)
+    expect(() => parseIndex({ ...good, version: 99 }, vectors)).toThrow(
+      IndexFormatError,
+    )
+    // Missing, truncated or tampered vector file; a vec from another build.
+    expect(() => parseIndex(good, null)).toThrow('missing')
+    expect(() => parseIndex(good, vectors!.slice(0, -4))).toThrow('bad vector')
+    const flipped = vectors!.slice()
+    flipped[0] = flipped[0]! ^ 0xff
+    expect(() => parseIndex(good, flipped)).toThrow('hash differs')
     const dup = structuredClone(good)
     dup.chunks[1].id = dup.chunks[0].id
-    expect(() => parseIndex(dup)).toThrow('duplicate')
+    expect(() => parseIndex(dup, vectors)).toThrow('duplicate')
+    // The vector file name comes from untrusted JSON: no paths.
+    const evil = structuredClone(good)
+    evil.vectors.file = '../../etc/passwd'
+    expect(() => parseIndex(evil, vectors)).toThrow('vectors')
   })
 })
 
