@@ -1,0 +1,16 @@
+/* Panel de Ask Ether: entra desde la derecha. Solo sin `prefers-reduced-motion: reduce`. */
+@keyframes ask-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ask-dialog[open] {
+    animation: ask-in var(--duration-panel) var(--ease-out-brand);
+  }
+  .ask-dialog[open]::backdrop {
+    animation: palette-fade var(--duration-panel) var(--ease-out-brand);
+  }
+}

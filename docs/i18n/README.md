@@ -26,5 +26,5 @@ El selector cambia la interfaz y elige qué versión de un doc o native se muest
 
 ## Pendiente
 
-- Texto de los componentes de M3, M4 y M5 (chat, sandbox, roadmap): se pasa al diccionario cuando sus ramas se integren.
+- Texto de los componentes de M4 y M5 (sandbox, roadmap): se pasa al diccionario cuando sus ramas se integren. El chat (M3) ya está.
 - Pasada en navegador del selector (escritorio y 375 px).

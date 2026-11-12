@@ -1,4 +1,5 @@
 import { Menu } from 'lucide-react'
+import { AskTrigger } from '@/components/ask/AskTrigger'
 import { PaletteTrigger } from '@/components/palette/PaletteTrigger'
 import { useLang } from '@/lib/use-lang'
 import { Breadcrumbs } from './Breadcrumbs'
@@ -36,6 +37,7 @@ export function TopBar({ menuOpen, onMenu, onSearch }: Props) {
           aria-hidden="true"
         />
         <PaletteTrigger onOpen={onSearch} />
+        <AskTrigger />
         <LangSwitch />
       </div>
     </header>

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/main.ts",
+    "dev:local": "ASTRA_DEV_VIEWER=subscriber ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176 bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "index": "bun scripts/index.ts",
     "embed:compat": "bun scripts/embed-compat.ts",

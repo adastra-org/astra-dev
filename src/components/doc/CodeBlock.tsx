@@ -8,9 +8,11 @@ interface Props {
   lang?: string
   /** HTML ya resaltado del interior de `<code>` (lo genera el build). Sin él, texto plano. */
   html?: string
+  /** Sin borde propio: el bloque vive dentro de un contenedor que ya lo tiene (un borde por nivel). */
+  bare?: boolean
 }
 
-export function CodeBlock({ code, lang, html }: Props) {
+export function CodeBlock({ code, lang, html, bare = false }: Props) {
   const [copied, setCopied] = useState(false)
   const { tr } = useLang()
 
@@ -25,7 +27,12 @@ export function CodeBlock({ code, lang, html }: Props) {
   }
 
   return (
-    <figure className="code-fig bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
+    <figure
+      className={[
+        'code-fig bg-surface-sunken max-w-3xl min-w-0 overflow-hidden rounded-md',
+        bare ? '' : 'border-border border',
+      ].join(' ')}
+    >
       <figcaption className="flex min-h-11 items-center justify-between px-4">
         <span className="text-data text-ink-subtle uppercase">
           {lang ?? tr('code.text')}
