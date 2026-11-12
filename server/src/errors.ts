@@ -6,11 +6,13 @@ export type ErrorCode =
   | 'forbidden_origin'
   | 'unauthenticated'
   | 'subscription_required'
+  | 'staff_required'
   | 'rate_limited'
   | 'budget_exceeded'
   | 'viewer_unavailable'
   | 'llm_unavailable'
   | 'index_unavailable'
+  | 'project_unavailable'
   | 'not_found'
   | 'internal'
 
@@ -20,11 +22,13 @@ const STATUS: Record<ErrorCode, number> = {
   forbidden_origin: 403,
   unauthenticated: 401,
   subscription_required: 403,
+  staff_required: 403,
   rate_limited: 429,
   budget_exceeded: 429,
   viewer_unavailable: 503,
   llm_unavailable: 502,
   index_unavailable: 503,
+  project_unavailable: 503,
   not_found: 404,
   internal: 500,
 }

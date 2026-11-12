@@ -58,19 +58,20 @@ Estado de Ask Ether: servidor (v0.4.0, [server/README](../server/README.md)) y p
 
 ## M4 — Sandbox de código (0.5.0)
 
-Es código no confiable del usuario: revisión de seguridad antes de merge.
+Es código no confiable del usuario: revisión de seguridad antes de merge. Detalle en [sandbox/README.md](../sandbox/README.md). Publicado como v0.9.0.
 
-- [ ] Decidir runtime (ver decisiones abiertas).
-- [ ] Ejecución aislada con límites de tiempo y memoria; sin red ni filesystem.
-- [ ] Salida: stdout, errores, tiempo de ejecución.
-- [ ] Lint y format del snippet (Lua).
-- [ ] Botón "Ejecutar" en bloques de código marcados en el Markdown.
+- [x] Decidir runtime: Lua 5.4 en WASM (wasmoon) en un Web Worker, sin server ni contenedor.
+- [x] Ejecución aislada con límites de tiempo, memoria, instrucciones y salida; sin red ni filesystem.
+- [x] Salida: stdout, errores con línea, tiempo de ejecución, límites alcanzados y crashes.
+- [x] Lint y format del snippet (Lua): luaparse con reglas propias y StyLua `CfxLua`.
+- [x] Página `/tools` con el playground de Lua (editor, Ejecutar, Revisar, Formatear) y la lista de herramientas que vienen (mapeo, vehículos, conversión de assets). v0.10.1.
+- [~] Botón "Ejecutar" en bloques de código marcados en el Markdown (```lua run): implementado con Revisar, Formatear y panel de salida; revisión de seguridad de código hecha ([sandbox/README.md](../sandbox/README.md#revisión-de-seguridad-2026-11-12)), **falta que la repita una persona y la pasada en navegador real** antes de merge.
 
 ## M5 — Proyecto: checklist y evolución (0.6.0)
 
-- [ ] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel.
-- [ ] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server).
-- [ ] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal.
+- [~] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel. Checklist del plan (`docs/plan/README.md`), milestones de GitHub y lista de MyChecklist por Code Mode hechos y probados con fixtures. GitHub verificado en vivo contra `adastra-org/astra-dev` (2026-11-12); **MyChecklist sin verificar contra el servicio real** (sin token). No se usa la API de GitHub Projects: ver [project/README.md](../project/README.md).
+- [x] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server por TTL con ETag y copia vieja). Página `/roadmap` solo para staff.
+- [x] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal en `docs/project/complexity.json`, generada por `bun run complexity`.
 - [ ] Más adelante: WeGraph para pesos y relaciones entre decisiones.
 
 ## Decisiones abiertas

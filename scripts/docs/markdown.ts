@@ -156,12 +156,15 @@ export function renderMarkdown(
     cur.words += wordCount(tok.raw)
     if (tok.type === 'code') {
       const c = tok as Tokens.Code
-      const lang = langOf(c.lang)
+      const [lang = '', ...flags] = (c.lang ?? '').trim().split(/\s+/)
+      // `run` marca el bloque como ejecutable en el sandbox (M4). Solo tiene sentido en Lua.
+      const runnable = lang === 'lua' && flags.includes('run')
       cur.blocks.push({
         type: 'code',
         lang,
         code: c.text,
         html: highlight(c.text, lang),
+        ...(runnable ? { runnable: true } : {}),
       })
       continue
     }

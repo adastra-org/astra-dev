@@ -166,6 +166,7 @@ here so they are checked in review. The Ad Astra DS README does not state them; 
   `src/styles/prose.css` map to roles (`accent`, `success`, `warning`, `info`, `ink-muted`, `ink-subtle`), and
   `code-colors.test.ts` measures each at 4.5:1 on `surface-sunken`. No third-party theme palette.
 - The M4 "Ejecutar" button goes in the header next to Copiar; the output panel opens below the `pre`.
+- **M4 sandbox** (`CodeBlock` with `runnable`): Ejecutar/Detener, Revisar and Formatear are text buttons with 16 px icons in the same header row as Copiar, separated by 4 px, wrapping as a group under `md`. While a run is active only Detener replaces Ejecutar; Copiar stays. The output panel is a full-width band below the `pre`, divided by a 1 px `border`, on `surface` (not `sunken`): status line first (icon + text, never color alone), stdout in `text-code` with `white-space: pre-wrap`. Diagnostics use the same band. Focus and hover follow the pill/fill rules; nothing gets a single-side border.
 
 ## Placeholders
 

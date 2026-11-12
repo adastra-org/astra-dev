@@ -22,11 +22,10 @@ export default defineConfig({
   },
   server: {
     host: true,
-    // Como nginx en producción: /api/* llega al server de Ask Ether sin el prefijo. Así la UI
-    // llama /api/chat en dev y en prod (mismo origen, misma cookie). Server: `bun run --cwd server dev`.
+    // La API vive en `/api/` detrás de nginx (que quita el prefijo). En dev el server corre en 4100.
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:4100',
+        target: process.env.ASTRA_API_URL ?? 'http://127.0.0.1:4100',
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
