@@ -21,6 +21,8 @@ interface Props {
   html?: string
   /** `lua run` en el Markdown: muestra Ejecutar, Revisar y Formatear (M4). */
   runnable?: boolean
+  /** Sin borde propio: el bloque vive dentro de un contenedor que ya lo tiene (un borde por nivel). */
+  bare?: boolean
 }
 
 type ToolBusy = 'lint' | 'format' | null
@@ -36,7 +38,7 @@ const LIMIT_TEXT = {
 const ms = (n: number) => `${Math.round(n)} ms`
 
 /** El bloque de código. `CodeBlock` no sabe ejecutar: carga el sandbox solo al pulsar. */
-export function CodeBlock({ code, lang, html, runnable }: Props) {
+export function CodeBlock({ code, lang, html, runnable, bare = false }: Props) {
   const [copied, setCopied] = useState(false)
   const [edited, setEdited] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
@@ -147,7 +149,12 @@ export function CodeBlock({ code, lang, html, runnable }: Props) {
         : null
 
   return (
-    <figure className="code-fig bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
+    <figure
+      className={[
+        'code-fig bg-surface-sunken max-w-3xl min-w-0 overflow-hidden rounded-md',
+        bare ? '' : 'border-border border',
+      ].join(' ')}
+    >
       <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-1">
         <span className="text-data text-ink-subtle uppercase">
           {lang ?? 'texto'}

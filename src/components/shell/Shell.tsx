@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import { useAsk } from '@/components/ask/useAsk'
 import { CommandPalette } from '@/components/palette/CommandPalette'
+import '@/lib/ask/palette'
+import { askStore } from '@/lib/ask/store'
 import {
   describeTarget,
   isApple,
@@ -8,6 +11,11 @@ import {
 } from '@/lib/palette/shortcut'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+
+// El chat (y el parser de Markdown) se descarga la primera vez que se abre.
+const AskPanel = lazy(() =>
+  import('@/components/ask/AskPanel').then((m) => ({ default: m.AskPanel })),
+)
 
 /** Sidebar + barra superior + contenido. Bajo `lg` el sidebar es un cajón. */
 export function Shell() {
@@ -27,6 +35,16 @@ export function Shell() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
+
+  // Quién es el visitante: decide si el palette ofrece "Preguntar a Ether".
+  useEffect(() => {
+    void askStore.loadViewer()
+  }, [])
+
+  // Se monta al abrirlo por primera vez y queda (la conversación vive en askStore).
+  const askOpen = useAsk().open
+  const [askLoaded, setAskLoaded] = useState(false)
+  if (askOpen && !askLoaded) setAskLoaded(true)
 
   // Palette: Ctrl+K / Cmd+K alterna desde cualquier página (reglas en lib/palette/shortcut.ts).
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -70,6 +88,11 @@ export function Shell() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
       />
+      {askLoaded && (
+        <Suspense fallback={null}>
+          <AskPanel />
+        </Suspense>
+      )}
       <ScrollRestoration />
     </div>
   )

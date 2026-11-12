@@ -46,6 +46,9 @@ export interface Config {
     contextMaxChars: number
     minSemanticScore: number
     maxBodyBytes: number
+    /** Answer cache: seconds an answer is reused (0 = cache off) and how many are kept. */
+    cacheTtlSeconds: number
+    cacheMaxEntries: number
   }
   limits: {
     chatViewerPerMin: number
@@ -201,6 +204,8 @@ export function loadConfig(env: Env = process.env): Config {
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
       minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.25, 0, 1),
       maxBodyBytes: int('CHAT_MAX_BODY_BYTES', 16384, 1024, 262144),
+      cacheTtlSeconds: int('CHAT_CACHE_TTL_SECONDS', 3600, 0, 604800),
+      cacheMaxEntries: int('CHAT_CACHE_MAX_ENTRIES', 500, 0, 5000),
     },
     limits: {
       chatViewerPerMin: int('RATE_CHAT_VIEWER_PER_MIN', 6, 1, 10000),

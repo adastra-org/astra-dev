@@ -3,9 +3,11 @@
 // then streams and never throws (failures become an `error` event).
 import { chunkPath, type ChunkKind } from '../docs/chunk.ts'
 import { AppError } from '../errors.ts'
+import type { Role } from '../config.ts'
 import type { Retriever, SearchMode } from '../index/search.ts'
 import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
+import { cacheKey, type AnswerCache } from './cache.ts'
 import {
   REFUSAL_ES,
   buildPrompt,
@@ -50,6 +52,8 @@ export type ChatEvent =
       cited: number[]
       refused: boolean
       truncated: boolean
+      /** The answer came from the cache: no model call, no tokens spent. */
+      cached?: boolean
       usage: { inputTokens: number; outputTokens: number }
     }
   | { type: 'error'; code: string; message: string }
@@ -58,6 +62,8 @@ export interface ChatRun {
   mode: SearchMode
   degraded: boolean
   sources: Source[]
+  /** True when `events` replays a cached answer (no model call). */
+  cacheHit?: boolean
   events(signal?: AbortSignal): AsyncGenerator<ChatEvent>
 }
 
@@ -66,15 +72,22 @@ export interface ChatDeps {
   llm: LlmProvider
   budget: TokenBudget
   settings: ChatSettings
+  /** Optional answer cache. Absent or disabled = every question goes to the model. */
+  cache?: AnswerCache
 }
 
 export interface ChatInput {
   requestId: string
   /** Budget key (viewer id). */
   viewerKey: string
+  /** Part of the cache key: viewers with different roles never share a cached answer. */
+  role: Role
   question: string
   history: unknown
 }
+
+/** Cached answers are replayed in a few deltas so the client path is the same as a live stream. */
+const REPLAY_CHUNK = 160
 
 export class ChatService {
   readonly #d: ChatDeps
@@ -151,6 +164,47 @@ export class ChatService {
       }
     }
 
+    // Same question over the same sources for the same role: replay the stored answer. No model
+    // call and no budget spent.
+    const { cache } = this.#d
+    const key = cache?.enabled
+      ? cacheKey({
+          role: input.role,
+          question,
+          history,
+          sourceIds: built.used.map((h) => h.id),
+        })
+      : null
+    const cached = key ? cache!.get(key) : null
+    if (cached) {
+      return {
+        ...base,
+        cacheHit: true,
+        async *events() {
+          yield {
+            type: 'meta',
+            requestId: input.requestId,
+            mode: found.mode,
+            degraded: found.degraded,
+          }
+          yield { type: 'sources', sources }
+          for (let i = 0; i < cached.text.length; i += REPLAY_CHUNK)
+            yield {
+              type: 'delta',
+              text: cached.text.slice(i, i + REPLAY_CHUNK),
+            }
+          yield {
+            type: 'done',
+            cited: cached.cited,
+            refused: cached.refused,
+            truncated: false,
+            cached: true,
+            usage: { inputTokens: 0, outputTokens: 0 },
+          }
+        },
+      }
+    }
+
     const inputChars = built.messages.reduce((n, m) => n + m.content.length, 0)
     const reserved = estimateTokens(inputChars) + s.maxOutputTokens
     this.#d.budget.reserve(input.viewerKey, reserved)
@@ -215,10 +269,15 @@ export class ChatService {
         }
         if (failed) return
 
+        const cited = citedNumbers(answer, sources.length)
+        const refused = isRefusal(answer)
+        // Only a complete answer is worth replaying.
+        if (key && !truncated && answer)
+          cache!.set(key, { text: answer, cited, refused })
         yield {
           type: 'done',
-          cited: citedNumbers(answer, sources.length),
-          refused: isRefusal(answer),
+          cited,
+          refused,
           truncated,
           usage: usage ?? {
             inputTokens: estimateTokens(inputChars),

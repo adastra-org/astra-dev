@@ -97,6 +97,16 @@ lg and up                         under lg (375 to 1023 px)
 - Copy: empty state says what to try ("Prueba con otro término"), no exclamation marks. Exception to the house
   "empty = dashed box": no box, because the panel is already the one bordered level.
 
+## Ask Ether panel
+
+Detalle y archivos en `docs/ask/README.md`. Es el único elemento con movimiento ("un solo brillo"): el icono pulsa solo mientras se busca, sin bucles el resto del tiempo y nada con `prefers-reduced-motion`.
+
+- Panel anclado a la derecha sobre el contenido (house: el detalle va en un panel acoplado, no en una página nueva): `<dialog>` modal, un borde (el panel), a 375 px ocupa el ancho menos 16 px. Esc, el fondo y el botón cierran; la conversación **no** se pierde al cerrar ni se corta la respuesta en curso.
+- Pregunta del usuario: relleno `surface-overlay` alineado a la derecha. Respuesta: texto sobre el panel, sin burbuja. Citas `[n]` = fichas de relleno (`surface-sunken`) que enlazan a la página; la lista "Fuentes" bajo la respuesta usa filas de 44 px. Ningún bloque lleva borde propio (el código usa `CodeBlock bare`).
+- Error: caja `danger-surface` con icono + texto (nunca solo color), qué pasó, qué hacer y "Reintentar" cuando tiene sentido. Aviso de acceso: caja `surface-sunken` con candado.
+- Envío con Intro, salto de línea con Mayús + Intro; el botón de enviar nunca se deshabilita (con la caja vacía devuelve el foco al campo) y se vuelve "Detener" mientras responde.
+- Copy: español neutro con tú, sin exclamaciones; dice qué se envía al modelo y qué guarda el server.
+
 ## Docs reading layout
 
 The reader is a developer in the middle of a task, possibly with ADHD. A doc page is built so the first screen already
