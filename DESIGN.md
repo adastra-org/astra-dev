@@ -97,6 +97,16 @@ lg and up                         under lg (375 to 1023 px)
 - Copy: empty state says what to try ("Prueba con otro término"), no exclamation marks. Exception to the house
   "empty = dashed box": no box, because the panel is already the one bordered level.
 
+## Ask Ether panel
+
+Detalle y archivos en `docs/ask/README.md`. Es el único elemento con movimiento ("un solo brillo"): el icono pulsa solo mientras se busca, sin bucles el resto del tiempo y nada con `prefers-reduced-motion`.
+
+- Panel anclado a la derecha sobre el contenido (house: el detalle va en un panel acoplado, no en una página nueva): `<dialog>` modal, un borde (el panel), a 375 px ocupa el ancho menos 16 px. Esc, el fondo y el botón cierran; la conversación **no** se pierde al cerrar ni se corta la respuesta en curso.
+- Pregunta del usuario: relleno `surface-overlay` alineado a la derecha. Respuesta: texto sobre el panel, sin burbuja. Citas `[n]` = fichas de relleno (`surface-sunken`) que enlazan a la página; la lista "Fuentes" bajo la respuesta usa filas de 44 px. Ningún bloque lleva borde propio (el código usa `CodeBlock bare`).
+- Error: caja `danger-surface` con icono + texto (nunca solo color), qué pasó, qué hacer y "Reintentar" cuando tiene sentido. Aviso de acceso: caja `surface-sunken` con candado.
+- Envío con Intro, salto de línea con Mayús + Intro; el botón de enviar nunca se deshabilita (con la caja vacía devuelve el foco al campo) y se vuelve "Detener" mientras responde.
+- Copy: español neutro con tú, sin exclamaciones; dice qué se envía al modelo y qué guarda el server.
+
 ## Docs reading layout
 
 The reader is a developer in the middle of a task, possibly with ADHD. A doc page is built so the first screen already
@@ -156,6 +166,7 @@ here so they are checked in review. The Ad Astra DS README does not state them; 
   `src/styles/prose.css` map to roles (`accent`, `success`, `warning`, `info`, `ink-muted`, `ink-subtle`), and
   `code-colors.test.ts` measures each at 4.5:1 on `surface-sunken`. No third-party theme palette.
 - The M4 "Ejecutar" button goes in the header next to Copiar; the output panel opens below the `pre`.
+- **M4 sandbox** (`CodeBlock` with `runnable`): Ejecutar/Detener, Revisar and Formatear are text buttons with 16 px icons in the same header row as Copiar, separated by 4 px, wrapping as a group under `md`. While a run is active only Detener replaces Ejecutar; Copiar stays. The output panel is a full-width band below the `pre`, divided by a 1 px `border`, on `surface` (not `sunken`): status line first (icon + text, never color alone), stdout in `text-code` with `white-space: pre-wrap`. Diagnostics use the same band. Focus and hover follow the pill/fill rules; nothing gets a single-side border.
 
 ## Placeholders
 

@@ -1,6 +1,6 @@
-# Server de Ask Ether (M3, v0.4.0)
+# Server de Ask Ether (M3, v0.4.0; caché de respuestas v0.8.0)
 
-Mitad servidor del chat de solo lectura sobre la documentación. Vive en [`server/`](../../server/) como paquete Bun aparte (su propio `package.json` y `bun.lock`). La UI (paleta Ctrl+K, panel del chat) es otra tarea y consume los endpoints de abajo.
+Mitad servidor del chat de solo lectura sobre la documentación. Vive en [`server/`](../../server/) como paquete Bun aparte (su propio `package.json` y `bun.lock`). La UI (panel del chat, entrada en la paleta Ctrl+K) está en [ask/README.md](../ask/README.md) y consume los endpoints de abajo.
 
 ```
 browser ──► nginx ──► /api/*  ──► astra-dev@<slot> (Bun, 127.0.0.1:4101|4102)
@@ -76,7 +76,7 @@ Eventos SSE (`Content-Type: text/event-stream`, `X-Accel-Buffering: no`, `X-Requ
 event: meta     data: {"requestId":"…","mode":"semantic|keyword","degraded":false}
 event: sources  data: {"sources":[{"n":1,"slug":"…","title":"…","heading":"…","anchor":"…","path":"/docs/slug#anchor","excerpt":"…","score":0.71}]}
 event: delta    data: {"text":"…"}                      (muchos)
-event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"usage":{"inputTokens":…,"outputTokens":…}}
+event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"cached":true,"usage":{"inputTokens":…,"outputTokens":…}}   (`cached` solo si salió de la caché)
 event: error    data: {"code":"llm_unavailable","message":"…"}   (en lugar de done)
 ```
 
@@ -137,6 +137,16 @@ Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/g
 
 **Recuperación** (`server/src/index/search.ts`): coseno top-k con el embedder; si el embedder falla o tarda más de `EMBEDDER_TIMEOUT_MS`, o el índice no tiene vectores, o nada supera `CHAT_MIN_SEMANTIC_SCORE`, cae a BM25 por palabras clave (sin tildes, con plurales, título y encabezado pesan más). Tras un fallo del embedder se lo salta 30 s para no sumar timeouts. `meta.degraded` y `mode` informan qué pasó. Nunca lanza.
 
+## Caché de respuestas (v0.8.0)
+
+`server/src/chat/cache.ts`. Una pregunta repetida sobre las mismas fuentes se responde sin llamar al modelo y sin gastar presupuesto de tokens.
+
+- **Clave** (SHA-256): rol del viewer + pregunta normalizada (minúsculas, sin tildes ni signos, espacios simples) + historial normalizado + **ids de los fragmentos** que entrarían en el prompt, en orden. Si dos viewers pueden ver contexto distinto (hoy no: todos los roles con chat ven el mismo corpus), las claves difieren y nunca comparten respuesta; la caída a palabras clave también cambia los ids y por tanto la clave.
+- **Qué se guarda**: solo respuestas completas y correctas. Un error del modelo o una respuesta cortada por longitud **no** se cachean.
+- **Acotada**: TTL (`CHAT_CACHE_TTL_SECONDS`, 3600) y máximo de entradas con descarte del menos usado (`CHAT_CACHE_MAX_ENTRIES`, 500). `0` en cualquiera la apaga.
+- **Un acierto sigue contando** para el rate limit por viewer e IP, y repite el stream SSE (`meta`, `sources`, `delta`, `done` con `cached: true` y uso 0), así el cliente no distingue el camino.
+- El log de la petición lleva `cache: hit|miss`. Pregunta y respuesta siguen sin loguearse; las claves son hashes y viven solo en memoria.
+
 ## Variables de entorno
 
 Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/astra-dev.env` (modo 600, formato `CLAVE=valor`).
@@ -165,6 +175,7 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `CHAT_NATIVES_TOP_K`                                          | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs              |
 | `CHAT_MIN_SEMANTIC_SCORE`                                     | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`         |
 | `CHAT_MAX_BODY_BYTES`                                         | 16384                                                           |                                                                            |
+| `CHAT_CACHE_TTL_SECONDS`, `CHAT_CACHE_MAX_ENTRIES`            | 3600, 500                                                       | Caché de respuestas. 0 en cualquiera = apagada                             |
 | `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                                 |
 | `RATE_SEARCH_IP_PER_MIN`                                      | 60                                                              | `searchDocs` público                                                       |
 | `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                  | 40000, 1000000                                                  | Reset 00:00 UTC                                                            |
@@ -182,7 +193,7 @@ Un valor inválido hace fallar el arranque con el listado de problemas (un deplo
 
 - **Rate limit, presupuesto y caché de viewer están en memoria del proceso.** Un reinicio los reinicia, y los dos slots (blue/green) no comparten estado: durante un deploy un viewer podría gastar el tope en cada uno. Aceptable para un VPS y un equipo chico; antes de escalar a varias instancias va un store compartido.
 - La estimación de tokens (3 caracteres por token) es conservadora; el consumo real se concilia con el `usage` del proveedor.
-- Sin caché de respuestas (el plan M3 lo menciona; falta).
+- La caché de respuestas también es del proceso: un reinicio o el otro slot la vacían, y un doc nuevo llega con un deploy (que reinicia el proceso).
 - El umbral semántico y los prefijos de tarea del embedder no están calibrados contra el embedder real (no es accesible fuera del VPS).
 - Si Cloudflare proxea el dominio, nginx necesita `real_ip_header CF-Connecting-IP` con los rangos de Cloudflare (`set_real_ip_from`), o `$remote_addr` será el borde de Cloudflare y el límite por IP se compartirá entre todos.
 - El stream usa `fetch` sin reintentos: un fallo del proveedor se informa y el usuario reintenta.
@@ -241,25 +252,27 @@ Rollback: `/home/hermes/deploy/astra-dev.sh rollback` mueve sitio y API al slot 
 cd server && bun install
 NO_EMBED=1 bun run index                                   # índice por palabras clave (sin embedder)
 ASTRA_DEV_VIEWER=subscriber LLM_PROVIDER=fake bun run dev  # 127.0.0.1:4100, chat con el proveedor de prueba
+bun run dev:local                                          # stub subscriber + proveedor real si hay DEEPSEEK_API_KEY; acepta localhost:5173-5176
 bun run check                                              # typecheck + tests (también corre en el `check` de la raíz)
 ```
 
-Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. El server no habla con Vite: la UI en dev debe apuntar a `http://127.0.0.1:4100` (el origen `localhost:5173` ya está permitido en dev).
+Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. La UI en dev llama `/api/*` y Vite lo reenvía a `127.0.0.1:4100` quitando el prefijo (`vite.config.ts`), igual que nginx: mismo origen y misma cookie. Con `bun run dev:local` el panel funciona de punta a punta.
 
-## Pruebas (`bun test`, 128)
+## Pruebas (`bun test`, 143)
 
-`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL), `offline-embeddings` (índice en dos archivos, reutilización de vectores, compatibilidad entre embedders, token y reintentos) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
+`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL), `offline-embeddings` (índice en dos archivos, reutilización de vectores, compatibilidad entre embedders, token y reintentos) `cache` (normalización, TTL, tope y descarte, clave por rol/fuentes/historial, un acierto sin modelo ni presupuesto, errores y cortes sin cachear, log) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
 
 ## Estado de verificación
 
-| Qué                                                                                  | Estado                                                                                                              |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Typecheck + 128 tests del server, `bun run check` de la raíz                         | Verificado                                                                                                          |
-| Índice por palabras clave con el corpus real (338 docs, 7.326 natives) y consultas   | Verificado: 10.254 fragmentos, 3-7 ms por consulta; búsquedas por nombre y hash exactas                             |
-| Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL            | Verificado a mano                                                                                                   |
-| Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401     | Verificado a mano                                                                                                   |
-| Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable | Verificado                                                                                                          |
-| DeepSeek real: respuesta con citas y rechazo fuera del tema                          | Verificado a mano contra la API (índice por palabras clave)                                                         |
-| Índice semántico y ranking con el embedder real                                      | **No verificado**: el embedder solo existe en el VPS                                                                |
-| Contrato de `/api/auth/viewer`                                                       | Tests con el payload real documentado por cuentas. **No verificado** contra el endpoint desplegado (PR #21 abierto) |
-| Unidad systemd, vhost `/api/`, script y workflow                                     | **No verificado**: sin aplicar en el VPS (el script pasa `bash -n`; el workflow parsea como YAML)                   |
+| Qué                                                                                          | Estado                                                                                                              |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Typecheck + 143 tests del server, `bun run check` de la raíz                                 | Verificado                                                                                                          |
+| Índice por palabras clave con el corpus real (338 docs, 7.326 natives) y consultas           | Verificado: 10.254 fragmentos, 3-7 ms por consulta; búsquedas por nombre y hash exactas                             |
+| Caché de respuestas: la pregunta repetida se sirve sin modelo (`cache: hit`, 0 tokens, 1 ms) | Verificado con tests y en el navegador contra DeepSeek real                                                         |
+| Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL                    | Verificado a mano                                                                                                   |
+| Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401             | Verificado a mano                                                                                                   |
+| Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable         | Verificado                                                                                                          |
+| DeepSeek real: respuesta con citas y rechazo fuera del tema                                  | Verificado a mano contra la API (índice por palabras clave)                                                         |
+| Índice semántico y ranking con el embedder real                                              | **No verificado**: el embedder solo existe en el VPS                                                                |
+| Contrato de `/api/auth/viewer`                                                               | Tests con el payload real documentado por cuentas. **No verificado** contra el endpoint desplegado (PR #21 abierto) |
+| Unidad systemd, vhost `/api/`, script y workflow                                             | **No verificado**: sin aplicar en el VPS (el script pasa `bash -n`; el workflow parsea como YAML)                   |

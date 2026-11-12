@@ -46,25 +46,25 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 - [ ] Índice de embeddings de todas las docs (WeKit `embed_text`), regenerado en build.
 - [ ] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto.
 - [ ] Respuesta redactada por LLM sobre los resultados (componente Ask Ether de WeKit), con citas a las páginas.
-- [ ] Rate limit y caché de consultas.
+- [x] Rate limit y caché de consultas: rate limit por viewer e IP, presupuesto diario y caché de respuestas (v0.8.0). Ver [server/README.md](../server/README.md#caché-de-respuestas-v080).
 
-Estado del server de Ask Ether (v0.4.0, [server/README](../server/README.md)). Mitad servidor hecha; falta la UI del chat y verificar contra el embedder real y las cuentas reales. Se ticka el ítem de arriba cuando esté completo (servidor + UI):
+Estado de Ask Ether: servidor (v0.4.0, [server/README](../server/README.md)) y panel del chat (v0.8.0, [ask/README](../ask/README.md)) hechos y verificados en local. **Falta verificar contra el embedder real y las cuentas reales** (solo existen en el VPS), por eso los ítems de índice, búsqueda y permisos siguen en `[~]` y los ítems de arriba (índice, búsqueda, respuesta) siguen sin tickear:
 
 - [~] Índice de embeddings: `bun run index` y degradado a palabras clave verificados; el índice semántico real **no** (el embedder solo existe en el VPS). `deploy.yml` lo regenera, sin aplicar.
 - [~] Búsqueda en lenguaje natural: `searchDocs` (GraphQL) y recuperación del chat verificados con embedder simulado; falta el ranking con el embedder real.
-- [~] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y a mano contra DeepSeek; falta el panel en la UI.
-- [~] Rate limit y caché: rate limit por viewer e IP y presupuesto diario de tokens hechos (en memoria); **falta la caché**.
+- [x] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y contra DeepSeek, y panel del chat (citas como enlaces a las páginas, rechazo, límites, estados, teclado, 375 px) verificado en el navegador. El componente Ask Ether de WeKit no existe: ver [ask/README](../ask/README.md#decisión-componentes-propios).
+- [x] Rate limit y caché: rate limit por viewer e IP, presupuesto diario de tokens y caché de respuestas, todo en memoria del proceso (límite conocido: no se comparte entre slots).
 - [~] Permisos por `Viewer`: mapeo del payload real de cuentas (`staff` por `role`, `subscriber` por entitlement `tebex-subscriber` vigente) probado con fixtures; falta probarlo contra el endpoint desplegado.
 
 ## M4 — Sandbox de código (0.5.0)
 
-Es código no confiable del usuario: revisión de seguridad antes de merge.
+Es código no confiable del usuario: revisión de seguridad antes de merge. Detalle en [sandbox/README.md](../sandbox/README.md). Publicado como v0.9.0.
 
-- [ ] Decidir runtime (ver decisiones abiertas).
-- [ ] Ejecución aislada con límites de tiempo y memoria; sin red ni filesystem.
-- [ ] Salida: stdout, errores, tiempo de ejecución.
-- [ ] Lint y format del snippet (Lua).
-- [ ] Botón "Ejecutar" en bloques de código marcados en el Markdown.
+- [x] Decidir runtime: Lua 5.4 en WASM (wasmoon) en un Web Worker, sin server ni contenedor.
+- [x] Ejecución aislada con límites de tiempo, memoria, instrucciones y salida; sin red ni filesystem.
+- [x] Salida: stdout, errores con línea, tiempo de ejecución, límites alcanzados y crashes.
+- [x] Lint y format del snippet (Lua): luaparse con reglas propias y StyLua `CfxLua`.
+- [~] Botón "Ejecutar" en bloques de código marcados en el Markdown (```lua run): implementado con Revisar, Formatear y panel de salida; **falta la pasada en navegador real y la revisión de seguridad** antes de merge.
 
 ## M5 — Proyecto: checklist y evolución (0.6.0)
 

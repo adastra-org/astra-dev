@@ -1,6 +1,7 @@
 // Builds the real dependency graph from config. Used by main.ts; tests build their own with fakes.
 import { readFile } from 'node:fs/promises'
 import { EmbedderClient } from '@wefaber/embed'
+import { AnswerCache } from './chat/cache.ts'
 import { ChatService } from './chat/service.ts'
 import type { Config } from './config.ts'
 import type { AppDeps, BuildInfo } from './context.ts'
@@ -153,6 +154,10 @@ export async function buildDeps(
           config.limits.dailyTokensGlobal,
         ),
         settings: config.chat,
+        cache: new AnswerCache({
+          maxEntries: config.chat.cacheMaxEntries,
+          ttlMs: config.chat.cacheTtlSeconds * 1000,
+        }),
       })
     : null
 

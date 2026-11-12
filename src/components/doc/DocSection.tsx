@@ -10,6 +10,7 @@ function Blocks({ blocks }: { blocks: Block[] }) {
         code={b.code}
         lang={b.lang || undefined}
         html={b.html}
+        runnable={b.runnable}
       />
     ) : (
       // HTML generado en build desde Markdown del repo (HTML crudo escapado).

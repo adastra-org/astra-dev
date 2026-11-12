@@ -23,7 +23,14 @@ export interface DocMeta {
 
 export type Block =
   | { type: 'html'; html: string }
-  | { type: 'code'; lang: string; code: string; html: string }
+  | {
+      type: 'code'
+      lang: string
+      code: string
+      html: string
+      /** `lua run` en el Markdown: el bloque se puede ejecutar en el sandbox (M4). */
+      runnable?: boolean
+    }
 
 export type SectionKind = 'intro' | 'example' | 'section'
 
