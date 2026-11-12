@@ -31,9 +31,9 @@ describe('visibleSources', () => {
 })
 
 describe('isLinkable / sourceLabel', () => {
-  test('los docs enlazan; los natives no, hasta que existan sus páginas', () => {
+  test('los docs y los natives enlazan a su página', () => {
     expect(isLinkable(src(1))).toBe(true)
-    expect(isLinkable(src(1, { kind: 'native' }))).toBe(false)
+    expect(isLinkable(src(1, { kind: 'native' }))).toBe(true)
   })
   test('no repite el título como sección', () => {
     expect(sourceLabel(src(1, { heading: 'Doc 1' })).section).toBe('')
@@ -56,7 +56,13 @@ describe('proveedor del palette', () => {
     expect(askProvider.order).toBeGreaterThan(40)
   })
   test('con consulta ofrece preguntarla; sin consulta, abrir el chat', async () => {
-    const ctx = { docs: [], headings: [], pathname: '/', recents: [] }
+    const ctx = {
+      docs: [],
+      headings: [],
+      pathname: '/',
+      recents: [],
+      lang: 'es' as const,
+    }
     const sig = new AbortController().signal
     const withQuery = await askProvider.search('cómo hago rollback', ctx, sig)
     expect(withQuery).toHaveLength(1)

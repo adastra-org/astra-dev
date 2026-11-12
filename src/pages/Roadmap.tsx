@@ -12,6 +12,7 @@ import { useRemote } from '@/components/project/useRemote'
 import { ApiError, loadChecklist, loadEvolution } from '@/lib/project/api'
 import { formatValue } from '@/lib/project/series'
 import { useTitle } from '@/lib/title'
+import { useLang } from '@/lib/use-lang'
 
 function Section({
   id,
@@ -47,7 +48,8 @@ const isGate = (e: unknown) =>
   (e.code === 'unauthenticated' || e.code === 'staff_required')
 
 export default function Roadmap() {
-  useTitle('Roadmap')
+  const { lang, tr } = useLang()
+  useTitle(tr('roadmap.title'))
   const [days, setDays] = useState<Range>(30)
   const checklist = useRemote(loadChecklist, 'checklist')
   const evolution = useRemote((s) => loadEvolution(days, s), days)
@@ -57,9 +59,9 @@ export default function Roadmap() {
     return (
       <>
         <PageHeader
-          eyebrow="Proyecto"
-          title="Roadmap"
-          lead="Checklist, evolución y complejidad del desarrollo de Ad Astra."
+          eyebrow={tr('roadmap.eyebrow')}
+          title={tr('roadmap.title')}
+          lead={tr('rm.gateLead')}
         />
         <ErrorNotice error={checklist.error} />
       </>
@@ -74,57 +76,65 @@ export default function Roadmap() {
   return (
     <div className="flex flex-col gap-12">
       <PageHeader
-        eyebrow="Proyecto"
-        title="Roadmap"
-        lead="Qué está hecho, qué falta y cómo crece el código. Solo para el staff."
+        eyebrow={tr('roadmap.eyebrow')}
+        title={tr('roadmap.title')}
+        lead={tr('rm.lead')}
       >
         {c && (
           <div className="mt-3">
             <Freshness
               at={c.checklist.generatedAt}
               stale={c.checklist.stale}
-              source="Plan y milestones de GitHub"
+              source={tr('rm.source.plan')}
             />
           </div>
         )}
       </PageHeader>
 
-      <Section id="estado" title="Estado">
+      <Section id="estado" title={tr('rm.status')}>
         <dl
           aria-busy={checklist.loading || evolution.loading}
           className="grid grid-cols-2 gap-3 lg:grid-cols-4"
         >
           <Stat
-            label="Plan"
+            label={tr('rm.plan')}
             value={c ? `${planDone}/${planTotal}` : dash}
-            note="ítems hechos"
+            note={tr('rm.planNote')}
           />
           <Stat
-            label="Issues abiertos"
-            value={ev ? formatValue(ev.totals.openIssues) : dash}
+            label={tr('rm.issuesOpen')}
+            value={ev ? formatValue(ev.totals.openIssues, lang) : dash}
             note={
-              ev ? `${formatValue(ev.totals.closedIssues)} cerrados` : undefined
+              ev
+                ? tr('rm.closedN', {
+                    n: formatValue(ev.totals.closedIssues, lang),
+                  })
+                : undefined
             }
           />
           <Stat
-            label="PRs abiertos"
-            value={ev ? formatValue(ev.totals.openPrs) : dash}
+            label={tr('rm.prsOpen')}
+            value={ev ? formatValue(ev.totals.openPrs, lang) : dash}
             note={
-              ev ? `${formatValue(ev.totals.mergedPrs)} mergeados` : undefined
+              ev
+                ? tr('rm.mergedN', {
+                    n: formatValue(ev.totals.mergedPrs, lang),
+                  })
+                : undefined
             }
           />
           <Stat
-            label={`Commits · ${days} d`}
-            value={ev ? formatValue(ev.totals.commits) : dash}
-            note={ev ? `en ${ev.ref}` : undefined}
+            label={tr('rm.commitsDays', { days })}
+            value={ev ? formatValue(ev.totals.commits, lang) : dash}
+            note={ev ? tr('rm.inRef', { ref: ev.ref }) : undefined}
           />
         </dl>
       </Section>
 
       <Section
         id="checklist"
-        title="Checklist"
-        lead="Los milestones del plan con el estado de cada ítem. Se lee de docs/plan/README.md en GitHub, así que sigue al plan sin redeploy."
+        title={tr('rm.checklist')}
+        lead={tr('rm.checklistLead')}
       >
         {checklist.error !== null && (
           <ErrorNotice error={checklist.error} onRetry={checklist.reload} />
@@ -134,7 +144,7 @@ export default function Roadmap() {
         ) : (
           checklist.error === null && (
             <p role="status" className="text-body-sm text-ink-muted">
-              Cargando el plan…
+              {tr('rm.loadingPlan')}
             </p>
           )
         )}
@@ -142,8 +152,8 @@ export default function Roadmap() {
 
       <Section
         id="evolucion"
-        title="Evolución"
-        lead="Issues, commits y burndown del repo astra-dev."
+        title={tr('rm.evolution')}
+        lead={tr('rm.evolutionLead')}
         aside={<RangePicker value={days} onChange={setDays} />}
       >
         {evolution.error !== null && !isGate(evolution.error) && (
@@ -157,14 +167,14 @@ export default function Roadmap() {
             <Freshness
               at={ev.generatedAt}
               stale={ev.stale}
-              source={`Datos de ${ev.repo}`}
+              source={tr('rm.source.repo', { repo: ev.repo })}
             />
             <EvolutionSection data={ev} />
           </div>
         ) : (
           evolution.error === null && (
             <p role="status" className="text-body-sm text-ink-muted">
-              Cargando la evolución…
+              {tr('rm.loadingEvolution')}
             </p>
           )
         )}
@@ -172,15 +182,15 @@ export default function Roadmap() {
 
       <Section
         id="complejidad"
-        title="Complejidad"
-        lead="Tamaño del repo en el tiempo: líneas, archivos y churn. Un script lo mide desde git y se guarda en el repo."
+        title={tr('rm.complexity')}
+        lead={tr('rm.complexityLead')}
       >
         {c ? (
           <ComplexitySection data={c.complexity} />
         ) : (
           checklist.error === null && (
             <p role="status" className="text-body-sm text-ink-muted">
-              Cargando la serie…
+              {tr('rm.loadingSeries')}
             </p>
           )
         )}

@@ -1,49 +1,57 @@
 import { formatDay, formatValue } from '@/lib/project/series'
 import type { Complexity } from '@/lib/project/types'
+import { useLang } from '@/lib/use-lang'
 import { LineChart } from './chart/LineChart'
 import { EmptyNote } from './parts'
 
 export function ComplexitySection({ data }: { data: Complexity | null }) {
+  const { lang, tr } = useLang()
   if (!data || data.series.length === 0)
     return (
       <EmptyNote>
-        Todavía no hay serie de complejidad en la rama. Se genera con{' '}
-        <code>bun run complexity -- --backfill</code> y se sube al repo en{' '}
-        <code>docs/project/complexity.json</code>.
+        {tr('rm.cx.emptyA')} <code>bun run complexity -- --backfill</code>{' '}
+        {tr('rm.cx.emptyB')} <code>docs/project/complexity.json</code>.
       </EmptyNote>
     )
   const s = data.series
   const last = s.at(-1)!
   const cats = s.map((p) => ({
     key: p.date,
-    label: `${formatDay(p.date)} · ${p.sha}`,
-    axis: formatDay(p.date),
+    label: `${formatDay(p.date, lang)} · ${p.sha}`,
+    axis: formatDay(p.date, lang),
   }))
   const xs = s.map((p) => Date.parse(`${p.date}T00:00:00Z`))
-  const now = (label: string, v: number) =>
-    `Hoy: ${formatValue(v)} ${label} (${formatDay(last.date)}).`
+  const now = (what: string, v: number) =>
+    tr('rm.cx.today', {
+      v: formatValue(v, lang),
+      what,
+      day: formatDay(last.date, lang),
+    })
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <LineChart
           compact
-          title="Líneas"
-          description={now('líneas de código', last.lines)}
+          title={tr('rm.cx.lines')}
+          description={now(tr('rm.cx.todayLines'), last.lines)}
           categories={cats}
           xValues={xs}
           height={160}
-          summary={`${formatValue(last.lines)} líneas de código y ${formatValue(last.docLines)} de documentación.`}
+          summary={tr('rm.cx.sumLines', {
+            lines: formatValue(last.lines, lang),
+            docs: formatValue(last.docLines, lang),
+          })}
           series={[
             {
               id: 'lines',
-              label: 'Código',
+              label: tr('rm.cx.code'),
               color: 'var(--chart-1)',
               values: s.map((p) => p.lines),
             },
             {
               id: 'docLines',
-              label: 'Docs',
+              label: tr('rm.cx.docs'),
               color: 'var(--chart-2)',
               values: s.map((p) => p.docLines),
             },
@@ -51,16 +59,16 @@ export function ComplexitySection({ data }: { data: Complexity | null }) {
         />
         <LineChart
           compact
-          title="Archivos"
-          description={now('archivos medidos', last.files)}
+          title={tr('rm.cx.files')}
+          description={now(tr('rm.cx.todayFiles'), last.files)}
           categories={cats}
           xValues={xs}
           height={160}
-          summary={`${formatValue(last.files)} archivos.`}
+          summary={tr('rm.cx.sumFiles', { n: formatValue(last.files, lang) })}
           series={[
             {
               id: 'files',
-              label: 'Archivos',
+              label: tr('rm.cx.files'),
               color: 'var(--chart-1)',
               values: s.map((p) => p.files),
             },
@@ -68,16 +76,16 @@ export function ComplexitySection({ data }: { data: Complexity | null }) {
         />
         <LineChart
           compact
-          title="Churn semanal"
-          description={now('líneas cambiadas en 7 días', last.churn)}
+          title={tr('rm.cx.churn')}
+          description={now(tr('rm.cx.todayChurn'), last.churn)}
           categories={cats}
           xValues={xs}
           height={160}
-          summary={`${formatValue(last.churn)} líneas cambiadas en los últimos 7 días.`}
+          summary={tr('rm.cx.sumChurn', { n: formatValue(last.churn, lang) })}
           series={[
             {
               id: 'churn',
-              label: 'Churn',
+              label: tr('rm.cx.churnSeries'),
               color: 'var(--chart-1)',
               values: s.map((p) => p.churn),
             },
@@ -85,9 +93,7 @@ export function ComplexitySection({ data }: { data: Complexity | null }) {
         />
       </div>
       <p className="text-caption text-ink-subtle max-w-prose">
-        Cuenta código (ts, tsx, js, css, html, sh, yaml, json) y docs (md) del
-        repo; no cuenta lockfiles, tokens generados ni <code>public/</code>. El
-        churn suma líneas añadidas y borradas en los 7 días hasta esa fecha.
+        {tr('rm.cx.note')}
       </p>
     </div>
   )

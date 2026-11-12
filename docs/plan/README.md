@@ -35,10 +35,10 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M2 — Contenido y traducción (0.3.0)
 
-- [~] Importar natives desde `citizenfx/natives`, los natives de CFX (`fivem/ext/native-decls`) y `fivem-docs`: importador hecho (7.326 natives, 333 docs, [import/README.md](../import/README.md)); falta publicarlos en el sitio (fase 3).
+- [x] Importar natives desde `citizenfx/natives`, los natives de CFX (`fivem/ext/native-decls`) y `fivem-docs`: importador (7.326 natives, 333 docs, [import/README.md](../import/README.md)) y publicación en el sitio bajo `/natives` ([natives/README.md](../natives/README.md)). Build verificado; falta la pasada en navegador.
 - [x] Capa propia: notas de Astra sobre cada native (`content/overrides/natives/`, sin tocar la fuente).
-- [ ] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`.
-- [ ] i18n EN/ES en la UI y selector de idioma.
+- [~] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`: pipeline hecho y probado ([translate/README.md](../translate/README.md)); **sin traducciones generadas** (la cuenta de DeepSeek no tiene saldo) y sin revisar.
+- [x] i18n EN/ES en la UI y selector de idioma ([i18n/README.md](../i18n/README.md)). Tests de paridad y de render; falta la pasada en navegador.
 
 ## M3 — Ask Ether (0.4.0)
 
@@ -64,11 +64,11 @@ Es código no confiable del usuario: revisión de seguridad antes de merge. Deta
 - [x] Ejecución aislada con límites de tiempo, memoria, instrucciones y salida; sin red ni filesystem.
 - [x] Salida: stdout, errores con línea, tiempo de ejecución, límites alcanzados y crashes.
 - [x] Lint y format del snippet (Lua): luaparse con reglas propias y StyLua `CfxLua`.
-- [~] Botón "Ejecutar" en bloques de código marcados en el Markdown (```lua run): implementado con Revisar, Formatear y panel de salida; **falta la pasada en navegador real y la revisión de seguridad** antes de merge.
+- [~] Botón "Ejecutar" en bloques de código marcados en el Markdown (```lua run): implementado con Revisar, Formatear y panel de salida; revisión de seguridad de código hecha ([sandbox/README.md](../sandbox/README.md#revisión-de-seguridad-2026-11-12)), **falta que la repita una persona y la pasada en navegador real** antes de merge.
 
 ## M5 — Proyecto: checklist y evolución (0.6.0)
 
-- [~] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel. Checklist del plan (`docs/plan/README.md`), milestones de GitHub y lista de MyChecklist por Code Mode hechos y probados con fixtures; **no verificados contra los servicios reales** (sin tokens). No se usa la API de GitHub Projects: ver [project/README.md](../project/README.md).
+- [~] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel. Checklist del plan (`docs/plan/README.md`), milestones de GitHub y lista de MyChecklist por Code Mode hechos y probados con fixtures. GitHub verificado en vivo contra `adastra-org/astra-dev` (2026-11-12); **MyChecklist sin verificar contra el servicio real** (sin token). No se usa la API de GitHub Projects: ver [project/README.md](../project/README.md).
 - [x] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server por TTL con ETag y copia vieja). Página `/roadmap` solo para staff.
 - [x] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal en `docs/project/complexity.json`, generada por `bun run complexity`.
 - [ ] Más adelante: WeGraph para pesos y relaciones entre decisiones.

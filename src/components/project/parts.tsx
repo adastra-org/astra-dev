@@ -2,6 +2,7 @@ import { RefreshCw, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { describeError } from '@/lib/project/api'
 import { formatStamp } from '@/lib/project/series'
+import { useLang } from '@/lib/use-lang'
 
 /** Cifra grande con su rótulo. */
 export function Stat({
@@ -34,6 +35,7 @@ export function Meter({
   total: number
   label: string
 }) {
+  const { tr } = useLang()
   const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0)
   return (
     <div
@@ -42,7 +44,7 @@ export function Meter({
       aria-valuemin={0}
       aria-valuemax={total}
       aria-valuenow={done}
-      aria-valuetext={`${done} de ${total} hechos${partial ? `, ${partial} parcial${partial > 1 ? 'es' : ''}` : ''}`}
+      aria-valuetext={`${tr('rm.meter', { done, total })}${partial ? tr(partial > 1 ? 'rm.meterPartialMany' : 'rm.meterPartialOne', { n: partial }) : ''}`}
       className="bg-surface-overlay flex h-2 w-full gap-0.5 overflow-hidden rounded-pill"
     >
       <span className="bg-success h-full" style={{ width: `${pct(done)}%` }} />
@@ -62,7 +64,8 @@ export function ErrorNotice({
   error: unknown
   onRetry?: () => void
 }) {
-  const { title, hint } = describeError(error)
+  const { tr } = useLang()
+  const { title, hint } = describeError(error, tr)
   return (
     <div
       role="alert"
@@ -84,7 +87,7 @@ export function ErrorNotice({
             className="text-label bg-surface-overlay hover:bg-accent-fill hover:text-on-accent flex min-h-11 w-fit items-center gap-2 rounded-pill px-4 transition-colors lg:min-h-8"
           >
             <RefreshCw className="size-4" aria-hidden="true" />
-            Reintentar
+            {tr('rm.retry')}
           </button>
         )}
       </div>
@@ -102,15 +105,14 @@ export function Freshness({
   stale: boolean
   source: string
 }) {
+  const { lang, tr } = useLang()
   return (
     <p className="text-caption text-ink-subtle flex flex-wrap items-center gap-x-2">
-      <span>
-        {source} al {formatStamp(at)}
-      </span>
+      <span>{tr('rm.at', { source, when: formatStamp(at, lang) })}</span>
       {stale && (
         <span className="text-warning flex items-center gap-1">
           <TriangleAlert className="size-3.5" aria-hidden="true" />
-          GitHub no respondió: se muestra la última copia guardada
+          {tr('rm.stale')}
         </span>
       )}
     </p>

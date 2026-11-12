@@ -98,8 +98,28 @@ Reglas visuales en [`DESIGN.md`](../../DESIGN.md#code-blocks).
 | `src/components/doc/CodeBlock.tsx` | Botones, salida y diagnósticos                                      |
 | `scripts/docs/markdown.ts`         | Lee el flag `run` del fence y lo marca en el bloque                 |
 
+## Revisión de seguridad (2026-11-12)
+
+Lectura línea a línea de `bootstrap.ts`, `lua.worker.ts`, `runner.ts`, `run.ts`, `protocol.ts`, `wasm-patch.ts` y `limits.ts`, más el render de la salida en `CodeBlock.tsx`. La hizo quien también escribió el sandbox con ayuda de un asistente: **no es una revisión independiente**; una persona del equipo debe repetirla antes del merge.
+
+Sin hallazgos que permitan salir de la VM o tocar la página:
+
+- Entorno: lista blanca; `load`, `require`, `io`, `os`, `package` no existen; `debug` queda con `traceback`; `string.dump` anulado también por el metatable; `getmetatable("")` no da acceso a los globales reales.
+- El bootstrap guarda sus referencias en locales (upvalues) y borra los globals de entrada; sin `debug.getupvalue` el snippet no las alcanza.
+- Los límites se aplican con un hook que se hereda en las corrutinas (Lua 5.4 copia el hook al crear un hilo) y, al dispararse, lanza antes de cada instrucción: un `pcall` anidado no lo traga.
+- La salida se pinta como texto (React escapa); no hay `dangerouslySetInnerHTML` sobre datos del worker, y la página valida cada mensaje del worker antes de usarlo.
+
+Riesgos residuales, todos acotados al worker del propio lector:
+
+1. **Finalizadores (`__gc`) y llamadas C largas** (patrones de `string.find` patológicos): Lua desactiva los hooks mientras corre un finalizador y el hook no ve una llamada C. Cubre `terminate()` del cliente a los `timeoutMs + killGraceMs` (4 s). El worker se descarta; la página no se afecta.
+2. **El sitio no manda `Content-Security-Policy`** (`deploy/nginx/*.conf` solo pone HSTS y cache). No es necesario para que el sandbox funcione, pero sería una capa más: `worker-src 'self'`, `connect-src 'self'` y `script-src` con `'wasm-unsafe-eval'` para el worker. Cambio de nginx aparte; hay que probarlo con las fuentes y el resaltado antes de activarlo.
+3. **No probado en Safari ni Firefox** (el parche de memoria del wasm y el `terminate` pueden comportarse distinto).
+4. **Pasada en navegador real** (375 y 1440 px) sin hacer en este entorno.
+
+Los mensajes de la herramienta de formato (StyLua) y los de sintaxis de luaparse llegan en el idioma de la herramienta; el resto de la interfaz del bloque (botones, salida, avisos del lint, causas de caída) está en el diccionario ES/EN.
+
 ## Verificación
 
 - Tests: `runner.test.ts` (ejecución, escapes y límites), `lint.test.ts`, `format` (dentro de lint), y el parser del flag en `scripts/docs/docs.test.ts`. `bun run check` en verde.
-- **Pendiente**: revisión de seguridad antes del merge (es código que ejecuta entrada del lector) y una pasada en navegador real a 375 px y 1440 px, con un bloque `lua run` en un doc.
+- Revisión de seguridad de código hecha (arriba), no independiente. **Pendiente**: que una persona la repita antes del merge y una pasada en navegador real a 375 px y 1440 px, con un bloque `lua run` en un doc.
 - El worker no se probó en Safari ni Firefox; el parche de memoria depende de que el wasm declare un máximo de 3 bytes (si cambia, falla ruidoso en vez de correr sin tope).

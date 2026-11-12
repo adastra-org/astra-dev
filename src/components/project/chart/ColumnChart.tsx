@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useLang } from '@/lib/use-lang'
 import { formatTick, labelIndexes, niceTicks } from '@/lib/project/series'
 import { ChartCard, DataTable, Legend, Tooltip } from './shared'
 import {
@@ -25,7 +26,7 @@ export function ColumnChart({
   categories,
   series,
   height = 220,
-  categoryHeader = 'Periodo',
+  categoryHeader,
   summary,
 }: {
   title: string
@@ -37,6 +38,7 @@ export function ColumnChart({
   /** Una frase con lo que muestra, para lectores de pantalla. */
   summary: string
 }) {
+  const { lang, tr } = useLang()
   const [wrap, width] = useWidth<HTMLDivElement>()
   const [active, setActive] = useState<number | null>(null)
 
@@ -85,7 +87,7 @@ export function ColumnChart({
           caption={title}
           categories={categories}
           series={series}
-          categoryHeader={categoryHeader}
+          categoryHeader={categoryHeader ?? tr('rm.period')}
         />
       }
     >
@@ -94,7 +96,7 @@ export function ColumnChart({
         className="relative"
         tabIndex={0}
         role="group"
-        aria-label={`${title}. ${summary} Usa las flechas para recorrer los valores.`}
+        aria-label={tr('rm.chart.aria', { title, summary })}
         onKeyDown={onKey}
         onBlur={() => setActive(null)}
       >
@@ -127,7 +129,7 @@ export function ColumnChart({
                   fontSize="11"
                   fontFamily="var(--font-mono)"
                 >
-                  {formatTick(t, compactAxis)}
+                  {formatTick(t, compactAxis, lang)}
                 </text>
               </g>
             ))}

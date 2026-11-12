@@ -9,6 +9,7 @@ import {
   isApple,
   isPaletteShortcut,
 } from '@/lib/palette/shortcut'
+import { useLang } from '@/lib/use-lang'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 
@@ -19,6 +20,7 @@ const AskPanel = lazy(() =>
 
 /** Sidebar + barra superior + contenido. Bajo `lg` el sidebar es un cajón. */
 export function Shell() {
+  const { tr } = useLang()
   // El cajón guarda la ruta en la que se abrió: al navegar deja de coincidir y se cierra.
   const [openAt, setOpenAt] = useState<string | null>(null)
   const { pathname } = useLocation()
@@ -65,7 +67,7 @@ export function Shell() {
         href="#main"
         className="text-label bg-accent-fill text-on-accent sr-only rounded-md px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
       >
-        Saltar al contenido
+        {tr('shell.skip')}
       </a>
       <Sidebar open={open} onClose={() => setOpen(false)} />
       <div className="flex min-w-0 flex-col">

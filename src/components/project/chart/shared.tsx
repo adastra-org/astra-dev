@@ -1,6 +1,7 @@
 import { ChartColumn, Table } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { formatValue } from '@/lib/project/series'
+import { useLang } from '@/lib/use-lang'
 import type { Category, Series } from './util'
 
 export function Swatch({ series }: { series: Series }) {
@@ -56,6 +57,7 @@ export function Tooltip({
   left: number
   plotWidth: number
 }) {
+  const { lang } = useLang()
   // Del lado izquierdo del punto cuando está en la mitad derecha, para no salirse.
   const flip = left > plotWidth * 0.6
   return (
@@ -74,7 +76,7 @@ export function Tooltip({
           <li key={s.id} className="flex items-center gap-2">
             <Swatch series={s} />
             <span className="text-ink text-label tabular-nums">
-              {formatValue(s.values[index] ?? 0)}
+              {formatValue(s.values[index] ?? 0, lang)}
             </span>
             <span className="text-ink-muted text-caption">{s.label}</span>
           </li>
@@ -95,6 +97,7 @@ export function DataTable({
   series: readonly Series[]
   categoryHeader: string
 }) {
+  const { lang } = useLang()
   return (
     <div
       // Tabla ancha o larga: desplaza dentro de sí misma, enfocable con teclado.
@@ -127,7 +130,7 @@ export function DataTable({
               </th>
               {series.map((s) => (
                 <td key={s.id} className="text-ink py-1.5 pr-4 text-right">
-                  {formatValue(s.values[i] ?? 0)}
+                  {formatValue(s.values[i] ?? 0, lang)}
                 </td>
               ))}
             </tr>
@@ -153,6 +156,7 @@ export function ChartCard({
   table?: ReactNode
   children: ReactNode
 }) {
+  const { tr } = useLang()
   const [asTable, setAsTable] = useState(false)
   return (
     <figure className="bg-surface-raised border-border flex min-w-0 flex-col gap-3 rounded-md border p-4">
@@ -171,7 +175,7 @@ export function ChartCard({
               ) : (
                 <Table className="size-4" aria-hidden="true" />
               )}
-              {asTable ? 'Ver gráfico' : 'Ver tabla'}
+              {asTable ? tr('rm.chart.viewChart') : tr('rm.chart.viewTable')}
             </button>
           )}
         </div>

@@ -19,6 +19,9 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 - [sandbox/README.md](sandbox/README.md) — sandbox de Lua (M4, v0.9.0): bloques `lua run`, runtime WASM, defensas, límites, Revisar/Formatear y estado de verificación.
 - [import/README.md](import/README.md) — importador de natives (GTA + CFX) y fivem-docs: fuentes fijadas por sha, salida normalizada, overrides, licencia y fases (índice con embeddings offline, WeGraph en Code Mode).
 - [project/README.md](project/README.md) — página Roadmap (M5, v0.10.0): checklist desde el plan y GitHub, evolución y burndown, complejidad medida desde git, MyChecklist, permisos y variables de entorno.
+- [natives/README.md](natives/README.md) — natives publicados (M2): rutas, archivos que emite el build, notas de Astra y verificación.
+- [translate/README.md](translate/README.md) — pipeline de traducción ES con deepseek-flash: uso, flags `auto`/`reviewed`, estado.
+- [i18n/README.md](i18n/README.md) — idioma de la interfaz (ES/EN): diccionario, selector, contenido traducido y cómo agregar un texto.
 - [deploy/README.md](deploy/README.md) — pasos manuales en el VPS (DNS, cert, nginx, env) y operación del deploy blue/green. Arquitectura: [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Qué resuelve

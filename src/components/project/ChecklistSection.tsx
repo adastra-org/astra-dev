@@ -5,6 +5,7 @@ import {
   CircleDashed,
   ExternalLink,
 } from 'lucide-react'
+import type { MessageKey } from '@/lib/i18n'
 import type {
   Checklist,
   ExternalChecklist,
@@ -12,23 +13,29 @@ import type {
   PlanMilestone,
   PlanState,
 } from '@/lib/project/types'
+import { useLang } from '@/lib/use-lang'
 import { EmptyNote, Meter } from './parts'
 
 const STATE: Record<
   PlanState,
-  { Icon: typeof Circle; tone: string; label: string }
+  { Icon: typeof Circle; tone: string; label: MessageKey }
 > = {
-  done: { Icon: CircleCheck, tone: 'text-success', label: 'Hecho' },
-  partial: { Icon: CircleDashed, tone: 'text-warning', label: 'Parcial' },
-  todo: { Icon: Circle, tone: 'text-ink-subtle', label: 'Pendiente' },
+  done: { Icon: CircleCheck, tone: 'text-success', label: 'rm.state.done' },
+  partial: {
+    Icon: CircleDashed,
+    tone: 'text-warning',
+    label: 'rm.state.partial',
+  },
+  todo: { Icon: Circle, tone: 'text-ink-subtle', label: 'rm.state.todo' },
 }
 
 function StateIcon({ state }: { state: PlanState }) {
+  const { tr } = useLang()
   const { Icon, tone, label } = STATE[state]
   return (
     <>
       <Icon className={`${tone} mt-0.5 size-4 shrink-0`} aria-hidden="true" />
-      <span className="sr-only">{label}: </span>
+      <span className="sr-only">{tr(label)}: </span>
     </>
   )
 }
@@ -46,6 +53,7 @@ function PlanCard({
   github: GithubMilestone | undefined
   defaultOpen: boolean
 }) {
+  const { tr } = useLang()
   const complete = milestone.total > 0 && milestone.done === milestone.total
   return (
     <details
@@ -64,7 +72,7 @@ function PlanCard({
           <span className="flex shrink-0 items-center gap-3">
             <span className="text-body-sm text-ink-muted tabular-nums">
               {milestone.done}/{milestone.total}
-              {complete && <span className="sr-only"> (completo)</span>}
+              {complete && <span className="sr-only">{tr('rm.complete')}</span>}
             </span>
             <ChevronDown
               className="text-ink-subtle size-4 transition-transform duration-(--duration-panel) ease-(--ease-out-brand) group-open:rotate-180 motion-reduce:transition-none"
@@ -76,7 +84,7 @@ function PlanCard({
           done={milestone.done}
           partial={milestone.partial}
           total={milestone.total}
-          label={`Avance de ${milestone.id}`}
+          label={tr('rm.progressOf', { id: milestone.id })}
         />
       </summary>
       <div className="text-body-sm flex flex-col gap-4 px-4 pt-1 pb-4">
@@ -87,7 +95,7 @@ function PlanCard({
             rel="noreferrer"
             className="text-label text-accent flex min-h-11 w-fit items-center gap-2 lg:min-h-8"
           >
-            GitHub: {github.open} abiertos · {github.closed} cerrados
+            {tr('rm.gh', { open: github.open, closed: github.closed })}
             <ExternalLink className="size-3.5" aria-hidden="true" />
           </a>
         )}
@@ -111,27 +119,26 @@ function PlanCard({
 
 const EXTERNAL_NOTE: Record<
   Exclude<ExternalChecklist['status'], 'ok'>,
-  string
+  MessageKey
 > = {
-  disabled:
-    'MyChecklist no está conectado: el server no tiene un token de lectura. Ver docs/server/README.md.',
-  error:
-    'MyChecklist no respondió o devolvió algo inesperado. El resto de la página no depende de él.',
-  not_found: 'No existe la lista en MyChecklist con ese nombre.',
+  disabled: 'rm.ext.disabled',
+  error: 'rm.ext.error',
+  not_found: 'rm.ext.notFound',
 }
 
 function External({ data }: { data: ExternalChecklist }) {
+  const { tr } = useLang()
   return (
     <section aria-labelledby="mychecklist" className="flex flex-col gap-3">
       <h3 id="mychecklist" className="text-h4">
-        MyChecklist · {data.name}
+        {tr('rm.ext.title', { name: data.name })}
       </h3>
       {data.status !== 'ok' ? (
-        <EmptyNote>{EXTERNAL_NOTE[data.status]}</EmptyNote>
+        <EmptyNote>{tr(EXTERNAL_NOTE[data.status])}</EmptyNote>
       ) : (
         <>
           <p className="text-body-sm text-ink-muted">
-            {data.open} abiertos de {data.total}.
+            {tr('rm.ext.open', { open: data.open, total: data.total })}
           </p>
           {data.groups.map((g, i) => (
             <div key={i} className="flex flex-col gap-2">

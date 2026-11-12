@@ -2,23 +2,29 @@ import { GitCommitHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { REPO_URL } from '@/lib/docs'
 import type { DocMeta, History } from '@/lib/docs/types'
+import { displayDoc } from '@/lib/docs-query'
+import { useLang } from '@/lib/use-lang'
 import { Collapsible } from './Collapsible'
 
 /** Lista de docs enlazados con su resumen. */
 function DocLinks({ docs }: { docs: DocMeta[] }) {
+  const { lang } = useLang()
   return (
     <ul className="flex flex-col gap-3">
-      {docs.map((d) => (
-        <li key={d.slug}>
-          <Link
-            to={`/docs/${d.slug}`}
-            className="text-label text-accent hover:text-ink inline-flex min-h-11 items-center underline underline-offset-4 md:min-h-8"
-          >
-            {d.title}
-          </Link>
-          <p className="text-body-sm text-ink-muted">{d.summary}</p>
-        </li>
-      ))}
+      {docs.map((d) => {
+        const shown = displayDoc(d, lang)
+        return (
+          <li key={d.slug}>
+            <Link
+              to={`/docs/${d.slug}`}
+              className="text-label text-accent hover:text-ink inline-flex min-h-11 items-center underline underline-offset-4 md:min-h-8"
+            >
+              {shown.title}
+            </Link>
+            <p className="text-body-sm text-ink-muted">{shown.summary}</p>
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -31,13 +37,14 @@ export function DocRelations({
   related: DocMeta[]
   backlinks: DocMeta[]
 }) {
+  const { tr } = useLang()
   if (!related.length && !backlinks.length) return null
   return (
     <div className="flex max-w-prose flex-col gap-6">
       {related.length > 0 && (
         <section aria-labelledby="relacionados" className="flex flex-col gap-2">
           <h2 id="relacionados" className="text-h4">
-            Relacionados
+            {tr('doc.related')}
           </h2>
           <DocLinks docs={related} />
         </section>
@@ -45,7 +52,7 @@ export function DocRelations({
       {backlinks.length > 0 && (
         <section aria-labelledby="usada-por" className="flex flex-col gap-2">
           <h2 id="usada-por" className="text-h4">
-            Usada por
+            {tr('doc.usedBy')}
           </h2>
           <DocLinks docs={backlinks} />
         </section>
@@ -63,17 +70,19 @@ export function DocHistory({
   path: string
 }) {
   const { available, entries } = history
+  const { tr } = useLang()
   return (
     <Collapsible
-      title={`Historial de cambios${entries.length ? ` (${entries.length})` : ''}`}
+      title={
+        entries.length
+          ? tr('doc.historyCount', { n: entries.length })
+          : tr('doc.history')
+      }
     >
       {!available ? (
-        <p className="text-body-sm">
-          El historial no está disponible en este build: no hay git o el clon es
-          superficial.
-        </p>
+        <p className="text-body-sm">{tr('doc.historyUnavailable')}</p>
       ) : entries.length === 0 ? (
-        <p className="text-body-sm">Este archivo todavía no tiene commits.</p>
+        <p className="text-body-sm">{tr('doc.historyEmpty')}</p>
       ) : (
         <ol className="flex flex-col gap-3">
           {entries.map((e) => (
@@ -104,7 +113,7 @@ export function DocHistory({
           rel="noopener noreferrer"
           className="text-accent hover:text-ink underline underline-offset-4"
         >
-          Ver el archivo en GitHub
+          {tr('doc.viewOnGithub')}
         </a>
       </p>
     </Collapsible>

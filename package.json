@@ -15,6 +15,7 @@
     "import": "bun scripts/import/run.ts",
     "import:update": "bun scripts/import/run.ts update",
     "complexity": "bun scripts/project/complexity.ts",
+    "translate": "bun scripts/translate/run.ts",
     "test": "bun test --pass-with-no-tests src scripts",
     "check:server": "bun run --cwd server check",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:server"

@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { BackToTop } from '@/components/doc/BackToTop'
 import { DocHistory, DocRelations } from '@/components/doc/DocFooter'
 import { DocSection } from '@/components/doc/DocSection'
+import { DocSource } from '@/components/doc/DocSource'
 import { PageHeader } from '@/components/doc/PageHeader'
 import { Summary } from '@/components/doc/Summary'
 import { TagList } from '@/components/doc/TagList'
 import { TocInline, TocSide } from '@/components/doc/Toc'
+import {
+  OnlySpanishNote,
+  TranslationNote,
+} from '@/components/doc/TranslationNote'
 import { docBySlug, docs, loadDocContent } from '@/lib/docs'
 import type { DocContent, DocMeta } from '@/lib/docs/types'
-import { resolveSlugs } from '@/lib/docs-query'
+import { displayDoc, resolveSlugs } from '@/lib/docs-query'
+import { useInternalLinks } from '@/lib/internal-links'
+import { wantedLang } from '@/lib/i18n'
+import { useLang } from '@/lib/use-lang'
 import { usePublishHeadings } from '@/lib/palette/headings'
 import { useRevealHash } from '@/lib/reveal'
 import { useTitle } from '@/lib/title'
@@ -26,24 +34,25 @@ export default function Doc() {
 }
 
 function DocNotFound({ slug }: { slug: string }) {
-  useTitle('Documento no encontrado')
+  const { tr } = useLang()
+  useTitle(tr('doc.notFound.title'))
   return (
     <>
       <PageHeader
-        eyebrow="Error 404"
-        title="Documento no encontrado"
+        eyebrow={tr('notFound.eyebrow')}
+        title={tr('doc.notFound.title')}
         lead={
           <>
-            No hay un documento con la dirección{' '}
+            {tr('doc.notFound.lead')}{' '}
             <code className="text-code text-ink [overflow-wrap:anywhere]">
               {slug}
             </code>
-            . Puede haberse renombrado o eliminado.
+            . {tr('doc.notFound.hint')}
           </>
         }
       />
       <Link to="/docs" className="text-label text-accent">
-        Ver todos los documentos
+        {tr('doc.all')}
       </Link>
     </>
   )
@@ -52,9 +61,15 @@ function DocNotFound({ slug }: { slug: string }) {
 type State = { content: DocContent } | { error: true } | null
 
 function DocView({ meta }: { meta: DocMeta }) {
-  const navigate = useNavigate()
   const [state, setState] = useState<State>(null)
-  useTitle(meta.title)
+  const [params] = useSearchParams()
+  const { lang, tr } = useLang()
+  // Se muestra el idioma de la interfaz si hay traducción; `?lang=en|es` manda sobre el selector
+  // (ver DESIGN, "Idioma").
+  const wanted = wantedLang(params.get('lang'), lang)
+  const shown = displayDoc(meta, wanted)
+  const translation = meta.translations?.es
+  useTitle(shown.title)
 
   useEffect(() => {
     let live = true
@@ -67,77 +82,73 @@ function DocView({ meta }: { meta: DocMeta }) {
   }, [meta.slug])
 
   const content = state && 'content' in state ? state.content : null
+  // Cuerpo en el idioma mostrado: la traducción trae el suyo (secciones e índice).
+  const body =
+    content && shown.lang !== meta.lang && content.es ? content.es : content
   useRevealHash(content !== null)
-  usePublishHeadings(content ? content.toc : null)
+  usePublishHeadings(body ? body.toc : null)
 
-  // Los enlaces del Markdown (`/docs/otro`) son `<a>` planos: se navegan sin recargar la página.
-  // Delegación en el `<article>` por listener nativo: el elemento no es interactivo, el clic es
-  // de los enlaces que contiene (que ya son operables con teclado).
   const articleRef = useRef<HTMLElement>(null)
-  useEffect(() => {
-    const article = articleRef.current
-    if (!article) return
-    const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0) return
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-      const a = (e.target as HTMLElement).closest('a')
-      const href = a?.getAttribute('href')
-      if (
-        !a ||
-        !href ||
-        a.target ||
-        !href.startsWith('/') ||
-        href.startsWith('//')
-      )
-        return
-      e.preventDefault()
-      void navigate(href)
-    }
-    article.addEventListener('click', onClick)
-    return () => article.removeEventListener('click', onClick)
-  }, [navigate])
+  useInternalLinks(articleRef)
 
   return (
     <div className="xl:grid xl:grid-cols-[minmax(0,44rem)_13rem] xl:gap-8">
       <article
         ref={articleRef}
-        lang={meta.lang}
+        lang={shown.lang}
         className="flex min-w-0 flex-col gap-6"
       >
-        <PageHeader eyebrow="Documento" title={meta.title}>
+        <PageHeader
+          eyebrow={meta.origin ? tr('doc.eyebrowFivem') : tr('doc.eyebrow')}
+          title={shown.title}
+        >
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             <TagList tags={meta.tags} />
             <span className="text-data text-ink-subtle uppercase">
-              Desde v{meta.since}
+              {tr('doc.since', { version: meta.since })}
             </span>
           </div>
         </PageHeader>
 
-        <Summary>{meta.summary}</Summary>
+        {translation ? (
+          <TranslationNote
+            showing={shown.lang === meta.lang ? 'en' : 'es'}
+            translated={translation.translated}
+            to={`/docs/${meta.slug}`}
+          />
+        ) : (
+          wanted === 'en' && meta.lang === 'es' && <OnlySpanishNote />
+        )}
 
-        {content ? (
+        <Summary>{shown.summary}</Summary>
+
+        {body && content ? (
           <>
-            <TocInline items={content.toc} />
-            {content.sections.map((s) => (
+            <TocInline items={body.toc} />
+            {body.sections.map((s) => (
               <DocSection key={s.id ?? 'intro'} section={s} />
             ))}
             <DocRelations
               related={resolveSlugs(docs, meta.related)}
               backlinks={resolveSlugs(docs, meta.backlinks)}
             />
-            <DocHistory history={content.history} path={meta.path} />
+            {meta.origin ? (
+              <DocSource origin={meta.origin} />
+            ) : (
+              <DocHistory history={content.history} path={meta.path} />
+            )}
           </>
         ) : state ? (
           <p className="text-body text-danger" role="alert">
-            No se pudo cargar el documento. Recarga la página.
+            {tr('doc.loadError')}
           </p>
         ) : (
           <p className="text-body-sm text-ink-muted" role="status">
-            Cargando documento…
+            {tr('doc.loading')}
           </p>
         )}
       </article>
-      {content && <TocSide items={content.toc} />}
+      {body && <TocSide items={body.toc} />}
       <BackToTop />
     </div>
   )

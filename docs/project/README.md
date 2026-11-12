@@ -100,7 +100,9 @@ Un valor inválido hace fallar el arranque con el listado de problemas. En el VP
 ## Estado de verificación
 
 - **Verificado con tests**: parser del plan, agrupado de MyChecklist, cálculo de evolución y burndown, cliente de GitHub (paginado, ETag, timeout, errores), caché con copia vieja, permisos, rate limit y el script de complejidad. `bun run check` en verde.
-- **No verificado contra los servicios reales**: no había token de GitHub ni de MyChecklist al escribir esto. El adaptador de MyChecklist se probó contra un `fetch` falso con la forma documentada en su repo (ADR 0010 y 0013). Antes de darlo por cerrado hay que correrlo en el VPS con los tokens reales y mirar una lista y un milestone reales.
+- **GitHub, verificado en vivo (2026-11-12)**: `ProjectService` con el cliente real contra `adastra-org/astra-dev` (token de `gh`, solo lectura, sin imprimirlo) devolvió evolución a 30 días sin `stale` ni `truncated` (2 issues abiertos, 5 PRs abiertos, 11 mergeados, 39 commits en `dev`; 30 puntos diarios y de burndown) y el plan parseado de `dev` (M0 0/5, M1 5/5, M2 1/4, M3 1/10, M4 0/5, M5 0/4). Sin milestones de GitHub en el repo: el burndown cuenta todos los issues abiertos. La serie de complejidad sale `null` hasta que `docs/project/complexity.json` esté en la rama que se lee.
+- **MyChecklist, no verificado contra el servicio real**: no hay token. El adaptador se probó contra un `fetch` falso con la forma documentada en su repo (ADR 0010 y 0013). Antes de darlo por cerrado hay que correrlo en el VPS con el token real y mirar una lista real.
+- **Idioma**: la página y sus gráficos usan el diccionario (`rm.*`, ES y EN) y fechas y números siguen el idioma. Los títulos del plan y de los milestones son contenido en español y no se traducen.
 - **GitHub Projects**: no se usa la API de Projects (v2). El checklist se apoya en el plan del repo y en milestones de issues. Si hace falta el tablero de WePanel, es otro adaptador.
 
 ## Límites conocidos

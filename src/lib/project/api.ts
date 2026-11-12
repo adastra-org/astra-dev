@@ -1,6 +1,7 @@
 // Cliente de "Proyecto". Habla con `/api/graphql` del server (nginx quita `/api`; en dev Vite lo
 // proxea al server local). Las cookies de sesión viajan solas porque es mismo origen.
 import type { ChecklistData, Evolution } from './types'
+import { t, type MessageKey, type Vars } from '@/lib/i18n'
 
 export type ApiErrorCode =
   | 'unauthenticated'
@@ -142,42 +143,38 @@ export async function loadEvolution(
   return d.project.evolution
 }
 
+type Tr = (key: MessageKey, vars?: Vars) => string
+
 /** Frase para el usuario según el error (sin detalles internos). */
-export function describeError(e: unknown): { title: string; hint: string } {
+export function describeError(
+  e: unknown,
+  tr: Tr = (key, vars) => t('es', key, vars),
+): { title: string; hint: string } {
   const code = e instanceof ApiError ? e.code : 'internal'
   switch (code) {
     case 'unauthenticated':
       return {
-        title: 'Inicia sesión',
-        hint: 'Esta sección es solo para el staff. Inicia sesión con tu cuenta de Ad Astra y recarga.',
+        title: tr('rm.err.unauthenticated'),
+        hint: tr('rm.err.unauthenticated.hint'),
       }
     case 'staff_required':
-      return {
-        title: 'Solo para el staff',
-        hint: 'Tu cuenta no tiene el rol de staff.',
-      }
+      return { title: tr('rm.err.staff'), hint: tr('rm.err.staff.hint') }
     case 'project_unavailable':
       return {
-        title: 'Datos no disponibles',
-        hint: 'El server no pudo leer GitHub o no está configurado. Reintenta en unos minutos.',
+        title: tr('rm.err.unavailable'),
+        hint: tr('rm.err.unavailable.hint'),
       }
     case 'rate_limited':
       return {
-        title: 'Demasiadas consultas',
+        title: tr('rm.err.rate'),
         hint:
           e instanceof ApiError && e.retryAfter
-            ? `Espera ${e.retryAfter} s y reintenta.`
-            : 'Espera un momento y reintenta.',
+            ? tr('rm.err.rate.in', { n: e.retryAfter })
+            : tr('rm.err.rate.wait'),
       }
     case 'network':
-      return {
-        title: 'Sin conexión con el server',
-        hint: 'No se pudo llegar a la API. Revisa tu conexión y reintenta.',
-      }
+      return { title: tr('rm.err.network'), hint: tr('rm.err.network.hint') }
     default:
-      return {
-        title: 'Algo falló',
-        hint: 'Reintenta. Si sigue, avisa al equipo.',
-      }
+      return { title: tr('rm.err.other'), hint: tr('rm.err.other.hint') }
   }
 }

@@ -9,6 +9,12 @@ import type { DocContent } from '../../src/lib/docs/types.ts'
 import { createHighlight } from './highlight.ts'
 import { gitIn, readHistory } from './history.ts'
 import {
+  attachExtras,
+  type Extras,
+  IMPORTED_DIR,
+  readImportedDocs,
+} from './imported.ts'
+import {
   brokenDocLinks,
   CONTENT_DIR,
   type Loaded,
@@ -16,17 +22,42 @@ import {
   readSources,
 } from './loader.ts'
 import { renderMarkdown } from './markdown.ts'
+import { TRANSLATIONS_DIR } from '../translate/store.ts'
 
 const INDEX = 'virtual:astra-docs'
 const DOC = 'virtual:astra-doc/'
 const PREFIX = '\0virtual:astra-doc'
 
+type All = Loaded & Extras
+
+/** Docs de `content/docs` + importados (`content/generated/docs`) + traducciones ES. */
+async function loadAll(root: string): Promise<All> {
+  const imported = await readImportedDocs(root)
+  const loaded = loadDocs([
+    ...(await readSources(root)),
+    ...(imported?.files ?? []),
+  ])
+  const extras = await attachExtras(
+    root,
+    loaded.docs,
+    imported?.origins ?? new Map(),
+  )
+  const warnings = [...loaded.warnings, ...extras.warnings]
+  if (!imported)
+    warnings.push(
+      'no hay content/generated/docs: corre `bun run import` para publicar los docs de FiveM',
+    )
+  if (!imported && process.env.REQUIRE_GENERATED)
+    throw new Error(warnings.at(-1))
+  return { docs: loaded.docs, translations: extras.translations, warnings }
+}
+
 export function docsPlugin(): Plugin {
   let root = process.cwd()
-  let loaded: Promise<Loaded> | undefined
+  let loaded: Promise<All> | undefined
   let warned = false
 
-  const load = () => (loaded ??= readSources(root).then(loadDocs))
+  const load = () => (loaded ??= loadAll(root))
 
   return {
     name: 'astra-docs',
@@ -42,7 +73,7 @@ export function docsPlugin(): Plugin {
     async load(id) {
       if (!id.startsWith(PREFIX)) return
 
-      const { docs, warnings } = await load()
+      const { docs, warnings, translations } = await load()
 
       if (id === `\0${INDEX}`) {
         if (!warned) {
@@ -70,19 +101,28 @@ export function docsPlugin(): Plugin {
       for (const w of brokenDocLinks(doc.meta.path, rendered.links, slugs))
         this.warn(w)
 
+      const tr = translations.get(slug)
+      const es = tr ? renderMarkdown(doc.meta.path, tr.body, highlight) : null
       const content: DocContent = {
         sections: rendered.sections,
         toc: rendered.toc,
-        history: await readHistory(gitIn(root), doc.meta.path),
+        // Un doc importado no tiene historial propio: la fuente es el repo de origen.
+        history: doc.meta.origin
+          ? { available: false, entries: [] }
+          : await readHistory(gitIn(root), doc.meta.path),
+        ...(es ? { es: { sections: es.sections, toc: es.toc } } : {}),
       }
       return `export default ${JSON.stringify(content)}`
     },
 
     configureServer(server) {
-      const dir = resolve(root, CONTENT_DIR)
-      server.watcher.add(dir)
+      const dirs = [CONTENT_DIR, IMPORTED_DIR, `${TRANSLATIONS_DIR}/docs`].map(
+        (d) => resolve(root, d),
+      )
+      server.watcher.add(dirs)
       const onChange = (file: string) => {
-        if (!resolve(file).startsWith(dir) || !file.endsWith('.md')) return
+        if (!dirs.some((d) => resolve(file).startsWith(d))) return
+        if (!file.endsWith('.md') && !file.endsWith('index.json')) return
         loaded = undefined
         warned = false
         for (const m of server.moduleGraph.idToModuleMap.values())

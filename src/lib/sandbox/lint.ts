@@ -14,7 +14,10 @@ export interface Diagnostic {
   severity: 'error' | 'warning'
   line: number
   column: number
+  /** Texto en español (tests y respaldo). La interfaz traduce por `code` y `name`. */
   message: string
+  code?: 'unavailable' | 'unusedLocal'
+  name?: string
 }
 
 /** Globals que existen en un resource de FiveM pero no en el sandbox. */
@@ -100,6 +103,8 @@ class Analyzer {
         line: id.loc?.start.line ?? 1,
         column: (id.loc?.start.column ?? 0) + 1,
         message: `«${name}» no está disponible en el sandbox`,
+        code: 'unavailable',
+        name,
       })
   }
   /** Escritura: no cuenta como uso del local. */
@@ -246,6 +251,8 @@ export function lintLua(code: string): Diagnostic[] {
         line: l.line,
         column: l.column,
         message: `variable local «${l.name}» sin usar`,
+        code: 'unusedLocal',
+        name: l.name,
       })
   return a.out.sort((x, y) => x.line - y.line || x.column - y.column)
 }

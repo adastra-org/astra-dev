@@ -56,38 +56,55 @@ export function niceTicks(max: number, target = 4): number[] {
   return ticks
 }
 
-const nf = new Intl.NumberFormat('es', { maximumFractionDigits: 1 })
-const compact = new Intl.NumberFormat('es', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-})
+type Lang = 'es' | 'en'
+
+const cache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>()
+const numberFmt = (lang: Lang, opts: Intl.NumberFormatOptions) => {
+  const key = `n:${lang}:${JSON.stringify(opts)}`
+  let f = cache.get(key)
+  if (!f) cache.set(key, (f = new Intl.NumberFormat(lang, opts)))
+  return f as Intl.NumberFormat
+}
+const dateFmt = (lang: Lang, opts: Intl.DateTimeFormatOptions) => {
+  const key = `d:${lang}:${JSON.stringify(opts)}`
+  let f = cache.get(key)
+  if (!f) cache.set(key, (f = new Intl.DateTimeFormat(lang, opts)))
+  return f as Intl.DateTimeFormat
+}
 
 /** Entero completo, o compacto (10 mil) cuando el eje llega a las decenas de miles. */
-export const formatTick = (v: number, compactAxis: boolean) =>
-  compactAxis ? compact.format(v) : nf.format(v)
+export const formatTick = (
+  v: number,
+  compactAxis: boolean,
+  lang: Lang = 'es',
+) =>
+  compactAxis
+    ? numberFmt(lang, { notation: 'compact', maximumFractionDigits: 1 }).format(
+        v,
+      )
+    : numberFmt(lang, { maximumFractionDigits: 1 }).format(v)
 
-export const formatValue = (v: number) => nf.format(v)
+export const formatValue = (v: number, lang: Lang = 'es') =>
+  numberFmt(lang, { maximumFractionDigits: 1 }).format(v)
 
-const day = new Intl.DateTimeFormat('es', {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-})
+/** `YYYY-MM-DD` a "12 nov" / "Nov 12". */
+export const formatDay = (iso: string, lang: Lang = 'es') =>
+  dateFmt(lang, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+    new Date(`${iso}T00:00:00Z`),
+  )
 
-/** `YYYY-MM-DD` a "12 nov". */
-export const formatDay = (iso: string) =>
-  day.format(new Date(`${iso}T00:00:00Z`))
+export const formatRange = (start: string, end: string, lang: Lang = 'es') =>
+  start === end
+    ? formatDay(start, lang)
+    : `${formatDay(start, lang)} – ${formatDay(end, lang)}`
 
-export const formatRange = (start: string, end: string) =>
-  start === end ? formatDay(start) : `${formatDay(start)} – ${formatDay(end)}`
-
-const stamp = new Intl.DateTimeFormat('es', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-export const formatStamp = (iso: string) => stamp.format(new Date(iso))
+export const formatStamp = (iso: string, lang: Lang = 'es') =>
+  dateFmt(lang, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso))
 
 /**
  * Índices del eje X a rotular: una marca cada `minPx` como mucho, siempre el primero y el último
