@@ -1,0 +1,16 @@
+/* Colores de los gráficos (dataviz). No salen del DS: son marcas de datos, no roles de UI.
+   Par categórico validado con el validador de la skill `dataviz` sobre la superficie `surface-raised`
+   (#1a181e, tema Void): banda de luminosidad OK, ΔE CVD 22,3 (min protan/deután), ΔE visión normal 29,5,
+   contraste >= 3:1.
+     --chart-1 = violet-500 (#8d63ff)     serie principal
+     --chart-2 = #2fa88a                   segunda serie
+   La referencia (línea ideal del burndown) va en `ink-muted`, nunca en un tercer color.
+   Para cambiar un valor hay que volver a correr el validador:
+     node validate_palette.js "#8d63ff,#2fa88a" --mode dark --surface "#1a181e" */
+:root {
+  --chart-1: var(--violet-500);
+  --chart-2: #2fa88a;
+  --chart-ref: var(--ink-muted);
+  --chart-grid: var(--border);
+  --chart-axis: var(--ink-subtle);
+}
