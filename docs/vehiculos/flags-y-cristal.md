@@ -19,19 +19,19 @@ Escaneo: todos los `vehicles.meta` bajo `resources` (1.072 modelos) contra los 2
 
 **86 usos de flags que el juego no define, en 45 archivos.**
 
-| Flag en el servidor | Usos | Nombre oficial |
-|---|---|---|
-| `FLAG_HAS_EXTRA` | 29 | ninguno |
-| `FLAG_HAS_INTERIOR_EXTRA` | 29 | `FLAG_HAS_INTERIOR_EXTRAS` |
-| `FLAG_HAS_EXTRA_ALL` | 7 | probablemente `FLAG_EXTRAS_ALL` |
-| `FLAG_RESPRAY` | 7 | ninguno (por defecto ya se puede repintar; lo opuesto es `FLAG_NO_RESPRAY`) |
-| `FLAG_HAS_EXTRAS` | 7 | ninguno |
-| `FLAG_INCREASED_RAMMING_FORCE` | 2 | `FLAG_HAS_INCREASED_RAMMING_FORCE` |
-| `FLAG_CAPPED_EXPLOSION_DAMAGE` | 1 | `FLAG_HAS_CAPPED_EXPLOSION_DAMAGE` |
-| `FLAG_HAS_GULLWING_DOORS` | 1 | `FLAG_HAS_GULL_WING_DOORS` |
-| `FLAG_NO_ROOF` | 1 | `FLAG_HAS_NO_ROOF` |
-| `FLAG_NO_DOORS` | 1 | ninguno |
-| `FLAG_EXTRAS_SUNROOF` | 1 | ninguno |
+| Flag en el servidor            | Usos | Nombre oficial                                                              |
+| ------------------------------ | ---- | --------------------------------------------------------------------------- |
+| `FLAG_HAS_EXTRA`               | 29   | ninguno                                                                     |
+| `FLAG_HAS_INTERIOR_EXTRA`      | 29   | `FLAG_HAS_INTERIOR_EXTRAS`                                                  |
+| `FLAG_HAS_EXTRA_ALL`           | 7    | probablemente `FLAG_EXTRAS_ALL`                                             |
+| `FLAG_RESPRAY`                 | 7    | ninguno (por defecto ya se puede repintar; lo opuesto es `FLAG_NO_RESPRAY`) |
+| `FLAG_HAS_EXTRAS`              | 7    | ninguno                                                                     |
+| `FLAG_INCREASED_RAMMING_FORCE` | 2    | `FLAG_HAS_INCREASED_RAMMING_FORCE`                                          |
+| `FLAG_CAPPED_EXPLOSION_DAMAGE` | 1    | `FLAG_HAS_CAPPED_EXPLOSION_DAMAGE`                                          |
+| `FLAG_HAS_GULLWING_DOORS`      | 1    | `FLAG_HAS_GULL_WING_DOORS`                                                  |
+| `FLAG_NO_ROOF`                 | 1    | `FLAG_HAS_NO_ROOF`                                                          |
+| `FLAG_NO_DOORS`                | 1    | ninguno                                                                     |
+| `FLAG_EXTRAS_SUNROOF`          | 1    | ninguno                                                                     |
 
 Flags que la doc marca como "Does nothing" (se pueden dejar; es ruido): `FLAG_NO_BOOT` (171 usos) y `FLAG_BOOT_IN_FRONT` (13 usos; la doc dice que se use `FLAG_FRONT_BOOT`).
 
@@ -43,9 +43,9 @@ Dos cosas deciden cómo se comporta una ventana, y el flag es la menor.
 
 **Flags** (descripciones oficiales):
 
-| Flag | # | Efecto |
-|---|---|---|
-| `FLAG_HAS_BULLETPROOF_GLASS` | 76 | Impide que el cristal se rompa |
+| Flag                              | #   | Efecto                                |
+| --------------------------------- | --- | ------------------------------------- |
+| `FLAG_HAS_BULLETPROOF_GLASS`      | 76  | Impide que el cristal se rompa        |
 | `FLAG_HAS_BULLET_RESISTANT_GLASS` | 120 | El cristal del vehículo resiste balas |
 
 Son comportamientos distintos, no sinónimos. El servidor usa `BULLET_RESISTANT` en 22 entradas y `BULLETPROOF` en 8.
@@ -61,30 +61,30 @@ cargo build --release -p cw-core --example yft_glass
 
 Medido en 7 vehículos (sin conteo de polígonos; los tipos son el `material_type` crudo):
 
-| Vehículo | Flag en el meta | Tipos de material |
-|---|---|---|
-| `rrfaku` | ninguno | 116, 122, 142 |
-| `s500w223` | BULLETPROOF | 116, 121, 123, 142 |
-| `nuketruck` | BULLETPROOF | 116, 122, 142 |
-| `caliburn` | BULLETPROOF | 116, 121, 142 |
-| `aleutianems` | RESISTANT | 116, 117, 120, 121, 142 |
-| `hx58` | RESISTANT | 0, 70, 116, 117, 118, 122, 142 |
-| `bfdsuv` | ninguno | 116, 117, 120, 121, 122, 142 |
+| Vehículo      | Flag en el meta | Tipos de material              |
+| ------------- | --------------- | ------------------------------ |
+| `rrfaku`      | ninguno         | 116, 122, 142                  |
+| `s500w223`    | BULLETPROOF     | 116, 121, 123, 142             |
+| `nuketruck`   | BULLETPROOF     | 116, 122, 142                  |
+| `caliburn`    | BULLETPROOF     | 116, 121, 142                  |
+| `aleutianems` | RESISTANT       | 116, 117, 120, 121, 142        |
+| `hx58`        | RESISTANT       | 0, 70, 116, 117, 118, 122, 142 |
+| `bfdsuv`      | ninguno         | 116, 117, 120, 121, 122, 142   |
 
 Nombres de esos números, del `materials.dat` del juego (tabla completa en [materiales-de-colision.md](materiales-de-colision.md)):
 
-| Tipo | Nombre |
-|---|---|
-| 116 | `CAR_METAL` |
-| 117 | `CAR_PLASTIC` |
-| 118 | `CAR_SOFTTOP` |
-| 120 | `CAR_GLASS_WEAK` |
-| 121 | `CAR_GLASS_MEDIUM` |
-| 122 | `CAR_GLASS_STRONG` |
-| 123 | `CAR_GLASS_BULLETPROOF` |
-| 142 | `PHYS_CAR_VOID` |
-| 70 | `WOOD_SOLID_MEDIUM` |
-| 0 | `DEFAULT` |
+| Tipo | Nombre                  |
+| ---- | ----------------------- |
+| 116  | `CAR_METAL`             |
+| 117  | `CAR_PLASTIC`           |
+| 118  | `CAR_SOFTTOP`           |
+| 120  | `CAR_GLASS_WEAK`        |
+| 121  | `CAR_GLASS_MEDIUM`      |
+| 122  | `CAR_GLASS_STRONG`      |
+| 123  | `CAR_GLASS_BULLETPROOF` |
+| 142  | `PHYS_CAR_VOID`         |
+| 70   | `WOOD_SOLID_MEDIUM`     |
+| 0    | `DEFAULT`               |
 
 Lectura de las muestras con esos nombres:
 
