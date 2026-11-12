@@ -266,15 +266,23 @@ Para probar o correr Ask Ether sin DeepSeek, contra un servidor OpenAI-compatibl
 - No usa key: `DEEPSEEK_API_KEY` no se envía y no hace falta, tampoco en producción.
 - Cada pedido manda `chat_template_kwargs: {enable_thinking: false}`: los modelos de razonamiento (Liquid LFM3, Qwen3) gastarían todo el presupuesto de tokens pensando y devolverían la respuesta vacía. llama.cpp lo respeta; otros servidores lo ignoran.
 
-Probado (2026-11-12) con `LiquidAI/LFM3-1.7B-GGUF` (`Q4_K_M`, 1,1 GB) en llama.cpp b12314, RTX 5070:
+Probado (2026-11-12) con llama.cpp b12314 en una RTX 5070 (12 GB), `Q4_K_M`, 4 preguntas por `/chat` con el índice por palabras clave (3 sobre la doc, 1 fuera de tema):
+
+| Modelo (`LiquidAI/…-GGUF`) | Tamaño | Resultado                                                                                                                                                                         |
+| -------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LFM2.5-2.6B`              | 1,7 GB | **El único usable.** Respuestas directas y bien formadas, con citas `[n]` correctas; define "native" desde el glosario. Una respuesta cita una fuente de más. 2-5 s por respuesta |
+| `LFM3-1.7B`                | 1,1 GB | Contesta con la doc pero abre con `<contexto>` y copia fragmentos del prompt; las citas valen, el formato no. 2-8 s                                                               |
+| `LFM3-VL-2B`               | 1,1 GB | Rechaza "¿Qué es una native?" aunque la fuente está, y en otra pregunta mezcla el rechazo con el contexto copiado (`<contexto>`, `<pregunta>`). Descartado                        |
+
+Los tres rechazan bien lo que está fuera de la doc ("No encuentro eso…"; ese rechazo sale del server sin llamar al modelo). Los modelos de razonamiento necesitan el `enable_thinking: false` de arriba.
 
 ```bash
-llama-server -m LFM3-1.7B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -ngl 99 -c 4096 --alias lfm3
+llama-server -m LFM2.5-2.6B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -ngl 99 -c 4096 --alias lfm
 NO_EMBED=1 bun run index
-LLM_PROVIDER=local LLM_MODEL=lfm3 ASTRA_DEV_VIEWER=staff bun run dev
+LLM_PROVIDER=local LLM_MODEL=lfm ASTRA_DEV_VIEWER=staff bun run dev
 ```
 
-`/chat` responde de punta a punta (~12 s para 813 tokens, índice por palabras clave). Calidad: un modelo de 1,7B repite el contexto y no cita las fuentes (`cited: 0`); sirve para verificar el cableado, no como reemplazo de DeepSeek en producción.
+Alcanza para desarrollo sin red o sin saldo de DeepSeek. No lo tomamos como reemplazo en producción: un modelo de 2-3B se equivoca en detalles (cita de más, nombres de tokens) y no se midió con el índice completo de natives ni con embedder.
 
 ## Pruebas (`bun test`, 143)
 
