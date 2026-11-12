@@ -165,7 +165,7 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `EMBEDDER_DIMS`                                               | 256                                                             | Cambiarlo exige regenerar el índice                                        |
 | `EMBEDDER_TOKEN`                                              | —                                                               | Secreto. Bearer para un embedder hospedado (Cloudflare). Exige https       |
 | `EMBEDDER_ACCEPT_MODELS`                                      | — (siempre incluye `EMBEDDER_MODEL`)                            | Modelos cuyos vectores se aceptan de un índice ajeno (tras `embed:compat`) |
-| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción                                            |
+| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción; `local` ver abajo                         |
 | `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                 | `/api/auth/viewer`, 3000                                        |                                                                            |
 | `ASTRA_DEV_VIEWER`                                            | —                                                               | Stub de dev. Ignorado en producción                                        |
 | `CHAT_MAX_QUESTION_CHARS`                                     | 800                                                             |                                                                            |
@@ -257,6 +257,24 @@ bun run check                                              # typecheck + tests (
 ```
 
 Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. La UI en dev llama `/api/*` y Vite lo reenvía a `127.0.0.1:4100` quitando el prefijo (`vite.config.ts`), igual que nginx: mismo origen y misma cookie. Con `bun run dev:local` el panel funciona de punta a punta.
+
+### Modelo local (`LLM_PROVIDER=local`)
+
+Para probar o correr Ask Ether sin DeepSeek, contra un servidor OpenAI-compatible en la misma máquina (llama.cpp, Ollama, LM Studio). Reglas:
+
+- `LLM_BASE_URL` debe ser loopback (`localhost`, `127.0.0.1`, `[::1]`); si no, el server no arranca. Por defecto `http://127.0.0.1:8080/v1`.
+- No usa key: `DEEPSEEK_API_KEY` no se envía y no hace falta, tampoco en producción.
+- Cada pedido manda `chat_template_kwargs: {enable_thinking: false}`: los modelos de razonamiento (Liquid LFM3, Qwen3) gastarían todo el presupuesto de tokens pensando y devolverían la respuesta vacía. llama.cpp lo respeta; otros servidores lo ignoran.
+
+Probado (2026-11-12) con `LiquidAI/LFM3-1.7B-GGUF` (`Q4_K_M`, 1,1 GB) en llama.cpp b12314, RTX 5070:
+
+```bash
+llama-server -m LFM3-1.7B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -ngl 99 -c 4096 --alias lfm3
+NO_EMBED=1 bun run index
+LLM_PROVIDER=local LLM_MODEL=lfm3 ASTRA_DEV_VIEWER=staff bun run dev
+```
+
+`/chat` responde de punta a punta (~12 s para 813 tokens, índice por palabras clave). Calidad: un modelo de 1,7B repite el contexto y no cita las fuentes (`cited: 0`); sirve para verificar el cableado, no como reemplazo de DeepSeek en producción.
 
 ## Pruebas (`bun test`, 143)
 
