@@ -68,6 +68,18 @@ export function CommandPalette({ open, onClose }: Props) {
     }
   }, [open])
 
+  // Un clic en el fondo cae sobre el propio `<dialog>` (el panel lo ocupa entero). Listener
+  // nativo: es un atajo de ratón, el equivalente de teclado (Esc) ya cierra por `onCancel`.
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === d) onClose()
+    }
+    d.addEventListener('click', onBackdrop)
+    return () => d.removeEventListener('click', onBackdrop)
+  }, [onClose])
+
   return (
     <dialog
       ref={ref}
@@ -80,8 +92,6 @@ export function CommandPalette({ open, onClose }: Props) {
       }}
       // Esc repetido o cierre del navegador sin `cancel`.
       onClose={() => open && onClose()}
-      // Un clic en el fondo cae sobre el propio `<dialog>` (el panel lo ocupa entero).
-      onClick={(e) => e.target === e.currentTarget && onClose()}
       className="palette-dialog bg-surface-raised text-ink border-border shadow-card backdrop:bg-brand-dark/70 mx-auto mt-[10dvh] mb-auto max-h-[min(34rem,calc(100dvh-10dvh-1rem))] w-[calc(100%-2rem)] max-w-xl flex-col overflow-hidden rounded-lg border p-0 open:flex"
     >
       {open && (
@@ -211,7 +221,6 @@ function Body({
             aria-hidden="true"
           />
           <input
-            autoFocus
             type="text"
             role="combobox"
             aria-label="Buscar"

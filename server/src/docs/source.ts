@@ -13,13 +13,14 @@ export interface SourceDoc extends DocInput {
 
 async function walk(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
-  const out: string[] = []
-  for (const e of entries) {
-    const p = join(dir, e.name)
-    if (e.isDirectory()) out.push(...(await walk(p)))
-    else if (e.isFile() && e.name.endsWith('.md')) out.push(p)
-  }
-  return out.sort()
+  const found = await Promise.all(
+    entries.map(async (e): Promise<string[]> => {
+      const p = join(dir, e.name)
+      if (e.isDirectory()) return walk(p)
+      return e.isFile() && e.name.endsWith('.md') ? [p] : []
+    }),
+  )
+  return found.flat().sort()
 }
 
 export function parseDoc(path: string, raw: string): SourceDoc {
