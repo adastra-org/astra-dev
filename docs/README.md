@@ -15,6 +15,7 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 - [cmdk/README.md](cmdk/README.md) — command palette Ctrl+K (v0.3.0): contenido, ranking, regla del atajo, accesibilidad y cómo agregar un proveedor (IA después).
 - [shell/README.md](shell/README.md) — shell de la app (sidebar, barra superior, rutas, tokens). Reglas visuales en [`DESIGN.md`](../DESIGN.md).
 - [server/README.md](server/README.md) — server de Ask Ether (M3): chat de solo lectura con citas, índice semántico, permisos, límites, modelo de seguridad y diseño de deploy.
+- [ask/README.md](ask/README.md) — panel del chat Ask Ether (M3, v0.8.0): flujo SSE, citas, estados de error, accesibilidad, seguridad del renderizado y archivos.
 - [import/README.md](import/README.md) — importador de natives (GTA + CFX) y fivem-docs: fuentes fijadas por sha, salida normalizada, overrides, licencia y fases (índice con embeddings offline, WeGraph en Code Mode).
 - [deploy/README.md](deploy/README.md) — pasos manuales en el VPS (DNS, cert, nginx, env) y operación del deploy blue/green. Arquitectura: [../ARCHITECTURE.md](../ARCHITECTURE.md).
 

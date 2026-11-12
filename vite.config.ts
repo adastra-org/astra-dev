@@ -20,5 +20,13 @@ export default defineConfig({
   },
   server: {
     host: true,
+    // Como nginx en producción: /api/* llega al server de Ask Ether sin el prefijo. Así la UI
+    // llama /api/chat en dev y en prod (mismo origen, misma cookie). Server: `bun run --cwd server dev`.
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:4100',
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
 })
