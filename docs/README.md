@@ -9,6 +9,9 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 - [plan/README.md](plan/README.md) — milestones M0–M5, estimaciones, decisiones abiertas.
 - [docs-engine/README.md](docs-engine/README.md) — motor de docs (M1): frontmatter, build, vista TDA, cómo agregar un doc. Contenido en [`content/`](../content/README.md).
 - [fixes-2026-11-10-v0.2.0/README.md](fixes-2026-11-10-v0.2.0/README.md) — correcciones de diseño al motor de docs (bordes, texto, animación, TOC), con su estado.
+- [materiales/README.md](materiales/README.md) — materiales del juego (`materials.dat`): tabla de los 213 tipos, categorías, y las tres copias del archivo con sus índices distintos.
+- [vehiculos/README.md](vehiculos/README.md) — auditoría y corrección de vehículos: flags contra la lista oficial, cristal blindado (flag vs material), materiales de colisión, shaders, tintado y LODs.
+- [fixes-2026-11-12-v0.4.0/README.md](fixes-2026-11-12-v0.4.0/README.md) — problemas de vehículos reportados (blindaje, tintado, LODs, flags), con su estado.
 - [cmdk/README.md](cmdk/README.md) — command palette Ctrl+K (v0.3.0): contenido, ranking, regla del atajo, accesibilidad y cómo agregar un proveedor (IA después).
 - [shell/README.md](shell/README.md) — shell de la app (sidebar, barra superior, rutas, tokens). Reglas visuales en [`DESIGN.md`](../DESIGN.md).
 - [server/README.md](server/README.md) — server de Ask Ether (M3): chat de solo lectura con citas, índice semántico, permisos, límites, modelo de seguridad y diseño de deploy.
