@@ -14,3 +14,16 @@
     animation: palette-fade var(--duration-panel) var(--ease-out-brand);
   }
 }
+
+/* Colores del orbe de Ether (@wefaber/orb). Salen de los tokens de marca y no cambian con el tema:
+   el orbe siempre va sobre su placa oscura (`plate`), así se lee igual en Void y en Dawn. */
+:root {
+  --orb: var(--orchid-400);
+  --orb-ring: var(--violet-400);
+  --orb-flow: var(--success);
+  --orb-alert: var(--warning);
+  --orb-error: var(--danger);
+  --orb-off: var(--void-400);
+  --orb-plate: var(--brand-dark);
+  --orb-auto-plate: var(--brand-dark);
+}

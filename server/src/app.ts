@@ -2,6 +2,7 @@
 // routes here are `/health`, `/ready`, `/graphql` and `/chat`.
 import { createHash } from 'node:crypto'
 import { Elysia } from 'elysia'
+import { parseLang } from './chat/environment.ts'
 import { citedLog } from './chat/log.ts'
 import { sseResponse } from './chat/sse.ts'
 import type { AppDeps } from './context.ts'
@@ -76,13 +77,14 @@ async function readChatBody(request: Request, maxBytes: number) {
   }
   if (body === null || typeof body !== 'object' || Array.isArray(body))
     throw new AppError('bad_request', 'Body must be a JSON object.')
-  const { question, history } = body as {
+  const { question, history, lang } = body as {
     question?: unknown
     history?: unknown
+    lang?: unknown
   }
   if (typeof question !== 'string')
     throw new AppError('bad_request', '`question` must be a string.')
-  return { question, history }
+  return { question, history, lang: parseLang(lang) }
 }
 
 export function createApp(deps: AppDeps) {
@@ -138,7 +140,7 @@ export function createApp(deps: AppDeps) {
             'index_unavailable',
             'The docs index is not loaded.',
           )
-        const { question, history } = await readChatBody(
+        const { question, history, lang } = await readChatBody(
           request,
           config.chat.maxBodyBytes,
         )
@@ -149,12 +151,16 @@ export function createApp(deps: AppDeps) {
           role: viewer.role,
           question,
           history,
+          lang,
+          user: { handle: viewer.handle },
+          showThinking: viewer.role === 'staff',
         })
         log.mode = run.mode
         log.degraded = run.degraded
         log.sources = run.sources.length
         log.cache = run.cacheHit ? 'hit' : 'miss'
         if (run.usedHistory != null) log.usedHistory = run.usedHistory
+        if (run.gate) log.gate = `${run.gate.kept}/${run.gate.total}`
 
         return sseResponse(
           async function* (signal) {

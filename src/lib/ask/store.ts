@@ -9,6 +9,7 @@ import {
   AskError,
   type AskEvent,
   type AskSource,
+  type AskStep,
   type HistoryTurn,
   type SearchMode,
 } from './types'
@@ -29,6 +30,10 @@ export interface Turn {
   cached: boolean
   mode: SearchMode | null
   degraded: boolean
+  /** Lo que hizo el server antes del modelo, en orden. */
+  steps: AskStep[]
+  /** Razonamiento del modelo (solo staff). No entra al historial ni a la respuesta. */
+  thinking: string
   error: { code: string; retryAfter?: number } | null
 }
 
@@ -54,6 +59,8 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   cached: false,
   mode: null,
   degraded: false,
+  steps: [],
+  thinking: '',
   error: null,
 })
 
@@ -62,6 +69,10 @@ export function applyEvent(turn: Turn, ev: AskEvent): Turn {
   switch (ev.type) {
     case 'meta':
       return { ...turn, mode: ev.mode, degraded: ev.degraded }
+    case 'step':
+      return { ...turn, steps: [...turn.steps, ev.step] }
+    case 'thinking':
+      return { ...turn, thinking: turn.thinking + ev.text }
     case 'sources':
       return { ...turn, sources: ev.sources }
     case 'delta':

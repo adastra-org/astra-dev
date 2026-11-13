@@ -21,6 +21,8 @@ export interface LlmUsage {
 
 export type LlmChunk =
   | { type: 'delta'; text: string }
+  /** The model's reasoning, when it exposes it (`reasoning_content`). Never part of the answer. */
+  | { type: 'thinking'; text: string }
   | { type: 'usage'; usage: LlmUsage }
 
 export interface LlmProvider {

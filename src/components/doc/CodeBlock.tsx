@@ -94,13 +94,7 @@ export function CodeBlock({
       cancelRun.current = null
       return r
     } catch (e) {
-      return {
-        status: 'crash',
-        message: e instanceof Error ? e.message : tr('code.crash.load'),
-        ...(e instanceof Error ? {} : { reason: 'load' as const }),
-        ms: 0,
-        lines: [],
-      }
+      return crashResult(e, tr)
     }
   }
 
@@ -124,7 +118,7 @@ export function CodeBlock({
       const { lint } = await import('@/lib/sandbox/tools')
       return await lint(text)
     } catch {
-      return { ok: false as const, message: tr('code.crash.load') }
+      return loadFailure(tr)
     }
   }
 
@@ -144,7 +138,7 @@ export function CodeBlock({
       const { format: formatLua } = await import('@/lib/sandbox/tools')
       return await formatLua(text)
     } catch {
-      return { ok: false as const, message: tr('code.crash.load') }
+      return loadFailure(tr)
     }
   }
 
@@ -179,80 +173,30 @@ export function CodeBlock({
         bare ? '' : 'border-border border',
       ].join(' ')}
     >
-      <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-1">
-        <span className="text-data text-ink-subtle uppercase">
-          {lang ?? tr('code.text')}
-        </span>
-        <div className="flex flex-wrap items-center justify-end gap-1">
-          {runnable &&
-            (running ? (
-              <ToolButton
-                icon={Square}
-                label={tr('code.stop')}
-                onClick={stop}
-              />
-            ) : (
-              <ToolButton icon={Play} label={tr('code.run')} onClick={run} />
-            ))}
-          {runnable && !running && (
-            <>
-              <ToolButton
-                icon={toolBusy === 'lint' ? LoaderCircle : ListChecks}
-                label={tr('code.lint')}
-                onClick={review}
-                busy={toolBusy === 'lint'}
-              />
-              <ToolButton
-                icon={toolBusy === 'format' ? LoaderCircle : Sparkles}
-                label={tr('code.format')}
-                onClick={format}
-                busy={toolBusy === 'format'}
-              />
-            </>
-          )}
-          <ToolButton
-            icon={copied ? Check : Copy}
-            label={copied ? tr('code.copied') : tr('code.copy')}
-            onClick={copy}
-            tone={copied ? 'success' : undefined}
-          />
-        </div>
-      </figcaption>
-      {editable ? (
-        <textarea
-          value={text}
-          onChange={(e) => setEdited(e.target.value)}
-          aria-label={tr('code.editor')}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          rows={Math.min(24, Math.max(8, text.split('\n').length + 1))}
-          className="text-code text-ink block w-full resize-y bg-transparent p-4 whitespace-pre outline-none"
-        />
-      ) : (
-        <pre className="text-code text-ink overflow-x-auto p-4" tabIndex={0}>
-          {edited === null && html !== undefined ? (
-            <code dangerouslySetInnerHTML={{ __html: html }} />
-          ) : (
-            <code>{text}</code>
-          )}
-        </pre>
-      )}
+      <CodeToolbar
+        lang={lang}
+        runnable={runnable}
+        running={running}
+        toolBusy={toolBusy}
+        copied={copied}
+        onRun={run}
+        onStop={stop}
+        onReview={review}
+        onFormat={format}
+        onCopy={copy}
+      />
+      <CodeBody
+        text={text}
+        html={edited === null ? html : undefined}
+        editable={editable}
+        onEdit={setEdited}
+      />
       {output && (
-        <div
-          role="region"
-          aria-label={tr('code.output')}
-          className="border-border bg-surface border-t px-4 py-3"
-        >
-          <div role="status" aria-live="polite">
-            <Status result={output.result} running={running} />
-          </div>
-          {output.lines.length > 0 && (
-            <pre className="text-code text-ink-muted mt-2 overflow-x-auto whitespace-pre-wrap">
-              {output.lines.join('\n')}
-            </pre>
-          )}
-        </div>
+        <OutputRegion
+          result={output.result}
+          lines={output.lines}
+          running={running}
+        />
       )}
       {diagnostics !== null && <Diagnostics list={diagnostics} />}
       {toolError !== null && (
@@ -268,6 +212,157 @@ export function CodeBlock({
         {copied ? tr('code.copiedStatus') : ''}
       </span>
     </figure>
+  )
+}
+
+type Tr = ReturnType<typeof useLang>['tr']
+
+/** Un fallo al correr: el mensaje del error, o "no cargó el sandbox" si no es un `Error`. */
+function crashResult(e: unknown, tr: Tr): RunResult {
+  const isError = e instanceof Error
+  return {
+    status: 'crash',
+    message: isError ? e.message : tr('code.crash.load'),
+    ...(isError ? {} : { reason: 'load' as const }),
+    ms: 0,
+    lines: [],
+  }
+}
+
+const loadFailure = (tr: Tr) => ({
+  ok: false as const,
+  message: tr('code.crash.load'),
+})
+
+function CodeToolbar({
+  lang,
+  runnable,
+  running,
+  toolBusy,
+  copied,
+  onRun,
+  onStop,
+  onReview,
+  onFormat,
+  onCopy,
+}: {
+  lang?: string
+  runnable?: boolean
+  running: boolean
+  toolBusy: ToolBusy
+  copied: boolean
+  onRun: () => void
+  onStop: () => void
+  onReview: () => void
+  onFormat: () => void
+  onCopy: () => void
+}) {
+  const { tr } = useLang()
+  return (
+    <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-1">
+      <span className="text-data text-ink-subtle uppercase">
+        {lang ?? tr('code.text')}
+      </span>
+      <div className="flex flex-wrap items-center justify-end gap-1">
+        {runnable &&
+          (running ? (
+            <ToolButton
+              icon={Square}
+              label={tr('code.stop')}
+              onClick={onStop}
+            />
+          ) : (
+            <ToolButton icon={Play} label={tr('code.run')} onClick={onRun} />
+          ))}
+        {runnable && !running && (
+          <>
+            <ToolButton
+              icon={toolBusy === 'lint' ? LoaderCircle : ListChecks}
+              label={tr('code.lint')}
+              onClick={onReview}
+              busy={toolBusy === 'lint'}
+            />
+            <ToolButton
+              icon={toolBusy === 'format' ? LoaderCircle : Sparkles}
+              label={tr('code.format')}
+              onClick={onFormat}
+              busy={toolBusy === 'format'}
+            />
+          </>
+        )}
+        <ToolButton
+          icon={copied ? Check : Copy}
+          label={copied ? tr('code.copied') : tr('code.copy')}
+          onClick={onCopy}
+          tone={copied ? 'success' : undefined}
+        />
+      </div>
+    </figcaption>
+  )
+}
+
+/** El código: textarea si se edita a mano, `<pre>` si no. `html` solo viene sin editar. */
+function CodeBody({
+  text,
+  html,
+  editable,
+  onEdit,
+}: {
+  text: string
+  html?: string
+  editable: boolean
+  onEdit: (v: string) => void
+}) {
+  const { tr } = useLang()
+  if (editable)
+    return (
+      <textarea
+        value={text}
+        onChange={(e) => onEdit(e.target.value)}
+        aria-label={tr('code.editor')}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        rows={Math.min(24, Math.max(8, text.split('\n').length + 1))}
+        className="text-code text-ink block w-full resize-y bg-transparent p-4 whitespace-pre outline-none"
+      />
+    )
+  return (
+    <pre className="text-code text-ink overflow-x-auto p-4" tabIndex={0}>
+      {html !== undefined ? (
+        <code dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <code>{text}</code>
+      )}
+    </pre>
+  )
+}
+
+function OutputRegion({
+  result,
+  lines,
+  running,
+}: {
+  result: RunResult | null
+  lines: string[]
+  running: boolean
+}) {
+  const { tr } = useLang()
+  return (
+    <div
+      role="region"
+      aria-label={tr('code.output')}
+      className="border-border bg-surface border-t px-4 py-3"
+    >
+      <div role="status" aria-live="polite">
+        <Status result={result} running={running} />
+      </div>
+      {lines.length > 0 && (
+        <pre className="text-code text-ink-muted mt-2 overflow-x-auto whitespace-pre-wrap">
+          {lines.join('\n')}
+        </pre>
+      )}
+    </div>
   )
 }
 

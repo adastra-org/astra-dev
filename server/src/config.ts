@@ -33,12 +33,18 @@ export interface Config {
     model: string
     apiKey: string
     timeoutMs: number
+    /** Optional local fallback when the primary fails before answering. */
+    fallback: { baseUrl: string; model: string } | null
   }
   /** Optional follow-up classifier (Liquid d1 on llama.cpp). Empty `url` = off. */
   decision: {
     url: string
     timeoutMs: number
     followUpThreshold: number
+    /** Context gate: fragments at or above `gateThreshold` enter the prompt; see decision/gate.ts. */
+    gateThreshold: number
+    gateFloor: number
+    gateMaxFragmentChars: number
   }
   chat: {
     maxQuestionChars: number
@@ -46,6 +52,8 @@ export interface Config {
     maxHistoryTurnChars: number
     maxOutputTokens: number
     maxOutputChars: number
+    /** Reasoning shown to staff while the model works. 0 = never forwarded. */
+    maxThinkingChars: number
     topK: number
     /** Natives added to the chat context on top of `topK` docs (0 = docs only). */
     nativesTopK: number
@@ -152,6 +160,31 @@ export function loadConfig(env: Env = process.env): Config {
       const host = new URL(llmBaseUrl).hostname
       if (!['localhost', '127.0.0.1', '[::1]'].includes(host))
         problems.push('LLM_PROVIDER=local needs a loopback LLM_BASE_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
+  // Optional local fallback for a hosted primary: same loopback rule, same text leaves nowhere new.
+  const fallbackName = str('LLM_FALLBACK_PROVIDER', '')
+  if (fallbackName && fallbackName !== 'local')
+    problems.push('LLM_FALLBACK_PROVIDER must be "local" or empty')
+  if (fallbackName === 'local' && provider !== 'deepseek')
+    problems.push(
+      'LLM_FALLBACK_PROVIDER only applies when LLM_PROVIDER=deepseek',
+    )
+  const fallbackBase = url(
+    'LLM_FALLBACK_BASE_URL',
+    'http://127.0.0.1:8080/v1',
+  ).replace(/\/+$/, '')
+  if (fallbackName === 'local') {
+    try {
+      if (
+        !['localhost', '127.0.0.1', '[::1]'].includes(
+          new URL(fallbackBase).hostname,
+        )
+      )
+        problems.push('LLM_FALLBACK_BASE_URL needs a loopback URL')
     } catch {
       // already reported by url()
     }
@@ -290,18 +323,34 @@ export function loadConfig(env: Env = process.env): Config {
       ),
       apiKey: provider === 'local' ? '' : apiKey,
       timeoutMs: int('LLM_TIMEOUT_MS', 60000, 1000, 300000),
+      fallback:
+        fallbackName === 'local'
+          ? {
+              baseUrl: fallbackBase,
+              model: str('LLM_FALLBACK_MODEL', 'local'),
+            }
+          : null,
     },
     decision: {
       url: decisionUrl,
       timeoutMs: int('DECISION_TIMEOUT_MS', 1500, 100, 10000),
       followUpThreshold: num('DECISION_FOLLOWUP_THRESHOLD', 0.25, 0.01, 0.99),
+      gateThreshold: num('DECISION_GATE_THRESHOLD', 0.5, 0.01, 0.99),
+      gateFloor: num('DECISION_GATE_FLOOR', 0.3, 0, 0.99),
+      gateMaxFragmentChars: int(
+        'DECISION_GATE_FRAGMENT_CHARS',
+        1500,
+        200,
+        6000,
+      ),
     },
     chat: {
       maxQuestionChars: int('CHAT_MAX_QUESTION_CHARS', 800, 50, 4000),
       maxHistoryTurns: int('CHAT_MAX_HISTORY_TURNS', 6, 0, 20),
       maxHistoryTurnChars: int('CHAT_MAX_HISTORY_TURN_CHARS', 800, 50, 4000),
-      maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 700, 50, 4000),
-      maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 4000, 200, 20000),
+      maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 4096, 4096, 16_000),
+      maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 16_000, 200, 64_000),
+      maxThinkingChars: int('CHAT_MAX_THINKING_CHARS', 12_000, 0, 100_000),
       topK: int('CHAT_TOP_K', 5, 1, 12),
       nativesTopK: int('CHAT_NATIVES_TOP_K', 3, 0, 8),
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
@@ -335,7 +384,7 @@ export function loadConfig(env: Env = process.env): Config {
       chatViewerPerMin: int('RATE_CHAT_VIEWER_PER_MIN', 6, 1, 10000),
       chatIpPerMin: int('RATE_CHAT_IP_PER_MIN', 20, 1, 10000),
       searchIpPerMin: int('RATE_SEARCH_IP_PER_MIN', 60, 1, 10000),
-      dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 40_000, 1000),
+      dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 120_000, 1000),
       dailyTokensGlobal: int('DAILY_TOKENS_GLOBAL', 1_000_000, 1000),
     },
   }

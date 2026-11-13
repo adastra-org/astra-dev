@@ -80,7 +80,9 @@ export class DeepSeekProvider implements LlmProvider {
           const data = line.slice(5).trim()
           if (data === '[DONE]') return
           let json: {
-            choices?: { delta?: { content?: unknown } }[]
+            choices?: {
+              delta?: { content?: unknown; reasoning_content?: unknown }
+            }[]
             usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
           }
           try {
@@ -88,7 +90,11 @@ export class DeepSeekProvider implements LlmProvider {
           } catch {
             continue
           }
-          const text = json.choices?.[0]?.delta?.content
+          const delta = json.choices?.[0]?.delta
+          const thought = delta?.reasoning_content
+          if (typeof thought === 'string' && thought)
+            yield { type: 'thinking', text: thought }
+          const text = delta?.content
           if (typeof text === 'string' && text) yield { type: 'delta', text }
           const u = json.usage
           if (

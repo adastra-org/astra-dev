@@ -18,8 +18,24 @@ export interface AskSource {
   score: number
 }
 
+/** Qué hizo el server antes de llamar al modelo: solo cuentas y tiempos. Espejo de `ChatStep`. */
+export type AskStep =
+  | { id: 'history'; ms: number; usedHistory: boolean }
+  | {
+      id: 'search'
+      ms: number
+      mode: SearchMode
+      docs: number
+      natives: number
+    }
+  | { id: 'gate'; ms: number; kept: number; total: number }
+  | { id: 'cache'; ms: number }
+
 export type AskEvent =
   | { type: 'meta'; requestId: string; mode: SearchMode; degraded: boolean }
+  | { type: 'step'; step: AskStep }
+  /** Razonamiento del modelo; el server solo lo manda a staff. */
+  | { type: 'thinking'; text: string }
   | { type: 'sources'; sources: AskSource[] }
   | { type: 'delta'; text: string }
   | {

@@ -8,7 +8,10 @@ import type { AppDeps, BuildInfo } from './context.ts'
 import { loadIndex } from './index/store.ts'
 import { Retriever } from './index/search.ts'
 import { RateLimiter, TokenBudget } from './limits.ts'
+import { GithubHeadSource } from './chat/head.ts'
 import { D1FollowUpDecider } from './decision/followup.ts'
+import { D1ContextGate } from './decision/gate.ts'
+import { FallbackProvider } from './llm/fallback.ts'
 import { DeepSeekProvider } from './llm/deepseek.ts'
 import { FakeLlmProvider } from './llm/fake.ts'
 import type { LlmProvider } from './llm/provider.ts'
@@ -68,15 +71,28 @@ export function createEmbedder(
   })
 }
 
-export function createLlm(config: Config): LlmProvider {
+export function createLlm(config: Config, logger?: Logger): LlmProvider {
   if (config.llm.provider === 'fake') return new FakeLlmProvider()
-  return new DeepSeekProvider({
+  const primary = new DeepSeekProvider({
     name: config.llm.provider,
     apiKey: config.llm.apiKey,
     baseUrl: config.llm.baseUrl,
     model: config.llm.model,
     timeoutMs: config.llm.timeoutMs,
   })
+  const fb = config.llm.fallback
+  if (!fb) return primary
+  return new FallbackProvider(
+    primary,
+    new DeepSeekProvider({
+      name: 'local',
+      apiKey: '',
+      baseUrl: fb.baseUrl,
+      model: fb.model,
+      timeoutMs: config.llm.timeoutMs,
+    }),
+    (from, to) => logger?.warn('llm_fallback', { from, to }),
+  )
 }
 
 async function readBuildInfo(config: Config): Promise<BuildInfo> {
@@ -147,10 +163,32 @@ export async function buildDeps(
     })
   }
 
+  const build = await readBuildInfo(config)
   const chat = retriever
     ? new ChatService({
         retriever,
-        llm: createLlm(config),
+        llm: createLlm(config, logger),
+        version: build.version,
+        head: config.project.githubToken
+          ? new GithubHeadSource({
+              github: new GithubClient({
+                token: config.project.githubToken,
+                baseUrl: config.project.githubApiUrl,
+              }),
+              repo: config.project.repo,
+              ref: config.project.ref,
+              ttlMs: config.project.cacheTtlMs,
+            })
+          : undefined,
+        gate: config.decision.url
+          ? new D1ContextGate({
+              url: config.decision.url,
+              timeoutMs: config.decision.timeoutMs,
+              threshold: config.decision.gateThreshold,
+              floor: config.decision.gateFloor,
+              maxFragmentChars: config.decision.gateMaxFragmentChars,
+            })
+          : undefined,
         budget: new TokenBudget(
           config.limits.dailyTokensViewer,
           config.limits.dailyTokensGlobal,
@@ -182,6 +220,6 @@ export async function buildDeps(
       chatIp: new RateLimiter(config.limits.chatIpPerMin),
       searchIp: new RateLimiter(config.limits.searchIpPerMin),
     },
-    build: await readBuildInfo(config),
+    build,
   }
 }
