@@ -9,7 +9,7 @@ export interface Crumb {
 
 /** Páginas con ruta propia que no están en la navegación (se llega por URL o por el palette). */
 const HIDDEN_PAGES: readonly { to: string; label: MessageKey }[] = [
-  { to: '/ia', label: 'ai.title' },
+  { to: '/ask', label: 'ai.title' },
 ]
 
 /** Traductor de claves del diccionario; por defecto español (para probar sin React). */
