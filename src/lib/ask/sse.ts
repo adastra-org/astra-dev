@@ -3,7 +3,15 @@
 // línea en blanco. Sin React ni fetch: se prueba con texto.
 import type { AskEvent } from './types'
 
-const TYPES = new Set(['meta', 'sources', 'delta', 'done', 'error'])
+const TYPES = new Set([
+  'meta',
+  'step',
+  'thinking',
+  'sources',
+  'delta',
+  'done',
+  'error',
+])
 
 export class SseParser {
   #buffer = ''

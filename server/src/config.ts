@@ -52,6 +52,8 @@ export interface Config {
     maxHistoryTurnChars: number
     maxOutputTokens: number
     maxOutputChars: number
+    /** Reasoning shown to staff while the model works. 0 = never forwarded. */
+    maxThinkingChars: number
     topK: number
     /** Natives added to the chat context on top of `topK` docs (0 = docs only). */
     nativesTopK: number
@@ -346,8 +348,9 @@ export function loadConfig(env: Env = process.env): Config {
       maxQuestionChars: int('CHAT_MAX_QUESTION_CHARS', 800, 50, 4000),
       maxHistoryTurns: int('CHAT_MAX_HISTORY_TURNS', 6, 0, 20),
       maxHistoryTurnChars: int('CHAT_MAX_HISTORY_TURN_CHARS', 800, 50, 4000),
-      maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 700, 50, 4000),
-      maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 4000, 200, 20000),
+      maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 4096, 4096, 16_000),
+      maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 16_000, 200, 64_000),
+      maxThinkingChars: int('CHAT_MAX_THINKING_CHARS', 12_000, 0, 100_000),
       topK: int('CHAT_TOP_K', 5, 1, 12),
       nativesTopK: int('CHAT_NATIVES_TOP_K', 3, 0, 8),
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
@@ -381,7 +384,7 @@ export function loadConfig(env: Env = process.env): Config {
       chatViewerPerMin: int('RATE_CHAT_VIEWER_PER_MIN', 6, 1, 10000),
       chatIpPerMin: int('RATE_CHAT_IP_PER_MIN', 20, 1, 10000),
       searchIpPerMin: int('RATE_SEARCH_IP_PER_MIN', 60, 1, 10000),
-      dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 40_000, 1000),
+      dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 120_000, 1000),
       dailyTokensGlobal: int('DAILY_TOKENS_GLOBAL', 1_000_000, 1000),
     },
   }

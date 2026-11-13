@@ -6,7 +6,6 @@ import {
   LockKeyhole,
   LogIn,
   RotateCcw,
-  Sparkles,
   SquarePen,
   Square,
   TriangleAlert,
@@ -14,12 +13,15 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { describeError } from '@/lib/ask/errors'
+import { describeError, type ErrorView } from '@/lib/ask/errors'
+import { orbState } from '@/lib/ask/orb-state'
 import { isLinkable, sourceLabel, visibleSources } from '@/lib/ask/sources'
 import { askStore, type Turn } from '@/lib/ask/store'
 import { ASK_MAX_QUESTION, type AskSource } from '@/lib/ask/types'
 import { useLang } from '@/lib/use-lang'
+import { Activity } from './Activity'
 import { AnswerBody } from './AnswerBody'
+import { EtherOrb } from './EtherOrb'
 import { useAsk } from './useAsk'
 
 const SUGGESTIONS = [
@@ -132,7 +134,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
   return (
     <>
       <header className="flex shrink-0 items-center gap-1 p-2 pl-4">
-        <Sparkles className="text-accent size-5 shrink-0" aria-hidden="true" />
+        <EtherOrb className="shrink-0" state={orbState(last?.status)} />
         <h2 className="text-label min-w-0 flex-1 truncate">{tr('ask.name')}</h2>
         {turns.length > 0 && (
           <button
@@ -332,15 +334,9 @@ function TurnView({
         {turn.question}
       </p>
 
-      {turn.status === 'waiting' && (
-        <p
-          className="text-body-sm text-ink-muted flex items-center gap-2"
-          aria-hidden="true"
-        >
-          <Sparkles className="text-accent size-4 motion-safe:animate-pulse" />
-          {tr('ask.searching')}
-        </p>
-      )}
+      {turn.status === 'waiting' && !turn.steps.length && <Searching />}
+
+      <Activity turn={turn} />
 
       {turn.text && (
         <AnswerBody
@@ -350,59 +346,10 @@ function TurnView({
         />
       )}
 
-      {turn.refused && settled && (
-        <p className="text-body-sm text-ink-muted">
-          {tr('ask.refused.lead')}{' '}
-          <Link
-            to="/docs"
-            onClick={onNavigate}
-            className="text-accent underline underline-offset-2"
-          >
-            {tr('ask.refused.link')}
-          </Link>
-          .
-        </p>
-      )}
+      {turn.refused && settled && <RefusedNote onNavigate={onNavigate} />}
 
       {errorView && (
-        <div
-          role="alert"
-          className="bg-danger-surface flex gap-3 rounded-md p-4"
-        >
-          <TriangleAlert
-            className="text-danger mt-0.5 size-5 shrink-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <p className="text-label text-ink">{errorView.title}</p>
-            {errorView.hint && (
-              <p className="text-body-sm text-ink-muted mt-1">
-                {errorView.hint}
-              </p>
-            )}
-            {errorView.action && (
-              <a
-                href={errorView.action.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-label text-ink hover:bg-surface-overlay bg-surface-raised -ml-1 mt-2 mr-2 inline-flex min-h-11 items-center gap-2 rounded-md px-3"
-              >
-                <LogIn className="size-4" aria-hidden="true" />
-                {errorView.action.label}
-              </a>
-            )}
-            {errorView.retry && isLast && (
-              <button
-                type="button"
-                onClick={() => askStore.retry(turn.id)}
-                className="text-label text-ink hover:bg-surface-overlay bg-surface-raised -ml-1 mt-2 inline-flex min-h-11 items-center gap-2 rounded-md px-3"
-              >
-                <RotateCcw className="size-4" aria-hidden="true" />
-                {tr('ask.retry')}
-              </button>
-            )}
-          </div>
-        </div>
+        <ErrorNotice turnId={turn.id} view={errorView} canRetry={isLast} />
       )}
 
       {settled && turn.status !== 'error' && <Notes turn={turn} />}
@@ -421,6 +368,84 @@ function TurnView({
         </section>
       )}
     </>
+  )
+}
+
+/** Antes del primer evento del server: la búsqueda todavía no terminó. */
+function Searching() {
+  const { tr } = useLang()
+  return (
+    <p
+      className="text-body-sm text-ink-muted flex items-center gap-2"
+      aria-hidden="true"
+    >
+      <EtherOrb size={16} state="thinking" className="shrink-0" />
+      {tr('ask.searching')}
+    </p>
+  )
+}
+
+function RefusedNote({ onNavigate }: { onNavigate: () => void }) {
+  const { tr } = useLang()
+  return (
+    <p className="text-body-sm text-ink-muted">
+      {tr('ask.refused.lead')}{' '}
+      <Link
+        to="/docs"
+        onClick={onNavigate}
+        className="text-accent underline underline-offset-2"
+      >
+        {tr('ask.refused.link')}
+      </Link>
+      .
+    </p>
+  )
+}
+
+function ErrorNotice({
+  turnId,
+  view,
+  canRetry,
+}: {
+  turnId: Turn['id']
+  view: ErrorView
+  canRetry: boolean
+}) {
+  const { tr } = useLang()
+  return (
+    <div role="alert" className="bg-danger-surface flex gap-3 rounded-md p-4">
+      <TriangleAlert
+        className="text-danger mt-0.5 size-5 shrink-0"
+        aria-hidden="true"
+      />
+      <div className="min-w-0">
+        <p className="text-label text-ink">{view.title}</p>
+        {view.hint && (
+          <p className="text-body-sm text-ink-muted mt-1">{view.hint}</p>
+        )}
+        {view.action && (
+          <a
+            href={view.action.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-label text-ink hover:bg-surface-overlay bg-surface-raised -ml-1 mt-2 mr-2 inline-flex min-h-11 items-center gap-2 rounded-md px-3"
+          >
+            <LogIn className="size-4" aria-hidden="true" />
+            {view.action.label}
+          </a>
+        )}
+        {view.retry && canRetry && (
+          <button
+            type="button"
+            onClick={() => askStore.retry(turnId)}
+            className="text-label text-ink hover:bg-surface-overlay bg-surface-raised -ml-1 mt-2 inline-flex min-h-11 items-center gap-2 rounded-md px-3"
+          >
+            <RotateCcw className="size-4" aria-hidden="true" />
+            {tr('ask.retry')}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 

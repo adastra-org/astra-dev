@@ -127,7 +127,7 @@ describe('chat answer cache', () => {
 
   test('a hit does not spend the daily token budget', async () => {
     // Enough for exactly one live answer.
-    const h = await harness({ env: { DAILY_TOKENS_VIEWER: '1800' } })
+    const h = await harness({ env: { DAILY_TOKENS_VIEWER: '6500' } })
     expect((await ask(h, 'rollback del deploy')).res.status).toBe(200)
     for (let i = 0; i < 3; i++) {
       const r = await ask(h, 'rollback del deploy')

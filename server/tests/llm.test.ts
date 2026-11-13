@@ -53,6 +53,22 @@ describe('DeepSeekProvider', () => {
       fetch: fetchImpl,
     })
 
+  test('reasoning_content becomes thinking chunks, apart from the answer', async () => {
+    const llm = make((async () =>
+      sseBody([
+        'data: {"choices":[{"delta":{"reasoning_content":"Miro la fuente 1. "}}]}',
+        'data: {"choices":[{"delta":{"reasoning_content":"Cito."}}]}',
+        'data: {"choices":[{"delta":{"content":"Listo [1]."}}]}',
+        'data: [DONE]',
+      ])) as unknown as typeof fetch)
+    const out = await collect(llm.stream({ messages: [], maxOutputTokens: 5 }))
+    expect(out).toEqual([
+      { type: 'thinking', text: 'Miro la fuente 1. ' },
+      { type: 'thinking', text: 'Cito.' },
+      { type: 'delta', text: 'Listo [1].' },
+    ])
+  })
+
   test('sends a plain completion (no tools), key only in the header, to the configured base URL', async () => {
     let seen: { url: string; init: RequestInit } | undefined
     const llm = make((async (url: string, init: RequestInit) => {

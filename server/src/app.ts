@@ -153,6 +153,7 @@ export function createApp(deps: AppDeps) {
           history,
           lang,
           user: { handle: viewer.handle },
+          showThinking: viewer.role === 'staff',
         })
         log.mode = run.mode
         log.degraded = run.degraded
