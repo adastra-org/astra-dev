@@ -7,7 +7,12 @@ import type {
   Permission,
 } from './types'
 
-const RANK: Record<Permission, number> = { public: 0, subscriber: 1, staff: 2 }
+const RANK: Record<Permission, number> = {
+  public: 0,
+  subscriber: 1,
+  staff: 2,
+  owner: 3,
+}
 
 /** `access` alcanza para `required` (staff ve lo de subscriber; todos ven lo público). */
 export function canAccess(access: Permission, required: Permission): boolean {

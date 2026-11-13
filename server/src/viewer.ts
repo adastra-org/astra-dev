@@ -36,6 +36,17 @@ export const ANONYMOUS: Viewer = {
   entitlements: [],
 }
 
+const RANK: Record<Role, number> = {
+  public: 0,
+  subscriber: 1,
+  staff: 2,
+  owner: 3,
+}
+
+/** `role` is `min` or above (`owner` implies `staff`). Every permission check goes through here. */
+export const atLeast = (role: Role, min: Role): boolean =>
+  RANK[role] >= RANK[min]
+
 export interface ViewerPort {
   /** Resolve the viewer behind a request. Throws `viewer_unavailable` when accounts is down. */
   resolve(request: Request): Promise<Viewer>
@@ -185,22 +196,49 @@ export class DevStubViewerPort implements ViewerPort {
   }
 }
 
+/**
+ * Promotes a viewer to `owner` when two independent facts hold: accounts says `staff`, and the id is
+ * in the server-side allowlist (`OWNER_IDS`). Losing staff in accounts revokes owner (within the
+ * accounts cache). The id comes from the accounts response, never from the client.
+ */
+export class OwnerOverlayViewerPort implements ViewerPort {
+  readonly #inner: ViewerPort
+  readonly #owners: ReadonlySet<string>
+  constructor(inner: ViewerPort, ownerIds: readonly string[]) {
+    this.#inner = inner
+    this.#owners = new Set(ownerIds)
+  }
+  async resolve(request: Request): Promise<Viewer> {
+    const viewer = await this.#inner.resolve(request)
+    if (
+      viewer.id !== null &&
+      viewer.role === 'staff' &&
+      this.#owners.has(viewer.id)
+    )
+      return { ...viewer, role: 'owner' }
+    return viewer
+  }
+}
+
 export function createViewerPort(config: Config): ViewerPort {
   // The config loader already nulls devViewer in production; the check is repeated on purpose.
   if (!config.production && config.devViewer)
     return new DevStubViewerPort(config.devViewer)
-  return new HttpViewerPort({
+  const http = new HttpViewerPort({
     baseUrl: config.accounts.baseUrl,
     path: config.accounts.viewerPath,
     timeoutMs: config.accounts.timeoutMs,
   })
+  return config.ownerIds.length
+    ? new OwnerOverlayViewerPort(http, config.ownerIds)
+    : http
 }
 
 /** Chat needs a signed-in subscriber or staff. 401 for anonymous, 403 for signed-in without access. */
 export function requireChatAccess(viewer: Viewer): void {
   if (viewer.id === null)
     throw new AppError('unauthenticated', 'Sign in to use Ask Ether.')
-  if (viewer.role !== 'subscriber' && viewer.role !== 'staff')
+  if (!atLeast(viewer.role, 'subscriber'))
     throw new AppError(
       'subscription_required',
       'Ask Ether is for subscribers and staff.',

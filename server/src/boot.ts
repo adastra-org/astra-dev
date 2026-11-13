@@ -1,5 +1,6 @@
 // Builds the real dependency graph from config. Used by main.ts; tests build their own with fakes.
 import { readFile } from 'node:fs/promises'
+import { UsageStore } from './usage/store.ts'
 import { EmbedderClient } from '@wefaber/embed'
 import { AnswerCache } from './chat/cache.ts'
 import { ChatService } from './chat/service.ts'
@@ -164,6 +165,17 @@ export async function buildDeps(
   }
 
   const build = await readBuildInfo(config)
+  let usage: UsageStore | null = null
+  if (config.usage.dbPath) {
+    try {
+      usage = new UsageStore(config.usage.dbPath)
+      const purged = usage.purge(config.usage.retentionDays)
+      logger.info('usage_store', { purged })
+    } catch (e) {
+      // Recording is optional: a bad path must not keep the chat down.
+      logger.error('usage_store_unavailable', { reason: (e as Error).message })
+    }
+  }
   const chat = retriever
     ? new ChatService({
         retriever,
@@ -215,6 +227,7 @@ export async function buildDeps(
     retriever,
     chat,
     project: createProject(config, logger),
+    usage,
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),

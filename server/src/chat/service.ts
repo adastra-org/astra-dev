@@ -11,6 +11,7 @@ import { renderEnv, type ChatLang } from './environment.ts'
 import type { HeadSource } from './head.ts'
 import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
+import { chatSettingsFor, type Policy } from '../policy.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
 import {
   REFUSAL_ES,
@@ -90,6 +91,8 @@ export interface ChatRun {
   usedHistory?: boolean | null
   /** Context gate result: fragments kept out of those retrieved. Absent = no gate or it could not decide. */
   gate?: { kept: number; total: number } | null
+  /** Filled by `events`. Read it after the stream ends. */
+  telemetry: RunTelemetry
   events(signal?: AbortSignal): AsyncGenerator<ChatEvent>
 }
 
@@ -125,6 +128,28 @@ export interface ChatInput {
   user?: { handle: string | null }
   /** Forward the model's reasoning as `thinking` events. Staff only; see app.ts. */
   showThinking?: boolean
+  /** Which limits apply. Absent = the strict one every non-owner gets. */
+  policy?: Policy
+}
+
+const STRICT: Policy = {
+  rateLimits: true,
+  viewerBudget: true,
+  globalBudget: true,
+  sizeCaps: true,
+  maxRounds: 3,
+}
+
+/** Facts about one run that the usage record needs. Filled while `events` runs; never any text. */
+export interface RunTelemetry {
+  provider: string | null
+  model: string | null
+  /** Local model time (llama.cpp timings), summed over every local call of the request. */
+  gpuMs: number | null
+  /** Milliseconds from `prepare` start to the first answer delta. */
+  ttftMs: number | null
+  /** Milliseconds from the first delta to the last one. */
+  genMs: number | null
 }
 
 /** Cached answers are replayed in a few deltas so the client path is the same as a live stream. */
@@ -137,7 +162,16 @@ export class ChatService {
   }
 
   async prepare(input: ChatInput): Promise<ChatRun> {
-    const s = this.#d.settings
+    const t0Run = performance.now()
+    const policy = input.policy ?? STRICT
+    const s = chatSettingsFor(this.#d.settings, policy)
+    const telemetry: RunTelemetry = {
+      provider: null,
+      model: null,
+      gpuMs: null,
+      ttftMs: null,
+      genMs: null,
+    }
     const question = cleanText(input.question, s.maxQuestionChars)
     if (!question) throw new AppError('bad_request', 'The question is empty.')
     const history: HistoryTurn[] = sanitizeHistory(
@@ -243,6 +277,7 @@ export class ChatService {
     }
 
     const base = {
+      telemetry,
       mode: found.mode,
       degraded: found.degraded,
       sources,
@@ -309,7 +344,10 @@ export class ChatService {
 
     const inputChars = built.messages.reduce((n, m) => n + m.content.length, 0)
     const reserved = estimateTokens(inputChars) + s.maxOutputTokens
-    this.#d.budget.reserve(input.viewerKey, reserved)
+    const scope = { viewer: policy.viewerBudget, global: policy.globalBudget }
+    const counted = scope.viewer || scope.global
+    if (counted)
+      this.#d.budget.reserve(input.viewerKey, reserved, Date.now(), scope)
 
     const { llm, budget } = this.#d
     return {
@@ -327,6 +365,8 @@ export class ChatService {
         let usage: { inputTokens: number; outputTokens: number } | null = null
         let failed = false
         let thinkingSent = 0
+        let firstDeltaAt: number | null = null
+        let lastDeltaAt = 0
         try {
           for await (const chunk of llm.stream({
             messages: built.messages,
@@ -335,6 +375,15 @@ export class ChatService {
           })) {
             if (chunk.type === 'usage') {
               usage = chunk.usage
+              continue
+            }
+            if (chunk.type === 'served') {
+              telemetry.provider = chunk.provider
+              telemetry.model = chunk.model
+              continue
+            }
+            if (chunk.type === 'timing') {
+              telemetry.gpuMs = (telemetry.gpuMs ?? 0) + chunk.gpuMs
               continue
             }
             if (chunk.type === 'thinking') {
@@ -347,6 +396,11 @@ export class ChatService {
               }
               continue
             }
+            if (firstDeltaAt === null) {
+              firstDeltaAt = performance.now()
+              telemetry.ttftMs = Math.round(firstDeltaAt - t0Run)
+            }
+            lastDeltaAt = performance.now()
             const room = s.maxOutputChars - answer.length
             if (chunk.text.length > room) {
               const part = chunk.text.slice(0, Math.max(0, room))
@@ -373,7 +427,10 @@ export class ChatService {
           const actual = usage
             ? usage.inputTokens + usage.outputTokens
             : estimateTokens(inputChars) + estimateTokens(answer.length)
-          budget.settle(input.viewerKey, reserved, actual)
+          if (firstDeltaAt !== null)
+            telemetry.genMs = Math.round(lastDeltaAt - firstDeltaAt)
+          if (counted)
+            budget.settle(input.viewerKey, reserved, actual, Date.now(), scope)
         }
         if (failed) return
 

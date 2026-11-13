@@ -4,9 +4,9 @@ import type { UiLang } from '@/lib/i18n'
 
 /**
  * Quién puede ver los resultados de un proveedor. `public` es todo el sitio; `subscriber` (lectura)
- * y `staff` (lectura y escritura) llegan con las funciones de IA. Cada nivel incluye al anterior.
+ * `staff` (lectura y escritura) y `owner` (staff sin límites) llegan con las funciones de IA. Cada nivel incluye al anterior.
  */
-export type Permission = 'public' | 'subscriber' | 'staff'
+export type Permission = 'public' | 'subscriber' | 'staff' | 'owner'
 
 /** Nombre del icono; el componente lo traduce a lucide-react. Así este módulo no importa React. */
 export type PaletteIcon =

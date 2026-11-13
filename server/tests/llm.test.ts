@@ -63,6 +63,7 @@ describe('DeepSeekProvider', () => {
       ])) as unknown as typeof fetch)
     const out = await collect(llm.stream({ messages: [], maxOutputTokens: 5 }))
     expect(out).toEqual([
+      { type: 'served', provider: 'deepseek', model: 'deepseek-flash' },
       { type: 'thinking', text: 'Miro la fuente 1. ' },
       { type: 'thinking', text: 'Cito.' },
       { type: 'delta', text: 'Listo [1].' },
@@ -101,6 +102,7 @@ describe('DeepSeekProvider', () => {
       'Bearer sk-test',
     )
     expect(out).toEqual([
+      { type: 'served', provider: 'deepseek', model: 'deepseek-flash' },
       { type: 'delta', text: 'Ho' },
       { type: 'delta', text: 'la' },
       { type: 'usage', usage: { inputTokens: 10, outputTokens: 2 } },
@@ -137,7 +139,10 @@ describe('DeepSeekProvider', () => {
         'data: {"choices":[{"delta":{"content":"ok"}}]}',
       ])) as unknown as typeof fetch)
     const out = await collect(llm.stream({ messages: [], maxOutputTokens: 1 }))
-    expect(out).toEqual([{ type: 'delta', text: 'ok' }])
+    expect(out).toEqual([
+      { type: 'served', provider: 'deepseek', model: 'deepseek-flash' },
+      { type: 'delta', text: 'ok' },
+    ])
   })
 })
 
@@ -160,10 +165,39 @@ describe('DeepSeekProvider as a local server', () => {
     })
     expect(llm.name).toBe('local')
     const out = await collect(llm.stream({ messages: [], maxOutputTokens: 5 }))
-    expect(out).toEqual([{ type: 'delta', text: 'ok' }])
+    expect(out).toEqual([
+      { type: 'served', provider: 'local', model: 'lfm2' },
+      { type: 'delta', text: 'ok' },
+    ])
     expect(Object.keys(seen!.headers as object)).not.toContain('authorization')
     expect(JSON.parse(String(seen!.body)).chat_template_kwargs).toEqual({
       enable_thinking: false,
     })
+  })
+
+  test('timing: llama.cpp timings become gpuMs, only for a local provider', async () => {
+    const body = () =>
+      sseBody([
+        'data: {"choices":[{"delta":{"content":"ok"}}]}',
+        'data: {"choices":[],"timings":{"prompt_ms":120.4,"predicted_ms":300.2}}',
+        'data: [DONE]',
+      ])
+    const mk = (name: 'local' | 'deepseek') =>
+      new DeepSeekProvider({
+        name,
+        apiKey: '',
+        baseUrl: 'http://127.0.0.1:8080/v1',
+        model: 'm',
+        timeoutMs: 5000,
+        fetch: (async () => body()) as unknown as typeof fetch,
+      })
+    const local = await collect(
+      mk('local').stream({ messages: [], maxOutputTokens: 5 }),
+    )
+    expect(local).toContainEqual({ type: 'timing', gpuMs: 421 })
+    const hosted = await collect(
+      mk('deepseek').stream({ messages: [], maxOutputTokens: 5 }),
+    )
+    expect(hosted.some((c) => c.type === 'timing')).toBe(false)
   })
 })

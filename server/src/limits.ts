@@ -46,6 +46,11 @@ const secondsToUtcMidnight = (ms: number) => {
 /** Rough token estimate (Spanish and code average ~3 chars per token). Deliberately pessimistic. */
 export const estimateTokens = (chars: number) => Math.ceil(chars / 3)
 
+export interface BudgetScope {
+  viewer: boolean
+  global: boolean
+}
+
 /**
  * Daily token budget per viewer and global, resetting at 00:00 UTC.
  * `reserve` before calling the provider, `settle` after with the real usage.
@@ -71,31 +76,47 @@ export class TokenBudget {
     }
   }
 
-  reserve(viewer: string, tokens: number, now = Date.now()): void {
+  /**
+   * `scope` lets a policy skip one of the two caps (owner skips both: the caller then does not
+   * reserve at all). A skipped cap is not checked and not counted.
+   */
+  reserve(
+    viewer: string,
+    tokens: number,
+    now = Date.now(),
+    scope: BudgetScope = { viewer: true, global: true },
+  ): void {
     this.#roll(now)
     const used = this.#used.get(viewer) ?? 0
-    if (used + tokens > this.#perViewer)
+    if (scope.viewer && used + tokens > this.#perViewer)
       throw new AppError(
         'budget_exceeded',
         'Daily Ask Ether budget reached. It resets at 00:00 UTC.',
         secondsToUtcMidnight(now),
       )
-    if (this.#globalUsed + tokens > this.#global)
+    if (scope.global && this.#globalUsed + tokens > this.#global)
       throw new AppError(
         'budget_exceeded',
         'Ask Ether is at its daily capacity. Try again tomorrow.',
         secondsToUtcMidnight(now),
       )
-    this.#used.set(viewer, used + tokens)
-    this.#globalUsed += tokens
+    if (scope.viewer) this.#used.set(viewer, used + tokens)
+    if (scope.global) this.#globalUsed += tokens
   }
 
   /** Replace the reserved amount with what was really used (never below zero). */
-  settle(viewer: string, reserved: number, actual: number, now = Date.now()) {
+  settle(
+    viewer: string,
+    reserved: number,
+    actual: number,
+    now = Date.now(),
+    scope: BudgetScope = { viewer: true, global: true },
+  ) {
     this.#roll(now)
     const delta = actual - reserved
-    this.#used.set(viewer, Math.max(0, (this.#used.get(viewer) ?? 0) + delta))
-    this.#globalUsed = Math.max(0, this.#globalUsed + delta)
+    if (scope.viewer)
+      this.#used.set(viewer, Math.max(0, (this.#used.get(viewer) ?? 0) + delta))
+    if (scope.global) this.#globalUsed = Math.max(0, this.#globalUsed + delta)
   }
 
   usage(viewer: string) {
