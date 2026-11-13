@@ -70,6 +70,7 @@ export function createEmbedder(
 export function createLlm(config: Config): LlmProvider {
   if (config.llm.provider === 'fake') return new FakeLlmProvider()
   return new DeepSeekProvider({
+    name: config.llm.provider,
     apiKey: config.llm.apiKey,
     baseUrl: config.llm.baseUrl,
     model: config.llm.model,

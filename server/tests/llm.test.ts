@@ -79,6 +79,7 @@ describe('DeepSeekProvider', () => {
     })
     expect(Object.keys(body)).not.toContain('tools')
     expect(Object.keys(body)).not.toContain('tool_choice')
+    expect(Object.keys(body)).not.toContain('chat_template_kwargs')
     expect(JSON.stringify(body)).not.toContain('sk-test')
     expect((seen!.init.headers as Record<string, string>).authorization).toBe(
       'Bearer sk-test',
@@ -121,5 +122,32 @@ describe('DeepSeekProvider', () => {
       ])) as unknown as typeof fetch)
     const out = await collect(llm.stream({ messages: [], maxOutputTokens: 1 }))
     expect(out).toEqual([{ type: 'delta', text: 'ok' }])
+  })
+})
+
+describe('DeepSeekProvider as a local server', () => {
+  test('no key means no Authorization header, and the name is local', async () => {
+    let seen: RequestInit | undefined
+    const llm = new DeepSeekProvider({
+      name: 'local',
+      apiKey: '',
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      model: 'lfm2',
+      timeoutMs: 5000,
+      fetch: (async (_u: string, init: RequestInit) => {
+        seen = init
+        return sseBody([
+          'data: {"choices":[{"delta":{"content":"ok"}}]}',
+          'data: [DONE]',
+        ])
+      }) as unknown as typeof fetch,
+    })
+    expect(llm.name).toBe('local')
+    const out = await collect(llm.stream({ messages: [], maxOutputTokens: 5 }))
+    expect(out).toEqual([{ type: 'delta', text: 'ok' }])
+    expect(Object.keys(seen!.headers as object)).not.toContain('authorization')
+    expect(JSON.parse(String(seen!.body)).chat_template_kwargs).toEqual({
+      enable_thinking: false,
+    })
   })
 })

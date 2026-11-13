@@ -28,7 +28,7 @@ export interface Config {
     acceptModels: string[]
   }
   llm: {
-    provider: 'deepseek' | 'fake'
+    provider: 'deepseek' | 'local' | 'fake'
     baseUrl: string
     model: string
     apiKey: string
@@ -125,13 +125,31 @@ export function loadConfig(env: Env = process.env): Config {
   const slot = str('ASTRA_SLOT', 'dev')
 
   const provider = str('LLM_PROVIDER', 'deepseek')
-  if (provider !== 'deepseek' && provider !== 'fake')
-    problems.push('LLM_PROVIDER must be "deepseek" or "fake"')
+  if (provider !== 'deepseek' && provider !== 'local' && provider !== 'fake')
+    problems.push('LLM_PROVIDER must be "deepseek", "local" or "fake"')
   if (production && provider === 'fake')
     problems.push('LLM_PROVIDER=fake is not allowed in production')
   const apiKey = env.DEEPSEEK_API_KEY?.trim() ?? ''
   if (production && provider === 'deepseek' && !apiKey)
     problems.push('DEEPSEEK_API_KEY is required in production')
+
+  // `local` talks to a model server on this machine (llama.cpp, Ollama, LM Studio): the URL must be
+  // loopback so the question never leaves the host, and no key is needed.
+  const llmBaseUrl = url(
+    'LLM_BASE_URL',
+    provider === 'local'
+      ? 'http://127.0.0.1:8080/v1'
+      : 'https://api.deepseek.com',
+  ).replace(/\/+$/, '')
+  if (provider === 'local') {
+    try {
+      const host = new URL(llmBaseUrl).hostname
+      if (!['localhost', '127.0.0.1', '[::1]'].includes(host))
+        problems.push('LLM_PROVIDER=local needs a loopback LLM_BASE_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
 
   const embedderUrl = url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings')
   const embedderModel = str('EMBEDDER_MODEL', 'embeddinggemma-2')
@@ -235,13 +253,18 @@ export function loadConfig(env: Env = process.env): Config {
       ],
     },
     llm: {
-      provider: provider === 'fake' ? 'fake' : 'deepseek',
-      baseUrl: url('LLM_BASE_URL', 'https://api.deepseek.com').replace(
-        /\/+$/,
-        '',
+      provider:
+        provider === 'fake'
+          ? 'fake'
+          : provider === 'local'
+            ? 'local'
+            : 'deepseek',
+      baseUrl: llmBaseUrl,
+      model: str(
+        'LLM_MODEL',
+        provider === 'local' ? 'local' : 'deepseek-flash',
       ),
-      model: str('LLM_MODEL', 'deepseek-flash'),
-      apiKey,
+      apiKey: provider === 'local' ? '' : apiKey,
       timeoutMs: int('LLM_TIMEOUT_MS', 60000, 1000, 300000),
     },
     chat: {

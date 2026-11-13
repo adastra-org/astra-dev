@@ -1,9 +1,14 @@
-// DeepSeek (OpenAI-compatible chat completions) behind `LlmProvider`. The key comes from the server
-// env only. No tools are ever sent. The only network destination is `baseUrl`.
+// OpenAI-compatible chat completions behind `LlmProvider`: DeepSeek, or a local server (llama.cpp,
+// Ollama, LM Studio) when `name` is 'local'. The key comes from the server env only; a local server
+// needs none, so the header is sent only when there is one. No tools are ever sent. The only network
+// destination is `baseUrl`.
 import { AppError } from '../errors.ts'
 import type { LlmChunk, LlmProvider, LlmRequest } from './provider.ts'
 
 export interface DeepSeekOptions {
+  /** Provider name reported in /health. Default 'deepseek'. */
+  name?: 'deepseek' | 'local'
+  /** Empty = no Authorization header (local server). */
   apiKey: string
   baseUrl: string
   model: string
@@ -15,11 +20,12 @@ const unavailable = () =>
   new AppError('llm_unavailable', 'The language model is not available.')
 
 export class DeepSeekProvider implements LlmProvider {
-  readonly name = 'deepseek'
+  readonly name: string
   readonly #o: DeepSeekOptions
 
   constructor(options: DeepSeekOptions) {
     this.#o = options
+    this.name = options.name ?? 'deepseek'
   }
 
   async *stream(req: LlmRequest): AsyncGenerator<LlmChunk> {
@@ -34,7 +40,9 @@ export class DeepSeekProvider implements LlmProvider {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${this.#o.apiKey}`,
+          ...(this.#o.apiKey
+            ? { authorization: `Bearer ${this.#o.apiKey}` }
+            : {}),
         },
         body: JSON.stringify({
           model: this.#o.model,
@@ -43,6 +51,11 @@ export class DeepSeekProvider implements LlmProvider {
           temperature: 0.2,
           stream: true,
           stream_options: { include_usage: true },
+          // Local reasoning models (Liquid LFM3, Qwen3) would spend the whole token budget thinking and
+          // return an empty answer; llama.cpp honors this template flag, other servers ignore it.
+          ...(this.name === 'local'
+            ? { chat_template_kwargs: { enable_thinking: false } }
+            : {}),
         }),
         signal,
       })
