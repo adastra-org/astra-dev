@@ -278,6 +278,7 @@ describe('usage collector', () => {
       gpuMs: null,
       ttftMs: null,
       genMs: null,
+      tokensPerSecond: null,
       ...over,
     }
     c.finish(500)
@@ -301,5 +302,67 @@ describe('usage collector', () => {
 
   test('local model without timings: GPU time stays null, never invented', () => {
     expect(run({ provider: 'local', model: 'lfm2' }).gpuMs).toBeNull()
+  })
+})
+
+describe('genTps in the usage record', () => {
+  const rec = (over: Partial<RunTelemetry>) => {
+    const out: UsageRecord[] = []
+    const c = new UsageCollector(
+      { record: (r) => out.push(r) },
+      testConfig({ LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k' }),
+      'rid',
+      'chat',
+      1000,
+    )
+    c.who = { id: 'u', handle: 'ana', role: 'owner' }
+    c.tokens = { input: 100, output: 1000 }
+    c.telemetry = {
+      provider: 'local',
+      model: 'lfm',
+      gpuMs: 9000,
+      ttftMs: 7000,
+      genMs: 350,
+      tokensPerSecond: null,
+      ...over,
+    }
+    c.finish(8000)
+    return out[0]!
+  }
+
+  test('the model timing wins over the text window', () => {
+    expect(rec({ tokensPerSecond: 125 }).genTps).toBe(125)
+  })
+  test('a short text window (a reasoning model that streamed its answer in a burst) is no speed', () => {
+    expect(rec({ genMs: 350 }).genTps).toBeNull()
+  })
+})
+
+describe('genTps text window limits', () => {
+  test('too fast to be real: dropped; a plain one is kept', () => {
+    const run = (genMs: number, output: number) => {
+      const out: UsageRecord[] = []
+      const c = new UsageCollector(
+        { record: (r) => out.push(r) },
+        testConfig({ LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k' }),
+        'rid',
+        'chat',
+        1000,
+      )
+      c.who = { id: 'u', handle: 'ana', role: 'owner' }
+      c.tokens = { input: 10, output }
+      c.telemetry = {
+        provider: 'deepseek',
+        model: 'm',
+        gpuMs: null,
+        ttftMs: 100,
+        genMs,
+        tokensPerSecond: null,
+      }
+      c.finish(2000)
+      return out[0]!.genTps
+    }
+    expect(run(600, 1000)).toBeNull() // 1666 tok/s
+    expect(run(2000, 100)).toBe(50)
   })
 })

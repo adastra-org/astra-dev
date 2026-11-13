@@ -88,6 +88,12 @@ export type ChatEvent =
       usage: { inputTokens: number; outputTokens: number }
       /** The provider sent no usage: `usage` is a count from the text. */
       usageEstimated?: boolean
+      /**
+       * Tokens per second the model really generated (reasoning included), from the local model's
+       * own timings. Absent when the provider does not say: the client must not guess it from the
+       * visible text, whose clock misses the time spent reasoning.
+       */
+      tps?: number
     }
   | { type: 'error'; code: string; message: string }
 
@@ -168,15 +174,44 @@ export interface RunTelemetry {
   ttftMs: number | null
   /** Milliseconds from the first delta to the last one. */
   genMs: number | null
+  /** Generation speed from the local model's timings (all tokens, reasoning included). */
+  tokensPerSecond: number | null
 }
 
 /** Cached answers are replayed in a few deltas so the client path is the same as a live stream. */
 const REPLAY_CHUNK = 160
 
+/** Tokens per second, one decimal. Null when the window is too short to be a measure. */
+export function tokensPerSecond(tokens: number, ms: number): number | null {
+  if (!(tokens > 0) || !(ms >= 50)) return null
+  return Math.round((tokens / (ms / 1000)) * 10) / 10
+}
+
 export class ChatService {
   readonly #d: ChatDeps
   constructor(deps: ChatDeps) {
     this.#d = deps
+  }
+
+  /**
+   * Names of what the conversation is about: the title of each source the previous answer cited
+   * (a native's title is its name), or else the natives named in the last turns. Empty = unknown.
+   */
+  #topic(
+    sources: readonly string[],
+    history: readonly HistoryTurn[],
+  ): string[] {
+    const { retriever } = this.#d
+    const cited = retriever.titlesOf(sources)
+    if (cited.length) return cited
+    // The latest turn that names natives is the topic.
+    for (const t of [...history].reverse()) {
+      const names = new Set<string>()
+      for (const c of retriever.findNatives(t.content.slice(0, 2000)))
+        if (c.native) names.add(c.native.name)
+      if (names.size) return [...names].slice(0, 3)
+    }
+    return []
   }
 
   async prepare(input: ChatInput): Promise<ChatRun> {
@@ -189,6 +224,7 @@ export class ChatService {
       gpuMs: null,
       ttftMs: null,
       genMs: null,
+      tokensPerSecond: null,
     }
     const question = cleanText(input.question, s.maxQuestionChars)
     if (!question) throw new AppError('bad_request', 'The question is empty.')
@@ -204,8 +240,13 @@ export class ChatService {
     const steps: ChatStep[] = []
     const since = (t0: number) => Math.round(performance.now() - t0)
     const lastUser = [...history].reverse().find((t) => t.role === 'user')
-    let usedHistory: boolean | null = null
-    if (lastUser && this.#d.decider) {
+    // A native named in the question (by name, Lua name, alias or hash) makes the question stand on
+    // its own: the topic is explicit, and the previous turn would only pull unrelated sources in.
+    const named = this.#d.retriever.findNatives(
+      question.slice(0, s.maxQuestionChars * 2),
+    )
+    let usedHistory: boolean | null = named.length ? false : null
+    if (lastUser && this.#d.decider && !named.length) {
       const lastAssistant = [...history]
         .reverse()
         .find((t) => t.role === 'assistant')
@@ -220,14 +261,17 @@ export class ChatService {
     }
     // A follow-up is a question that needs the conversation: no decider or no answer counts as one.
     const followUp = lastUser !== undefined && usedHistory !== false
-    const query = followUp
-      ? `${lastUser.content}
-${question}`
-      : question
     // What the previous answer cited is searched apart (only within those slugs), because a vague
     // follow-up ("explicame eso") cannot drive a new search on its own.
     const carrySlugs =
       followUp && input.sources?.length ? new Set(input.sources) : null
+    // The topic of a follow-up: what the previous answer was about. Neither "tiene variables de
+    // entrada?" nor "me mostrás un ejemplo?" names it, so it goes in the query, in the gate and in
+    // the prompt; otherwise words like "variable" or "ejemplo" pull in whatever else contains them.
+    const topic = followUp ? this.#topic(input.sources ?? [], history) : []
+    const query = followUp
+      ? [...topic, lastUser.content, question].join('\n')
+      : question
     // Docs and natives are ranked apart: ~7,000 natives would otherwise crowd the docs out. A
     // native named in the question (by name or hash) always comes first.
     const tSearch = performance.now()
@@ -263,19 +307,27 @@ ${question}`
     let gate: { kept: number; total: number } | null = null
     if (this.#d.gate && hits.length) {
       const tGate = performance.now()
-      const gated = hits.filter((h) => !carrySlugs?.has(h.slug))
-      const asked = followUp ? query : question
+      // What the previous answer cited and what the question names are never judged.
+      const exempt = new Set(named.map((c) => c.id))
+      const gated = hits.filter(
+        (h) => !carrySlugs?.has(h.slug) && !exempt.has(h.id),
+      )
+      // With a topic the gate judges the bare question against it; without one, the old query.
+      const asked = followUp && !topic.length ? query : question
       const kept = gated.length
         ? await this.#d.gate.select(
             asked.slice(0, s.maxQuestionChars * 2),
             gated,
+            topic.length ? { topic: topic.join(', ') } : {},
           )
         : []
       if (kept) {
         gate = { kept: kept.length, total: gated.length }
         steps.push({ id: 'gate', ms: since(tGate), ...gate })
         const keep = new Set(kept.map((h) => h.id))
-        hits = hits.filter((h) => carrySlugs?.has(h.slug) || keep.has(h.id))
+        hits = hits.filter(
+          (h) => carrySlugs?.has(h.slug) || exempt.has(h.id) || keep.has(h.id),
+        )
       }
     }
 
@@ -285,7 +337,13 @@ ${question}`
     const built: BuiltPrompt = buildPrompt({
       question,
       history,
-      hits,
+      hits: carrySlugs
+        ? [
+            ...hits.filter((h) => carrySlugs.has(h.slug)),
+            ...hits.filter((h) => !carrySlugs.has(h.slug)),
+          ]
+        : hits,
+      ...(topic.length ? { topic } : {}),
       ...(input.memories?.length ? { memories: input.memories } : {}),
       ...(styleBody ? { style: styleBody } : {}),
       contextMaxChars: s.contextMaxChars,
@@ -441,6 +499,11 @@ ${question}`
             }
             if (chunk.type === 'timing') {
               telemetry.gpuMs = (telemetry.gpuMs ?? 0) + chunk.gpuMs
+              if (chunk.predictedTokens && chunk.predictedMs)
+                telemetry.tokensPerSecond = tokensPerSecond(
+                  chunk.predictedTokens,
+                  chunk.predictedMs,
+                )
               continue
             }
             if (chunk.type === 'thinking') {
@@ -517,6 +580,9 @@ ${question}`
             outputTokens: estimateTokens(answer.length),
           },
           usageEstimated: usage === null,
+          ...(telemetry.tokensPerSecond === null
+            ? {}
+            : { tps: telemetry.tokensPerSecond }),
         }
       },
     }

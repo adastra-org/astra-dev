@@ -214,6 +214,25 @@ export class Retriever {
     return this.#lookup.find(query)
   }
 
+  /**
+   * Title of the first chunk of each slug (unknown slugs skipped). Natives come first, then docs,
+   * each group in the order given: a native is the subject of a question, a doc is its context.
+   * A native's title is its name (`GET_ACTUAL_SCREEN_RESOLUTION`), so it names the topic.
+   */
+  titlesOf(slugs: readonly string[], max = 3): string[] {
+    const wanted = new Set(slugs)
+    const first = new Map<string, IndexedChunk>()
+    for (const c of this.#index.chunks)
+      if (wanted.has(c.slug) && !first.has(c.slug)) first.set(c.slug, c)
+    const known = slugs.filter((s) => first.has(s)).map((s) => first.get(s)!)
+    return [
+      ...known.filter((c) => c.kind === 'native'),
+      ...known.filter((c) => c.kind !== 'native'),
+    ]
+      .slice(0, max)
+      .map((c) => c.title)
+  }
+
   async search(
     query: string,
     k: number,
@@ -265,6 +284,13 @@ export class Retriever {
         ? semantic
         : this.#keyword.search(query, depth, r.kind, r.slugs)
       if (fuse) ranked = this.#fuseNames(query, ranked, vector)
+      // The sources of the previous answer are the topic of a follow-up: a vague question may score
+      // none of them, and they must still be there.
+      if (r.slugs && !ranked.length)
+        ranked = this.#index.chunks
+          .filter((c) => r.slugs!.has(c.slug) && (!r.kind || c.kind === r.kind))
+          .slice(0, r.k)
+          .map((c) => toHit(c, 0))
       const pinned =
         r.kind === 'doc' || r.slugs ? [] : exact.map((c) => toHit(c, 1))
       const local = new Set<string>()

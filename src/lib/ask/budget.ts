@@ -73,7 +73,11 @@ export function contextUsage(
 }
 
 /** Mínimo de stream para que la velocidad sea una medida y no un redondeo. */
-export const MIN_STREAM_MS = 200
+export const MIN_STREAM_MS = 500
+/** Con menos tokens que esto el cociente es ruido. */
+export const MIN_SPEED_TOKENS = 8
+/** Ningún modelo que corra acá genera más; por encima, el reloj o el conteo están mal. */
+export const MAX_PLAUSIBLE_TPS = 1000
 
 /** Milisegundos hasta el primer texto. Null si la respuesta vino de caché o no llegó texto. */
 export function ttftMs(turn: Turn): number | null {
@@ -84,18 +88,27 @@ export function ttftMs(turn: Turn): number | null {
 }
 
 /**
- * Tokens de salida por segundo, medidos en el navegador: de primer a último texto. Incluye la red
- * y el render, así que no se compara con el `ttft` del log del server. Null si no hay medida
- * confiable (caché, respuesta corta o sin uso).
+ * Tokens de salida por segundo. Si el modelo midió su propia velocidad (`done.tps`), esa es la
+ * medida. Si no, se estima en el navegador de primer a último texto, y solo cuando eso puede ser
+ * cierto: los tokens de salida incluyen el razonamiento, que el reloj del texto no ve, así que un
+ * turno que razonó (o con una ventana corta, o con una velocidad imposible) no tiene medida.
+ * Null = mostrar "—", nunca un número dudoso.
  */
 export function outputSpeed(turn: Turn): number | null {
   if (turn.cached || !turn.usage) return null
+  const fromModel = turn.serverTps
+  if (fromModel !== null)
+    return fromModel <= MAX_PLAUSIBLE_TPS
+      ? Math.round(fromModel * 10) / 10
+      : null
+  if (turn.thinking) return null
   const { firstDeltaAt, doneAt } = turn.timing
   if (firstDeltaAt === null || doneAt === null) return null
   const streamMs = doneAt - firstDeltaAt
   const out = turn.usage.outputTokens
-  if (streamMs < MIN_STREAM_MS || out <= 0) return null
-  return Math.round((out / (streamMs / 1000)) * 10) / 10
+  if (streamMs < MIN_STREAM_MS || out < MIN_SPEED_TOKENS) return null
+  const tps = Math.round((out / (streamMs / 1000)) * 10) / 10
+  return tps > MAX_PLAUSIBLE_TPS ? null : tps
 }
 
 /** Último turno con medida de velocidad, para el rail. */

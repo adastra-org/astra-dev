@@ -46,6 +46,8 @@ export interface Turn {
   /** Uso de tokens que informó el `done`. Null hasta que llega. */
   usage: { inputTokens: number; outputTokens: number } | null
   usageEstimated: boolean
+  /** Velocidad que midió el modelo (`done.tps`). Null si el proveedor no la informó. */
+  serverTps: number | null
   /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
   memoryTokens: number
 }
@@ -80,6 +82,7 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   timing: { startedAt: null, firstDeltaAt: null, doneAt: null },
   usage: null,
   usageEstimated: false,
+  serverTps: null,
   memoryTokens: 0,
 })
 
@@ -116,6 +119,10 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
         cached: ev.cached === true,
         usage: ev.usage,
         usageEstimated: ev.usageEstimated === true,
+        serverTps:
+          typeof ev.tps === 'number' && Number.isFinite(ev.tps) && ev.tps > 0
+            ? ev.tps
+            : null,
         ...(at === undefined ? {} : { timing: { ...turn.timing, doneAt: at } }),
       }
     case 'error':
