@@ -182,6 +182,7 @@ export async function harness(
             config.limits.dailyTokensGlobal,
           ),
           settings: config.chat,
+          contextWindow: config.llm.contextWindow,
           decider: opts.decider,
           gate: opts.gate,
           cache:

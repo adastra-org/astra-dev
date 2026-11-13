@@ -8,7 +8,7 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 | ---- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | 0    | Rol `owner` + registro de uso (telemetría)                                                                                       | **Implementada en v0.13.0**; tests y verificación local abajo       |
 | 0b   | Dashboard de IA (solo owner)                                                                                                     | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
-| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | Esqueleto                                                           |
+| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | En curso, v0.15.0 (`feat/chat-page`)                                |
 | 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
 | 3    | Memorias (localStorage)                                                                                                          | Esqueleto                                                           |
 | 4    | Cross-session                                                                                                                    | Esqueleto                                                           |
@@ -224,3 +224,65 @@ Página `/dashboard` (solo owner), servida por la query GraphQL `aiUsage(days)` 
 | Datos                                                                                                                                                                        | Base sembrada a mano (903 requests simulados), no tráfico real        |
 | Contraste y estados de foco                                                                                                                                                  | Sin medir con herramienta; solo reusa tokens y componentes existentes |
 | Navegador del usuario (Chrome, Safari)                                                                                                                                       | No probado                                                            |
+
+## Fase 1: `/ask` workspace (v0.15.0, rama `feat/chat-page`)
+
+Base: `feat/chat-workspace` (dfc04f7). Cuando #30 mergee, retargetear a `feat/context-gate`.
+
+Alcance: página `/ask` con transcript, composer y rail. Mismo store (`askStore`) y mismos componentes que el panel; el panel gana el enlace "Abrir en página" y las acciones de editar/reenviar. Sin herramientas (fase 2). `POST /chat` sigue siendo el endpoint.
+
+### Archivos
+
+| Archivo                                             | Cambio                                                                                                                                                                                                   |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/src/config.ts`                              | `LLM_CONTEXT_WINDOW` (int; default 8192 en local, 65536 en deepseek, a confirmar) en `config.llm.contextWindow`                                                                                          |
+| `server/src/boot.ts`                                | pasa `contextWindow` a `ChatService`                                                                                                                                                                     |
+| `server/src/chat/service.ts`                        | `meta` lleva `contextWindow` (opcional en `ChatDeps`)                                                                                                                                                    |
+| `server/tests/chat.test.ts`, `server/tests/config*` | contrato de `meta`; parseo y rango de `LLM_CONTEXT_WINDOW`                                                                                                                                               |
+| `src/lib/ask/types.ts`                              | `meta.contextWindow?`                                                                                                                                                                                    |
+| `src/lib/ask/store.ts`                              | `Turn.timing` (inicio, primer delta, fin), `Turn.usage`, `AskState.contextWindow`; `applyEvent(turn, ev, at?)`; `edit(id, texto)`, `resend(id)`, `rewind(id)`; `now` inyectable                          |
+| `src/lib/ask/budget.ts` (nuevo)                     | puro: `contextUsage(turns, ventana, borrador)` → usado, límite, nivel (ok, warn desde 80 %, full desde 100 %); `outputSpeed(turn)` → tok/s; `ttft(turn)`; estimación `ceil(chars/3)` igual que el server |
+| `src/components/ask/Conversation.tsx` (nuevo)       | `Transcript`, `TurnView`, `Empty`, `Composer` extraídos de `AskPanel.tsx`; `TurnView` gana Editar/Reenviar y la línea de velocidad                                                                       |
+| `src/components/ask/ContextBudget.tsx` (nuevo)      | medidor `role="meter"` + texto "X de Y tokens"; ok/warn/full con icono y texto, no solo color                                                                                                            |
+| `src/components/ask/AskPanel.tsx`                   | usa `Transcript`/`Composer`; enlace "Abrir en página" a `/ask`                                                                                                                                           |
+| `src/pages/Ask.tsx` (nuevo)                         | `PageHeader` + transcript + composer (sticky abajo) + rail (presupuesto, velocidad de la última respuesta, sesión, "Nueva conversación"); gate para `public`                                             |
+| `src/routes.tsx`                                    | `{ path: '/ask', element: <Ask /> }`                                                                                                                                                                     |
+| `src/lib/i18n.ts`                                   | claves `ask.page.*`, `ask.edit*`, `ask.resend`, `ask.budget.*`, `ask.speed.*`, `ask.rail.*` en ES y EN                                                                                                   |
+| `src/lib/ask/budget.test.ts`, `ask.test.ts`         | presupuesto, velocidad, edit/resend/rewind, timings, `contextWindow` desde `meta`                                                                                                                        |
+| `src/components/ask/ask-page.test.tsx`              | render: rail en los tres niveles, Editar/Reenviar deshabilitados mientras responde, gate para public                                                                                                     |
+| `docs/server/README.md`, `docs/ask/README.md`       | contrato `meta.contextWindow`, variable nueva                                                                                                                                                            |
+| `package.json` (raíz)                               | 0.14.2 → 0.15.0                                                                                                                                                                                          |
+
+### Context budget
+
+- Servidor: `contextWindow` sale de `LLM_CONTEXT_WINDOW` y viaja en `meta`, que llega antes que cualquier texto: el medidor existe durante el stream.
+- Cliente: lo usado es `inputTokens + outputTokens` del último `done` con uso real (no caché, no rechazo): lo que la ventana sostuvo en ese envío. El borrador suma `ceil(chars/3)` como estimación de lo próximo.
+- Historial: el cliente manda como mucho 3 intercambios (`historyFor`); el medidor refleja eso.
+- Si el proveedor no reporta uso (fallback o fake), el texto dice que es estimación.
+
+### Velocidad de salida (cliente)
+
+- `startedAt` al enviar, `firstDeltaAt` en el primer `delta`, `doneAt` en el `done`.
+- `ttft = firstDeltaAt - startedAt`. `tok/s = outputTokens / ((doneAt - firstDeltaAt) / 1000)`, solo con al menos 200 ms de stream y `outputTokens > 0`. Respuestas de caché no muestran velocidad.
+- Se mide en el navegador, así que incluye la red. No se mezcla con el `ttft` del log del server.
+
+### Editar, reenviar, rewind
+
+- `rewind(id)`: corta la respuesta en curso si la hay; quita el turno `id` y los siguientes.
+- `edit(id, texto)` = `rewind(id)` + `ask(texto)`. `resend(id)` = `rewind(id)` + `ask(pregunta)`.
+- El historial sale de los turnos que quedan: la edición no arrastra respuestas viejas. Sin endpoint nuevo.
+
+### Tests (`bun test`)
+
+- Presupuesto: nivel ok/warn/full en los bordes (79/80 %, 99/100 %); sin uso → estimación; caché no cuenta.
+- Velocidad: cálculo exacto con `now` inyectado; stream menor a 200 ms → sin dato; caché → sin dato.
+- Store: `edit` corta la respuesta en curso y reenvía con el historial correcto; `resend` deja un solo turno nuevo; `rewind` no toca turnos anteriores.
+- Server: `meta.contextWindow` igual a la config; `LLM_CONTEXT_WINDOW` fuera de rango falla al arrancar.
+
+### Verificación en navegador (puppeteer-core + Edge, `E:\Proyectos\_scratch\browser`)
+
+- `bun dev --fake`, viewer owner. 1280 y 375 px: sin scroll horizontal, rail legible, composer visible.
+- Teclado: Tab por el transcript; Editar abre el campo con foco; Esc cancela; Enter envía; foco visible.
+- Estados: vacío, error (`llm_unavailable`), rate limit (429 con `retryAfter`), público (gate), medidor en ok/warn/full.
+- Velocidad aparece tras una respuesta del fake; una respuesta de caché no la muestra.
+- Consola sin errores. Capturas en `E:\Proyectos\_scratch\chat-page\`.

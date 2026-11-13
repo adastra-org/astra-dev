@@ -32,7 +32,14 @@ export type AskStep =
   | { id: 'cache'; ms: number }
 
 export type AskEvent =
-  | { type: 'meta'; requestId: string; mode: SearchMode; degraded: boolean }
+  | {
+      type: 'meta'
+      requestId: string
+      mode: SearchMode
+      degraded: boolean
+      /** Tokens the model holds (prompt + answer). Absent on a server that does not say. */
+      contextWindow?: number
+    }
   | { type: 'step'; step: AskStep }
   /** Razonamiento del modelo; el server solo lo manda a staff. */
   | { type: 'thinking'; text: string }
@@ -45,6 +52,8 @@ export type AskEvent =
       truncated: boolean
       cached?: boolean
       usage: { inputTokens: number; outputTokens: number }
+      /** The provider did not report usage; the server counted it from the text. */
+      usageEstimated?: boolean
     }
   | { type: 'error'; code: string; message: string }
 

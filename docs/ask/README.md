@@ -109,3 +109,15 @@ Se consultó el kit con `list_packages`: no hay un componente "Ask Ether" (paque
 | `budget_exceeded` y 401 en pantalla; lector de pantalla real                                       | Cubierto por tests de mensajes/estado; **no** probado en pantalla ni con un lector real                               |
 | react-doctor                                                                                       | **No ejecutado**: `bunx react-doctor@latest` lo bloqueó el modo automático (descarga código externo). Correrlo a mano |
 | Índice semántico con el embedder real y cuentas reales (viewer, suscriptores, staff)               | **No verificado**: solo existen en el VPS                                                                             |
+
+## Página `/ask` (v0.15.0)
+
+Misma conversación que el panel (`askStore`): transcript, composer y las acciones de cada pregunta (Editar, Reenviar) son los mismos componentes (`components/ask/Conversation.tsx`). El rail de la página muestra:
+
+- **Contexto**: tokens del próximo envío (último uso informado por el server más el borrador estimado con `chars/3`) sobre `LLM_CONTEXT_WINDOW`. Avisa desde 80 % y al 100 %, con texto e icono.
+- **Velocidad**: primer texto (ms) y tokens por segundo, medidos en el navegador de primer a último texto. Respuestas de caché no se miden.
+- **Sesión**: preguntas y tokens enviados y recibidos.
+
+Editar una pregunta corta la conversación en ese punto y la reenvía; Reenviar repite la pregunta. Sin endpoint nuevo: el historial que se manda es lo que queda antes del turno.
+
+Lógica pura en `lib/ask/budget.ts` y `lib/ask/status.ts`; pruebas en `budget.test.ts`, `workspace.test.ts` y `components/ask/ask-page.test.tsx`.

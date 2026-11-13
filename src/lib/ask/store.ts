@@ -35,6 +35,15 @@ export interface Turn {
   /** Razonamiento del modelo (solo staff). No entra al historial ni a la respuesta. */
   thinking: string
   error: { code: string; retryAfter?: number } | null
+  /** Milisegundos del reloj del store: al enviar, en el primer texto y al terminar. */
+  timing: {
+    startedAt: number | null
+    firstDeltaAt: number | null
+    doneAt: number | null
+  }
+  /** Uso de tokens que informó el `done`. Null hasta que llega. */
+  usage: { inputTokens: number; outputTokens: number } | null
+  usageEstimated: boolean
 }
 
 export type ViewerRole = Permission | 'unknown'
@@ -45,6 +54,8 @@ export interface AskState {
   draft: string
   turns: Turn[]
   viewerRole: ViewerRole
+  /** Ventana de contexto del modelo, desde `meta`. Null hasta la primera respuesta. */
+  contextWindow: number | null
 }
 
 export const emptyTurn = (id: number, question: string): Turn => ({
@@ -62,10 +73,16 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   steps: [],
   thinking: '',
   error: null,
+  timing: { startedAt: null, firstDeltaAt: null, doneAt: null },
+  usage: null,
+  usageEstimated: false,
 })
 
-/** Aplica un evento SSE a un turno. Puro. */
-export function applyEvent(turn: Turn, ev: AskEvent): Turn {
+/**
+ * Aplica un evento SSE a un turno. Puro: `at` es el instante del evento según el reloj del store
+ * (sin él no se registran tiempos).
+ */
+export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
   switch (ev.type) {
     case 'meta':
       return { ...turn, mode: ev.mode, degraded: ev.degraded }
@@ -75,12 +92,15 @@ export function applyEvent(turn: Turn, ev: AskEvent): Turn {
       return { ...turn, thinking: turn.thinking + ev.text }
     case 'sources':
       return { ...turn, sources: ev.sources }
-    case 'delta':
+    case 'delta': {
+      const first = turn.timing.firstDeltaAt === null && at !== undefined
       return {
         ...turn,
         text: turn.text + ev.text,
         status: turn.status === 'waiting' ? 'streaming' : turn.status,
+        ...(first ? { timing: { ...turn.timing, firstDeltaAt: at } } : {}),
       }
+    }
     case 'done':
       return {
         ...turn,
@@ -89,6 +109,9 @@ export function applyEvent(turn: Turn, ev: AskEvent): Turn {
         refused: ev.refused,
         truncated: ev.truncated,
         cached: ev.cached === true,
+        usage: ev.usage,
+        usageEstimated: ev.usageEstimated === true,
+        ...(at === undefined ? {} : { timing: { ...turn.timing, doneAt: at } }),
       }
     case 'error':
       return { ...turn, status: 'error', error: { code: ev.code } }
@@ -119,6 +142,8 @@ const isPermission = (v: unknown): v is Permission =>
 export interface AskStoreOptions {
   fetch?: typeof fetch
   base?: string
+  /** Reloj en milisegundos para medir tiempos. Por defecto `performance.now`. */
+  now?: () => number
 }
 
 export class AskStore {
@@ -127,14 +152,17 @@ export class AskStore {
     draft: '',
     turns: [],
     viewerRole: 'unknown',
+    contextWindow: null,
   }
   #listeners = new Set<() => void>()
   #nextId = 1
   #abort: AbortController | null = null
   readonly #opts: AskStoreOptions
+  readonly #now: () => number
 
   constructor(opts: AskStoreOptions = {}) {
     this.#opts = opts
+    this.#now = opts.now ?? (() => performance.now())
   }
 
   getState = (): AskState => this.#state
@@ -208,8 +236,15 @@ export class AskStore {
     const history = historyFor(this.#state.turns)
     const id = this.#nextId++
     const usedDraft = question === undefined
+    const startedAt = this.#now()
     this.#set({
-      turns: [...this.#state.turns, emptyTurn(id, q)],
+      turns: [
+        ...this.#state.turns,
+        {
+          ...emptyTurn(id, q),
+          timing: { startedAt, firstDeltaAt: null, doneAt: null },
+        },
+      ],
       ...(usedDraft ? { draft: '' } : {}),
     })
 
@@ -220,7 +255,12 @@ export class AskStore {
         question: q,
         history,
         signal: ctl.signal,
-        onEvent: (ev) => this.#update(id, (t) => applyEvent(t, ev)),
+        onEvent: (ev) => {
+          if (ev.type === 'meta' && typeof ev.contextWindow === 'number')
+            this.#set({ contextWindow: ev.contextWindow })
+          const at = this.#now()
+          this.#update(id, (t) => applyEvent(t, ev, at))
+        },
         ...(this.#opts.fetch ? { fetch: this.#opts.fetch } : {}),
         ...(this.#opts.base ? { base: this.#opts.base } : {}),
       })
@@ -266,6 +306,33 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn || turn.status !== 'error' || this.busy) return
     this.#set({ turns: this.#state.turns.filter((t) => t.id !== id) })
+    void this.ask(turn.question)
+  }
+
+  /**
+   * Quita el turno `id` y los que vienen después. Si hay una respuesta en curso, la corta antes.
+   * No envía nada: lo que quede en la conversación es el historial de la próxima pregunta.
+   */
+  rewind(id: number): void {
+    const idx = this.#state.turns.findIndex((t) => t.id === id)
+    if (idx < 0) return
+    this.stop()
+    this.#set({ turns: this.#state.turns.slice(0, idx) })
+  }
+
+  /** Edita una pregunta: la conversación vuelve a ese punto y la versión nueva se envía. */
+  edit(id: number, question: string): void {
+    const q = question.trim()
+    if (!q || !this.#state.turns.some((t) => t.id === id)) return
+    this.rewind(id)
+    void this.ask(q)
+  }
+
+  /** Vuelve a preguntar lo mismo desde ese punto: una respuesta nueva reemplaza a la anterior. */
+  resend(id: number): void {
+    const turn = this.#state.turns.find((t) => t.id === id)
+    if (!turn) return
+    this.rewind(id)
     void this.ask(turn.question)
   }
 
