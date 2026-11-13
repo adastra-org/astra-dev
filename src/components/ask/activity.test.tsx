@@ -90,7 +90,7 @@ describe('Activity', () => {
     expect(render(emptyTurn(1, 'q'))).toBe('')
   })
 
-  test('esperando: pasos, "esperando al modelo" y el razonamiento a la vista', () => {
+  test('esperando: un solo grupo abierto con pasos, estado y razonamiento adentro', () => {
     const html = render({
       ...emptyTurn(1, 'q'),
       steps: STEPS,
@@ -100,10 +100,13 @@ describe('Activity', () => {
     expect(html).toContain('140 ms')
     expect(html).toContain('Pensando…')
     expect(html).toContain('Veo el slot anterior.')
-    // El razonamiento es un <details> propio y plegable; el bloque de pasos no lo es.
-    expect(html.match(/<details/g)?.length).toBe(1)
-    expect(html).toContain('Razonamiento del modelo')
-    expect(html).not.toContain('Cómo se armó la respuesta')
+    // Un único disparador y el razonamiento dentro de la misma lista que los pasos.
+    expect(html.match(/<button/g)?.length).toBe(1)
+    expect(html).not.toContain('<details')
+    expect(html).toContain('aria-expanded="true"')
+    const list = html.slice(html.indexOf('<ol'), html.indexOf('</ol>'))
+    expect(list).toContain('Razonamiento del modelo')
+    expect(list).toContain('Filtro de contexto')
   })
 
   test('escribiendo: pasa de pensar a escribir', () => {
@@ -118,14 +121,33 @@ describe('Activity', () => {
     expect(html).not.toContain('Pensando…')
   })
 
-  test('terminado: queda plegado bajo "cómo se armó la respuesta"', () => {
-    const html = render(
-      { ...emptyTurn(1, 'q'), status: 'done', steps: STEPS, text: 'ok' },
-      'en',
-    )
-    expect(html).toContain('<details')
-    expect(html).toContain('How this answer was built · 3 steps')
-    expect(html).not.toContain('Writing the answer…')
+  test('terminado: compacto, con resumen de una línea', () => {
+    const turn = {
+      ...emptyTurn(1, 'q'),
+      status: 'done' as const,
+      steps: STEPS,
+      thinking: 'x',
+      text: 'ok',
+      timing: { startedAt: 1000, firstDeltaAt: 1500, doneAt: 2230 },
+    }
+    const en = render(turn, 'en')
+    expect(en).toContain('3 steps · reasoning · 1.2 s')
+    expect(en).toContain('aria-expanded="false"')
+    expect(en).toContain('inert')
+    expect(en).not.toContain('Writing the answer…')
+    expect(render(turn)).toContain('3 pasos · razonamiento · 1,2 s')
+  })
+
+  test('sin razonamiento (público) el resumen solo cuenta pasos', () => {
+    const html = render({
+      ...emptyTurn(1, 'q'),
+      status: 'done',
+      steps: [STEPS[0]!],
+      text: 'ok',
+    })
+    expect(html).toContain('1 paso<')
+    expect(html).not.toContain('razonamiento')
+    expect(html).not.toContain('Razonamiento del modelo')
   })
 
   test('el razonamiento es texto plano: el HTML se escapa', () => {
