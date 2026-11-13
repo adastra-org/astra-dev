@@ -132,7 +132,7 @@ Editar una pregunta corta la conversación en ese punto y la reenvía; Reenviar 
 
 Lógica pura en `lib/ask/budget.ts` y `lib/ask/status.ts`; pruebas en `budget.test.ts`, `workspace.test.ts` y `components/ask/ask-page.test.tsx`.
 
-## Memorias que guarda Ether (v0.19.3, #41)
+## Memorias que guarda Ether (v0.19.4, #41)
 
 - Ether puede proponer **guardar, cambiar o borrar** una memoria cuando dices una preferencia duradera ("respóndeme siempre corto"). Cada propuesta aparece como una tarjeta **"Ether quiere recordar: …"** con el texto (editable), **Guardar** y **Descartar**. Hasta que decides no se escribe nada.
 - En Memorias, el interruptor **"Permitir que Ether recuerde sin preguntar"** (apagado por defecto) deja que guarde y cambie **sus propias** memorias sin preguntar. Borrar, o cambiar una que escribiste tú, siempre pregunta.

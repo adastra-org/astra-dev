@@ -415,9 +415,9 @@ Server: `TOOLS` en `server/src/chat/tools.ts` (`name`, `bodyMax`, `describe` par
 
 Mock de API que emite el protocolo (`tool_call`, continuación, `confirm`) con el sandbox real. 1280 y 375 px, claro y oscuro, teclado. Casos: ejecución feliz con salida; error con línea; bucle infinito cortado por tiempo; salida enorme truncada; `check` con diagnósticos; botón Ejecutar manual sobre un bloque `lua`; owner con "Seguir"; Detener durante la ejecución; consola sin errores. El resultado va a `tools-security.md` separado en "Verificado por Ether" y "Pendiente de Faku".
 
-## Fase 2b: memorias guardadas por el modelo (v0.19.3, rama `feat/chat-memory-tools`, issue #41)
+## Fase 2b: memorias guardadas por el modelo (v0.19.4, rama `feat/chat-memory-tools`, issue #41)
 
-> **BLOQUEADA, apilada sobre #45** (`feat/chat-tools`, a su vez bloqueada por la revisión de seguridad humana de M4). El PR va contra `feat/chat-tools`. Amenazas nuevas y checklist en [`tools-security.md`](./tools-security.md#7-memorias-escritas-por-el-modelo-v0193-issue-41).
+> **BLOQUEADA, apilada sobre #45** (`feat/chat-tools`, a su vez bloqueada por la revisión de seguridad humana de M4). El PR va contra `feat/chat-tools`. Amenazas nuevas y checklist en [`tools-security.md`](./tools-security.md#7-memorias-escritas-por-el-modelo-v0194-issue-41).
 
 Base: `origin/feat/chat-tools` (8be750d). Sin cambios al protocolo, al escáner, a las rondas ni al esquema `ToolResult` v1: son tres entradas en `TOOLS` (server) y en `CLIENT_TOOLS` (cliente).
 
