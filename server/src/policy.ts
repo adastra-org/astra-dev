@@ -16,6 +16,8 @@ export interface Policy {
   sizeCaps: boolean
   /** Rounds (tool calls, subagents) allowed in one message before asking to continue. */
   maxRounds: number
+  /** At the round cap, ask the user to continue (owner) instead of just turning tools off. */
+  confirmRounds: boolean
 }
 
 /** Rounds per message for everyone else; phases 2 and 5 may lower it per feature. */
@@ -32,6 +34,7 @@ export function policyFor(
       globalBudget: false,
       sizeCaps: false,
       maxRounds: config.limits.ownerMaxRounds,
+      confirmRounds: true,
     }
   return {
     rateLimits: true,
@@ -39,6 +42,7 @@ export function policyFor(
     globalBudget: true,
     sizeCaps: true,
     maxRounds: DEFAULT_MAX_ROUNDS,
+    confirmRounds: false,
   }
 }
 

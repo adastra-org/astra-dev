@@ -1,0 +1,175 @@
+{
+  "ok": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": true,
+    "status": "ok",
+    "stdout": "2\nhola",
+    "stdoutChars": 6,
+    "error": null,
+    "diagnostics": [],
+    "durationMs": 12,
+    "truncated": false
+  },
+  "runtimeError": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "error",
+    "stdout": "a",
+    "stdoutChars": 1,
+    "error": {
+      "type": "runtime",
+      "message": "snippet:3: boom",
+      "line": 3
+    },
+    "diagnostics": [],
+    "durationMs": 12,
+    "truncated": false
+  },
+  "syntaxError": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "error",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": {
+      "type": "syntax",
+      "message": "snippet:1: unexpected symbol near '+'",
+      "line": 1
+    },
+    "diagnostics": [],
+    "durationMs": 12,
+    "truncated": false
+  },
+  "limit": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "limit",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": {
+      "type": "limit",
+      "message": "limit:time",
+      "line": null
+    },
+    "diagnostics": [],
+    "durationMs": 12,
+    "truncated": false
+  },
+  "timeout": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "timeout",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": {
+      "type": "timeout",
+      "message": "timeout",
+      "line": null
+    },
+    "diagnostics": [],
+    "durationMs": 4000,
+    "truncated": false
+  },
+  "cancelled": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "cancelled",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": null,
+    "diagnostics": [],
+    "durationMs": 3,
+    "truncated": false
+  },
+  "crash": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "crash",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": {
+      "type": "crash",
+      "message": "worker",
+      "line": null
+    },
+    "diagnostics": [],
+    "durationMs": 0,
+    "truncated": false
+  },
+  "truncatedOutput": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": true,
+    "status": "ok",
+    "stdout": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "stdoutChars": 5000,
+    "error": null,
+    "diagnostics": [],
+    "durationMs": 12,
+    "truncated": true
+  },
+  "rejected": {
+    "v": 1,
+    "tool": "ejecutar",
+    "ok": false,
+    "status": "rejected",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": {
+      "type": "rejected",
+      "message": "body_too_long",
+      "line": null
+    },
+    "diagnostics": [],
+    "durationMs": 0,
+    "truncated": false
+  },
+  "checkClean": {
+    "v": 1,
+    "tool": "check",
+    "ok": true,
+    "status": "ok",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": null,
+    "diagnostics": [],
+    "durationMs": 2,
+    "truncated": false
+  },
+  "checkFindings": {
+    "v": 1,
+    "tool": "check",
+    "ok": false,
+    "status": "error",
+    "stdout": "",
+    "stdoutChars": 0,
+    "error": {
+      "type": "syntax",
+      "message": "unexpected symbol",
+      "line": 4
+    },
+    "diagnostics": [
+      {
+        "severity": "error",
+        "line": 4,
+        "column": 1,
+        "message": "unexpected symbol"
+      },
+      {
+        "severity": "warning",
+        "line": 1,
+        "column": 6,
+        "message": "local sin usar"
+      }
+    ],
+    "durationMs": 2,
+    "truncated": false
+  }
+}

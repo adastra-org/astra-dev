@@ -54,8 +54,22 @@ export type AskEvent =
       usage: { inputTokens: number; outputTokens: number }
       /** The provider did not report usage; the server counted it from the text. */
       usageEstimated?: boolean
+      /** The stream ended waiting for the client: a tool result or the owner's confirmation. */
+      stop?: 'tool_call' | 'confirm'
     }
+  /** The model asked for a tool; the browser runs it and continues with `steps`. */
+  | { type: 'tool_call'; round: number; name: string; body: string }
+  /** Owner only: the round cap was reached; "Seguir" sends `continued`. */
+  | { type: 'confirm'; reason: 'max_rounds'; rounds: number }
   | { type: 'error'; code: string; message: string }
+
+/** One tool round sent back to the server: what the model wrote, what it called and what came out. */
+export interface ToolStepWire {
+  text: string
+  tool: string
+  body: string
+  result: import('./tool-result').ToolResult
+}
 
 export interface HistoryTurn {
   role: 'user' | 'assistant'

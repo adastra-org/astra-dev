@@ -7,6 +7,13 @@ import { citedLog } from './chat/log.ts'
 import { parseSources } from './chat/carry.ts'
 import { parseMemories } from './chat/memories.ts'
 import { sseResponse } from './chat/sse.ts'
+import {
+  STEPS_MAX_CHARS,
+  STEPS_MAX_CHARS_OWNER,
+  parseContinued,
+  parseSteps,
+  parseTools,
+} from './chat/tools.ts'
 import type { AppDeps } from './context.ts'
 import { AppError, toAppError } from './errors.ts'
 import { createGraphqlHandler } from './graphql.ts'
@@ -63,15 +70,24 @@ function checkOrigin(request: Request, allowed: readonly string[]) {
     throw new AppError('forbidden_origin', 'Origin not allowed.')
 }
 
-async function readChatBody(request: Request, maxBytes: number) {
+/**
+ * `maxBytes` is the cap of a plain request; `maxWithSteps` the larger one a request that carries
+ * tool `steps` may use (the continuation of a tool call). A body over `maxBytes` without a
+ * non-empty `steps` is a 413 like before.
+ */
+async function readChatBody(
+  request: Request,
+  maxBytes: number,
+  maxWithSteps: number,
+) {
   const type = request.headers.get('content-type') ?? ''
   if (!type.toLowerCase().startsWith('application/json'))
     throw new AppError('bad_request', 'Content-Type must be application/json.')
   const declared = Number(request.headers.get('content-length') ?? '0')
-  if (declared > maxBytes)
+  if (declared > maxWithSteps)
     throw new AppError('payload_too_large', 'Request body is too large.')
   const buf = await request.arrayBuffer()
-  if (buf.byteLength > maxBytes)
+  if (buf.byteLength > maxWithSteps)
     throw new AppError('payload_too_large', 'Request body is too large.')
   let body: unknown
   try {
@@ -81,13 +97,27 @@ async function readChatBody(request: Request, maxBytes: number) {
   }
   if (body === null || typeof body !== 'object' || Array.isArray(body))
     throw new AppError('bad_request', 'Body must be a JSON object.')
-  const { question, history, lang, memories, sources } = body as {
+  const {
+    question,
+    history,
+    lang,
+    memories,
+    sources,
+    tools,
+    steps,
+    continued,
+  } = body as {
     question?: unknown
     history?: unknown
     lang?: unknown
     memories?: unknown
     sources?: unknown
+    tools?: unknown
+    steps?: unknown
+    continued?: unknown
   }
+  if (buf.byteLength > maxBytes && !(Array.isArray(steps) && steps.length > 0))
+    throw new AppError('payload_too_large', 'Request body is too large.')
   if (typeof question !== 'string')
     throw new AppError('bad_request', '`question` must be a string.')
   return {
@@ -96,6 +126,9 @@ async function readChatBody(request: Request, maxBytes: number) {
     lang: parseLang(lang),
     memories: parseMemories(memories),
     sources: parseSources(sources),
+    tools: parseTools(tools),
+    rawSteps: steps,
+    continued: parseContinued(continued),
   }
 }
 
@@ -164,8 +197,26 @@ export function createApp(deps: AppDeps) {
             'index_unavailable',
             'The docs index is not loaded.',
           )
-        const { question, history, lang, memories, sources } =
-          await readChatBody(request, config.chat.maxBodyBytes)
+        const {
+          question,
+          history,
+          lang,
+          memories,
+          sources,
+          tools,
+          rawSteps,
+          continued,
+        } = await readChatBody(
+          request,
+          config.chat.maxBodyBytes,
+          config.chat.maxBodyBytes + config.chat.maxStepsBytes,
+        )
+        // The step cap depends on who asks (owner: larger), so it is checked here, after the policy.
+        const steps = parseSteps(
+          rawSteps,
+          tools,
+          policy.sizeCaps ? STEPS_MAX_CHARS : STEPS_MAX_CHARS_OWNER,
+        )
 
         const run = await deps.chat.prepare({
           requestId,
@@ -177,6 +228,9 @@ export function createApp(deps: AppDeps) {
           sources,
           lang,
           user: { handle: viewer.handle },
+          tools,
+          steps,
+          continued,
           showThinking: atLeast(viewer.role, 'staff'),
           policy,
         })
@@ -191,6 +245,9 @@ export function createApp(deps: AppDeps) {
         if (run.usedHistory != null) log.usedHistory = run.usedHistory
         // Only how many; the text of a memory never reaches a log.
         if (memories.length) log.memories = memories.length
+        // Counts only: neither the code nor its output reaches a log.
+        if (tools.length) log.tools = tools.length
+        if (steps.length) log.rounds = steps.length
         if (run.gate) log.gate = `${run.gate.kept}/${run.gate.total}`
 
         return sseResponse(
@@ -201,6 +258,7 @@ export function createApp(deps: AppDeps) {
               for await (const ev of run.events(signal)) {
                 if (ev.type === 'error') outcome = ev.code
                 if (ev.type === 'done') {
+                  if (ev.stop) outcome = ev.stop
                   tokens = ev.usage.inputTokens + ev.usage.outputTokens
                   Object.assign(log, citedLog(ev))
                   if (usage) {

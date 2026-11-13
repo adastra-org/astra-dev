@@ -10,6 +10,8 @@ const TYPES = new Set([
   'sources',
   'delta',
   'done',
+  'tool_call',
+  'confirm',
   'error',
 ])
 

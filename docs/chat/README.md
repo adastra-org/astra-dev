@@ -4,15 +4,15 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 
 ## Estado
 
-| Fase | Qué                                                                                                                              | Estado                                                              |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 0    | Rol `owner` + registro de uso (telemetría)                                                                                       | **Implementada en v0.13.0**; tests y verificación local abajo       |
-| 0b   | Dashboard de IA (solo owner)                                                                                                     | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
-| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | En curso, v0.15.0 (`feat/chat-page`)                                |
-| 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
-| 3    | Memorias (localStorage)                                                                                                          | En curso, v0.16.0 (`feat/chat-memories`, base `feat/chat-page`)     |
-| 4    | Cross-session                                                                                                                    | Esqueleto                                                           |
-| 5    | Subagents                                                                                                                        | Esqueleto                                                           |
+| Fase | Qué                                                                                                                              | Estado                                                                                          |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 0    | Rol `owner` + registro de uso (telemetría)                                                                                       | **Implementada en v0.13.0**; tests y verificación local abajo                                   |
+| 0b   | Dashboard de IA (solo owner)                                                                                                     | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)                              |
+| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | En curso, v0.15.0 (`feat/chat-page`)                                                            |
+| 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | En curso, v0.19.0 (`feat/chat-tools`). **No se mergea antes de la revisión de seguridad de M4** |
+| 3    | Memorias (localStorage)                                                                                                          | En curso, v0.16.0 (`feat/chat-memories`, base `feat/chat-page`)                                 |
+| 4    | Cross-session                                                                                                                    | Esqueleto                                                                                       |
+| 5    | Subagents                                                                                                                        | Esqueleto                                                                                       |
 
 ## Estado actual del código (base 9670ca7)
 
@@ -338,3 +338,79 @@ Base: `feat/chat-page` (PR #31). Decisión de Faku: las memorias viven en el nav
 ### Verificación en navegador
 
 `bun dev --fake` como owner, 1280 y 375 px: crear, editar, borrar con deshacer, activar/desactivar, recarga persiste, dos pestañas se sincronizan, teclado completo, `localStorage` bloqueado (aviso, sigue funcionando en memoria), sin scroll horizontal, consola limpia.
+
+## Fase 2: herramientas `ejecutar` y `check` (v0.19.0, rama `feat/chat-tools`, issue #40)
+
+> **BLOQUEADA: no se mergea antes de la revisión de seguridad humana de M4.** Modelo de amenazas, controles y checklist manual en [`tools-security.md`](./tools-security.md).
+
+Base: `origin/dev` (8db31aa, v0.18.1). Decisiones de Faku: el sandbox corre en el navegador; `LlmProvider` sigue sin tools nativas; protocolo textual; resultado escapado; 3 rondas (owner 8 con confirmación); `check` determinista en el cliente; botón "Ejecutar" manual en cada bloque de código.
+
+### Protocolo (exacto)
+
+1. **Habilitar.** El cliente manda `tools: ["ejecutar","check"]` en `POST /chat`. Sin el campo, el chat se comporta como hoy (regla 3 del prompt: sin herramientas). Nombres desconocidos: `400`.
+2. **Llamada del modelo.** El modelo escribe, en una línea propia y fuera de un bloque de código:
+
+   ```
+   <herramienta nombre="ejecutar">
+   print(1 + 1)
+   </herramienta>
+   ```
+
+   El server escanea el stream (`ToolTagScanner`): reconoce la apertura solo al inicio de línea y fuera de un bloque de código (cercas de tres backticks o `~~~`). Retiene lo que podría ser el comienzo de la etiqueta (nunca se muestra a medias). Al ver `</herramienta>` **corta el stream del modelo** (`abort`), emite `tool_call` y `done` con `stop: "tool_call"`. Cuerpo máximo: 4000 caracteres. Pasado el tope, con nombre desconocido o sin cierre al terminar el stream, no es una llamada: el texto se entrega literal.
+
+3. **Ejecución en el cliente.** El cliente valida el nombre contra su registro, ejecuta (sandbox o lint) y arma un `ToolResult` (esquema abajo).
+4. **Continuación.** Nuevo `POST /chat` con la misma pregunta e historial más `steps: [{ text, tool, body, result }]`. El server **no confía** en el paso: re-valida forma y topes, que `tool` esté habilitada y que `result` cumpla el esquema (`400` si no). El paso no se repite como turno del asistente (regla de la casa: el texto del cliente nunca se reproduce como turno real): se renderiza dentro del mensaje de usuario como `<pasos>`, todo con `escapeData`, y el resultado va como mensaje lógico de rol `tool` (`<resultado herramienta="ejecutar">{json}</resultado>`). El proveedor no ve ningún rol `tool`.
+5. **Rondas.** `steps.length` = herramientas ya ejecutadas. Con `steps.length < policy.maxRounds` el modelo puede llamar otra. Al llegar al tope el server **apaga las herramientas** en esa llamada (el prompt dice "no quedan rondas"; una etiqueta que igual aparezca es texto). Owner: al llegar a `OWNER_MAX_ROUNDS` (8) el server no llama al modelo; emite `confirm {reason:"max_rounds", rounds}` y `done` con `stop: "confirm"`; el cliente muestra "Seguir", que reenvía con `continued: n+1`. El server acepta `continued > 0` solo del owner y solo hasta `floor(steps.length / maxRounds)`.
+6. **Sin caché** cuando hay `steps`; no se guarda una respuesta que terminó en llamada. `tools` entra a la clave de caché.
+
+### Esquema de resultado (`ToolResult`, versión 1)
+
+Lo produce el cliente; lo valida el server; lo muestra la UI; lo lee el modelo (serializado JSON y escapado).
+
+| Campo         | Tipo                                                                                | Notas                                                                        |
+| ------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `v`           | `1`                                                                                 |                                                                              |
+| `tool`        | `"ejecutar" \| "check"`                                                             |                                                                              |
+| `ok`          | boolean                                                                             | `ejecutar`: terminó sin error ni límite. `check`: ningún diagnóstico `error` |
+| `status`      | `ok \| error \| limit \| timeout \| cancelled \| crash \| rejected`                 |                                                                              |
+| `stdout`      | string                                                                              | Tope al modelo: 1200 caracteres. La UI conserva hasta 8000                   |
+| `stdoutChars` | entero                                                                              | Largo original, para saber cuánto se cortó                                   |
+| `error`       | `null \| { type: syntax\|runtime\|limit\|timeout\|crash\|rejected, message, line }` | `message` ≤ 300 al modelo; `line` entero ≥ 1 o `null`                        |
+| `diagnostics` | `{ severity: error\|warning, line, column, message }[]`                             | Solo `check`. ≤ 10 al modelo, `message` ≤ 140                                |
+| `durationMs`  | entero ≥ 0                                                                          | Tiempo del snippet, sin cargar el runtime                                    |
+| `truncated`   | boolean                                                                             | Algo se cortó (stdout, mensaje o diagnósticos)                               |
+
+`returned` (valor de retorno) **no existe**: el sandbox de M4 ejecuta el snippet sin capturar retorno y esta fase no amplía su superficie; el modelo debe usar `print`. Los topes viven en un solo archivo por lado (`src/lib/ask/tool-result.ts` y `server/src/chat/tool-result.ts`, mismos números).
+
+`check` = lint determinista (luaparse + reglas del sandbox, sin ejecutar el código): error de sintaxis con línea y columna, locales sin usar, globales que el sandbox no tiene. No llama al modelo.
+
+### Contrato HTTP/SSE (se documenta en `docs/server/README.md`)
+
+- Body nuevo, todo opcional y **estricto** (`400 bad_request` si no cumple): `tools: string[]` (≤ 8, únicos, del registro), `steps: Step[]` (≤ 24; suma de caracteres ≤ 24000, owner 80000), `continued: entero ≥ 0`. `steps` o `continued` sin `tools` también es `400`. Tope del cuerpo: `CHAT_MAX_BODY_BYTES` y, si hay `steps`, más `CHAT_MAX_STEPS_BYTES` (def. 98304).
+- Eventos nuevos: `tool_call {round, name, body}`, `confirm {reason, rounds}`; `done.stop?: "tool_call" | "confirm"`.
+
+### Registro de herramientas (para #41 `guardar_memoria`)
+
+Server: `TOOLS` en `server/src/chat/tools.ts` (`name`, `bodyMax`, `describe` para el prompt). Cliente: `CLIENT_TOOLS` en `src/lib/ask/tools.ts` (`run(body, signal) → ToolResult`). Sumar una herramienta = una entrada en cada registro y sus tests; el escáner, las rondas, el esquema y la UI no cambian.
+
+### Archivos
+
+| Archivo                                                                          | Cambio                                                                              |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `server/src/chat/tools.ts`, `tool-result.ts` (nuevos)                            | registro, escáner, `parseSteps`, `parseToolResult`, render escapado                 |
+| `server/src/chat/prompt.ts`, `service.ts`                                        | `systemPrompt(tools)`, `<pasos>`, escáner en el stream, `tool_call`, `confirm`      |
+| `server/src/app.ts`, `config.ts`, `policy.ts`, `sse.ts`                          | body estricto, `CHAT_MAX_STEPS_BYTES`, `policy.confirmRounds`, eventos              |
+| `src/lib/ask/tool-result.ts`, `tools.ts` (nuevos)                                | esquema, topes, conversión desde el sandbox, registro de cliente                    |
+| `src/lib/ask/{types,sse,client,store}.ts`                                        | eventos, `tools`/`steps`/`continued`, bucle de rondas, `Turn.tools`, `continueTurn` |
+| `src/components/ask/{Conversation,AnswerBody,ToolStep}.tsx`, `doc/CodeBlock.tsx` | tarjeta del paso, "Seguir", botón Ejecutar en bloques `lua`                         |
+| `src/lib/i18n.ts`, `package.json` (0.19.0)                                       | claves ES/EN, versión                                                               |
+| `docs/chat/tools-security.md`, `docs/server/README.md`, `docs/ask/README.md`     | amenazas y checklist, contrato                                                      |
+
+### Tests (`bun test`)
+
+- **Server:** escáner (etiqueta partida entre deltas, dentro de bloque de código, con texto antes en la línea, entre backticks, nombre desconocido, sin cierre, cuerpo sobre el tope, dos llamadas: corta en la primera); `parseSteps` y `parseToolResult` (forma, topes, tipos, campos extra); render escapado (`<`, `&`, etiqueta forjada dentro de stdout); rondas (3, owner 8 → `confirm`, `continued` de no-owner → 400, tope absoluto); corte del stream del proveedor al cerrar la etiqueta; sin caché con `steps`; contrato HTTP.
+- **Cliente:** esquema (conversión desde cada `RunResult`, topes, `truncated`); registro (herramienta desconocida → `rejected`); bucle del store con `fetch` simulado (llamada → ejecución → continuación con `steps` → respuesta final; tope; Detener durante la ejecución; `confirm` → Seguir); parseo SSE de los eventos nuevos.
+
+### Verificación en navegador (Edge headless, `E:\Proyectos\_scratch\browser`)
+
+Mock de API que emite el protocolo (`tool_call`, continuación, `confirm`) con el sandbox real. 1280 y 375 px, claro y oscuro, teclado. Casos: ejecución feliz con salida; error con línea; bucle infinito cortado por tiempo; salida enorme truncada; `check` con diagnósticos; botón Ejecutar manual sobre un bloque `lua`; owner con "Seguir"; Detener durante la ejecución; consola sin errores. El resultado va a `tools-security.md` separado en "Verificado por Ether" y "Pendiente de Faku".

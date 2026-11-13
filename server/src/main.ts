@@ -18,7 +18,8 @@ try {
   const app = createApp(deps).listen({
     hostname: config.host,
     port: config.port,
-    maxRequestBodySize: config.chat.maxBodyBytes * 4,
+    maxRequestBodySize:
+      config.chat.maxBodyBytes + config.chat.maxStepsBytes + 4096,
   })
   logger.info('listening', {
     ...describeConfig(config),

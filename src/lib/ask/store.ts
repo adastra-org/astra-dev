@@ -6,6 +6,8 @@ import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
+import { toWire, type ToolResult } from './tool-result'
+import { TOOL_NAMES, runTool } from './tools'
 import {
   AskError,
   type AskEvent,
@@ -13,7 +15,27 @@ import {
   type AskStep,
   type HistoryTurn,
   type SearchMode,
+  type ToolStepWire,
 } from './types'
+
+/** Characters of the model's text kept per tool step (the server rejects more). */
+export const STEP_TEXT_MAX = 2000
+/** The server never allows more steps than this in one request. */
+export const MAX_TOOL_ROUNDS = 24
+
+/** One tool call of the model inside a turn. Rendered between the text before and after it. */
+export interface ToolRun {
+  round: number
+  name: string
+  /** The code or text the model put in the tag. Untrusted: shown as text, run only in the sandbox. */
+  body: string
+  /** Offset in `Turn.text` where the call happened: the UI splits the answer there. */
+  at: number
+  /** What the model wrote in this round before the tag (the part of `text` since the previous call). */
+  text: string
+  status: 'running' | 'done' | 'stopped'
+  result: ToolResult | null
+}
 
 export type TurnStatus = 'waiting' | 'streaming' | 'done' | 'stopped' | 'error'
 
@@ -47,6 +69,12 @@ export interface Turn {
   usageEstimated: boolean
   /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
   memoryTokens: number
+  /** Herramientas que el modelo llamó en esta respuesta, en orden. */
+  tools: ToolRun[]
+  /** El server pidió confirmar para seguir (owner, tope de rondas). */
+  confirm: { rounds: number } | null
+  /** Veces que se confirmó "Seguir" en esta respuesta. */
+  continued: number
 }
 
 export type ViewerRole = Permission | 'unknown'
@@ -80,6 +108,9 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   usage: null,
   usageEstimated: false,
   memoryTokens: 0,
+  tools: [],
+  confirm: null,
+  continued: 0,
 })
 
 /**
@@ -91,11 +122,15 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
     case 'meta':
       return { ...turn, mode: ev.mode, degraded: ev.degraded }
     case 'step':
-      return { ...turn, steps: [...turn.steps, ev.step] }
+      // Later rounds repeat the pipeline: only the first one is shown.
+      return turn.tools.length
+        ? turn
+        : { ...turn, steps: [...turn.steps, ev.step] }
     case 'thinking':
       return { ...turn, thinking: turn.thinking + ev.text }
     case 'sources':
-      return { ...turn, sources: ev.sources }
+      // The answer so far cited the first round's sources; keep them.
+      return turn.tools.length ? turn : { ...turn, sources: ev.sources }
     case 'delta': {
       const first = turn.timing.firstDeltaAt === null && at !== undefined
       return {
@@ -105,7 +140,31 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
         ...(first ? { timing: { ...turn.timing, firstDeltaAt: at } } : {}),
       }
     }
+    case 'tool_call': {
+      const prevAt = turn.tools.at(-1)?.at ?? 0
+      const run: ToolRun = {
+        round: ev.round,
+        name: ev.name,
+        body: ev.body,
+        at: turn.text.length,
+        text: turn.text.slice(prevAt),
+        status: 'running',
+        result: null,
+      }
+      return { ...turn, tools: [...turn.tools, run] }
+    }
+    case 'confirm':
+      return { ...turn, confirm: { rounds: ev.rounds } }
     case 'done':
+      // A call is not the end: the turn keeps going once the browser runs the tool.
+      if (ev.stop === 'tool_call')
+        return {
+          ...turn,
+          status: 'streaming',
+          cited: ev.cited,
+          usage: ev.usage,
+          usageEstimated: ev.usageEstimated === true,
+        }
       return {
         ...turn,
         status: 'done',
@@ -124,6 +183,36 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
 
 const MAX_HISTORY_EXCHANGES = 3
 const MAX_HISTORY_CHARS = 800
+
+/** Rounds already run, in the shape the server wants back. Only finished ones count. */
+export function stepsFor(turn: Turn): ToolStepWire[] {
+  return turn.tools.flatMap((t) =>
+    t.status === 'done' && t.result
+      ? [
+          {
+            text: t.text.slice(-STEP_TEXT_MAX),
+            tool: t.name,
+            body: t.body,
+            result: toWire(t.result),
+          },
+        ]
+      : [],
+  )
+}
+
+/** Finishes the running call of `round` with its result. */
+export function finishTool(
+  turn: Turn,
+  round: number,
+  result: ToolResult,
+): Turn {
+  return {
+    ...turn,
+    tools: turn.tools.map((t) =>
+      t.round === round ? { ...t, status: 'done' as const, result } : t,
+    ),
+  }
+}
 
 /** Contexto para la siguiente pregunta: los últimos intercambios que terminaron bien. */
 export function historyFor(turns: readonly Turn[]): HistoryTurn[] {
@@ -165,6 +254,17 @@ export interface AskStoreOptions {
   now?: () => number
   /** Memorias activas a enviar. Por defecto las del navegador (`memoryStore`). */
   memories?: () => string[]
+  /** Herramientas que se ofrecen al modelo. Por defecto las del registro del cliente. */
+  tools?: readonly string[]
+  /** Ejecuta una llamada del modelo. Por defecto el sandbox del navegador. */
+  runTool?: typeof runTool
+}
+
+interface RunBase {
+  question: string
+  history: HistoryTurn[]
+  sources: string[]
+  memories: string[]
 }
 
 export class AskStore {
@@ -274,22 +374,49 @@ export class AskStore {
 
     const ctl = new AbortController()
     this.#abort = ctl
+    await this.#drive(id, { question: q, history, sources, memories }, ctl)
+  }
+
+  /**
+   * Una respuesta completa: pide al server, y mientras el modelo llame herramientas las ejecuta en
+   * el navegador y vuelve a pedir con los pasos hechos. El tope de rondas lo decide el server; acá
+   * solo hay un freno duro por si el server fallara.
+   */
+  async #drive(id: number, base: RunBase, ctl: AbortController): Promise<void> {
+    const run = this.#opts.runTool ?? runTool
     try {
-      await streamChat({
-        question: q,
-        history,
-        memories,
-        sources,
-        signal: ctl.signal,
-        onEvent: (ev) => {
-          if (ev.type === 'meta' && typeof ev.contextWindow === 'number')
-            this.#set({ contextWindow: ev.contextWindow })
-          const at = this.#now()
-          this.#update(id, (t) => applyEvent(t, ev, at))
-        },
-        ...(this.#opts.fetch ? { fetch: this.#opts.fetch } : {}),
-        ...(this.#opts.base ? { base: this.#opts.base } : {}),
-      })
+      for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+        const turn = this.#state.turns.find((t) => t.id === id)
+        if (!turn) return
+        let call: Extract<AskEvent, { type: 'tool_call' }> | null = null
+        let stop: string | undefined
+        await streamChat({
+          question: base.question,
+          history: base.history,
+          memories: base.memories,
+          sources: base.sources,
+          tools: this.#opts.tools ?? TOOL_NAMES,
+          steps: stepsFor(turn),
+          continued: turn.continued,
+          signal: ctl.signal,
+          onEvent: (ev) => {
+            if (ev.type === 'meta' && typeof ev.contextWindow === 'number')
+              this.#set({ contextWindow: ev.contextWindow })
+            if (ev.type === 'tool_call') call = ev
+            if (ev.type === 'done') stop = ev.stop
+            const at = this.#now()
+            this.#update(id, (t) => applyEvent(t, ev, at))
+          },
+          ...(this.#opts.fetch ? { fetch: this.#opts.fetch } : {}),
+          ...(this.#opts.base ? { base: this.#opts.base } : {}),
+        })
+        if (ctl.signal.aborted || stop !== 'tool_call' || call === null) return
+        const c: Extract<AskEvent, { type: 'tool_call' }> = call
+        const result = await run(c.name, c.body, ctl.signal)
+        if (ctl.signal.aborted) return
+        this.#update(id, (t) => finishTool(t, c.round, result))
+      }
+      throw new AskError('too_many_rounds', 'Too many tool rounds')
     } catch (e) {
       const err =
         e instanceof AskError ? e : new AskError('internal', String(e))
@@ -314,6 +441,36 @@ export class AskStore {
     }
   }
 
+  /**
+   * Seguir tras el tope de rondas (owner): el server pidió confirmar y el usuario aceptó. Reenvía
+   * con los pasos ya hechos y `continued` +1; el contador de rondas del server vuelve a cero.
+   */
+  continueTurn(id: number): void {
+    const idx = this.#state.turns.findIndex((t) => t.id === id)
+    const turn = this.#state.turns[idx]
+    if (!turn?.confirm || this.busy) return
+    const prior = this.#state.turns.slice(0, idx)
+    const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    this.#update(id, (t) => ({
+      ...t,
+      confirm: null,
+      continued: t.continued + 1,
+      status: 'streaming' as const,
+    }))
+    const ctl = new AbortController()
+    this.#abort = ctl
+    void this.#drive(
+      id,
+      {
+        question: turn.question,
+        history: historyFor(prior),
+        sources: sourcesFor(prior),
+        memories,
+      },
+      ctl,
+    )
+  }
+
   /** Corta la respuesta en curso y conserva lo recibido. */
   stop(): void {
     this.#abort?.abort()
@@ -321,7 +478,15 @@ export class AskStore {
     this.#set({
       turns: this.#state.turns.map((t) =>
         t.status === 'waiting' || t.status === 'streaming'
-          ? { ...t, status: 'stopped' as const }
+          ? {
+              ...t,
+              status: 'stopped' as const,
+              tools: t.tools.map((r) =>
+                r.status === 'running'
+                  ? { ...r, status: 'stopped' as const }
+                  : r,
+              ),
+            }
           : t,
       ),
     })

@@ -71,6 +71,17 @@ export function sanitizeHistory(
   return out.slice(-maxTurns)
 }
 
+/** Rule 3 as written when the chat has tools (the tools block below it says which). */
+const RULE3_TOOLS =
+  '3. Solo tienes las herramientas descritas al final de estas reglas, ninguna otra: no navegas, no lees archivos, no llamas a servicios ni ejecutas comandos fuera de ellas. No finjas hacerlo.'
+const RULE3_RE = /^3\. No tienes herramientas:.*$/m
+
+/** The system message. Fixed text: no user or document text ever goes in it; `tools` comes from the registry. */
+export function systemPrompt(tools?: string): string {
+  if (!tools) return SYSTEM_PROMPT
+  return `${SYSTEM_PROMPT.replace(RULE3_RE, RULE3_TOOLS)}\n\n${tools}`
+}
+
 export interface PromptInput {
   question: string
   history: HistoryTurn[]
@@ -80,6 +91,10 @@ export interface PromptInput {
   env?: string
   /** User memories, already validated (`parseMemories`). Escaped here. */
   memories?: string[]
+  /** Fixed tools text for the system message (`toolsPrompt`). Empty/absent = the chat has no tools. */
+  tools?: string
+  /** Rendered `<pasos>` block (`renderSteps`): already escaped. */
+  steps?: string
 }
 
 export interface BuiltPrompt {
@@ -116,11 +131,12 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
   const memories = input.memories?.length
     ? `<memorias>\n${input.memories.map((m) => `- ${escapeData(m)}`).join('\n')}\n</memorias>\n`
     : ''
-  const user = `${env}${memories}<contexto>\n${blocks.join('\n')}\n</contexto>${history}\n\n<pregunta>\n${escapeData(input.question)}\n</pregunta>`
+  const steps = input.steps ? `\n\n${input.steps}` : ''
+  const user = `${env}${memories}<contexto>\n${blocks.join('\n')}\n</contexto>${history}\n\n<pregunta>\n${escapeData(input.question)}\n</pregunta>${steps}`
 
   return {
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt(input.tools) },
       { role: 'user', content: user },
     ],
     used,
