@@ -228,6 +228,7 @@ export async function buildDeps(
     chat,
     project: createProject(config, logger),
     usage,
+    usageReader: usage,
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),

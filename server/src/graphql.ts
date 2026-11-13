@@ -9,6 +9,7 @@ import { AppError } from './errors.ts'
 import type { Hit } from './index/search.ts'
 import { policyFor } from './policy.ts'
 import { addProjectSchema } from './project/schema.ts'
+import { addUsageSchema } from './usage/schema.ts'
 import type { Entitlement, Viewer } from './viewer.ts'
 
 export interface GqlContext {
@@ -184,6 +185,7 @@ export function createSchema(deps: AppDeps) {
   })
 
   addProjectSchema(builder, deps)
+  addUsageSchema(builder, deps)
 
   return builder.toSchema()
 }

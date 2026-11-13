@@ -113,6 +113,10 @@ Cuentas solo lista entitlements activos; aun así se descartan los vencidos. `em
 
 Hoy `subscriber`, `staff` y `owner` pueden chatear. `staff` read-write queda para cuando haya herramientas de escritura (no las hay: el chat es de solo lectura).
 
+### Dashboard de IA (v0.14.0)
+
+`aiUsage(days)` (GraphQL, solo `owner`) devuelve los agregados del registro de uso: totales, tokens y GPU por día, por modelo, top 10 de usuarios y resultados. Errores: `unauthenticated`, `owner_required`, `usage_unavailable` (sin `USAGE_DB_PATH`). `days` va de 1 a 180. La página es `/ia`, ver [chat/README.md](../chat/README.md).
+
 ### Rol `owner` (v0.13.0)
 
 `owner` no viene de cuentas: es un rol del server que exige dos cosas a la vez, `OWNER_IDS` (ids separados por comas) **y** `role: staff` en cuentas (`OwnerOverlayViewerPort`, sobre el puerto de cuentas). Quitar staff en cuentas revoca owner dentro de la caché de 5 s; `OWNER_IDS` vacío = nadie es owner; una entrada mal formada hace fallar el arranque. `owner` implica todo lo de staff (`atLeast(role, 'staff')`, un solo helper para los chequeos).

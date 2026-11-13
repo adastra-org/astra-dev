@@ -7,7 +7,7 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 | Fase | Qué                                                                      | Estado                                                              |
 | ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
 | 0    | Rol `owner` + registro de uso (telemetría)                               | **Implementada en v0.13.0**; tests y verificación local abajo       |
-| 0b   | Dashboard de IA (solo owner)                                             | Esqueleto                                                           |
+| 0b   | Dashboard de IA (solo owner)                                             | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
 | 1    | `/chat` workspace + context budget + output speed + editar/rewind/resend | Esqueleto                                                           |
 | 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                 | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
 | 3    | Memorias (localStorage)                                                  | Esqueleto                                                           |
@@ -202,3 +202,25 @@ Todos sin red: `fetch` simulado, como los tests actuales.
 
 1. Owner = id en `OWNER_IDS` Y staff en cuentas (default recomendado; Faku no entendió la pregunta, se explicó). Cambiable a solo allowlist.
 2. Owner sin tope diario (ni por viewer ni global). Tope de rondas por mensaje con confirmación (0.2b).
+
+## Fase 0b: dashboard de IA (v0.14.0)
+
+Página `/ia` (solo owner), servida por la query GraphQL `aiUsage(days)` del server, que agrega sobre `usage_events`.
+
+- **Acceso:** `aiUsage` exige `owner` (`unauthenticated` si no hay sesión, `owner_required` para cualquier otro rol, `usage_unavailable` sin `USAGE_DB_PATH`). La página muestra un solo aviso a quien no es owner. No está en el sidebar: se llega por URL o por el palette (Ctrl+K, entrada visible solo para owner).
+- **Periodos:** hoy, 7, 30 y 90 días (el server admite 1 a 180). Los días son UTC y todos aparecen, los vacíos como cero.
+- **Contenido:** requests, tokens (entrada y salida), tiempo de GPU, costo estimado, aciertos de caché, límites golpeados (frecuencia y presupuesto), primer token y velocidad promedios, errores y fallbacks; tokens y GPU por día; tabla por modelo; top 10 de usuarios por tokens; resultados de cada request.
+- **Gráficos:** sin librerías nuevas. Reusa `ColumnChart` y `ChartCard` de Roadmap (con vista de tabla y teclado) y los colores `--chart-*` ya validados.
+- **Archivos:** `server/src/usage/report.ts` y `schema.ts`; `src/pages/AiUsage.tsx`, `src/components/ai/UsageTables.tsx`, `src/lib/ai/`.
+- **Límite conocido:** `gpu_ms` solo cubre el LLM local; la página lo dice. El costo es una estimación con la tabla de precios de `USAGE_PRICE_*`.
+
+### Verificación de 0b
+
+| Qué                                                                                                                                                                          | Estado                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Tests del server (agregados, ventana, días vacíos, clamp, acceso por rol) y del cliente (formatos, palette, migas)                                                           | Verificado                                                            |
+| Navegador real (Edge headless con puppeteer-core): owner a 1280 y 375 px, sin scroll horizontal, sin errores de consola, cambio de periodo, "Ver tabla", entrada del palette | Verificado con capturas                                               |
+| Staff ve el aviso "Solo para el owner" y el server devuelve `owner_required`                                                                                                 | Verificado                                                            |
+| Datos                                                                                                                                                                        | Base sembrada a mano (903 requests simulados), no tráfico real        |
+| Contraste y estados de foco                                                                                                                                                  | Sin medir con herramienta; solo reusa tokens y componentes existentes |
+| Navegador del usuario (Chrome, Safari)                                                                                                                                       | No probado                                                            |

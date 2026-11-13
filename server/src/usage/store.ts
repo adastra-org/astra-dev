@@ -5,6 +5,7 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { buildReport, type UsageReport } from './report.ts'
 
 export interface UsageRecord {
   /** Epoch ms when the request started. */
@@ -166,6 +167,11 @@ export class UsageStore implements UsageSink {
       this.writeErrors++
       return 0
     }
+  }
+
+  /** Aggregates for the owner dashboard (phase 0b). */
+  report(days: number, now = Date.now()): UsageReport {
+    return buildReport(this, days, now)
   }
 
   /** Read-only handle for tests and the dashboard queries (phase 0b). */

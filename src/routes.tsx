@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router-dom'
 import { Shell } from '@/components/shell/Shell'
 import Doc from '@/pages/Doc'
+import AiUsage from '@/pages/AiUsage'
 import Docs from '@/pages/Docs'
 import Home from '@/pages/Home'
 import Native from '@/pages/Native'
@@ -23,6 +24,7 @@ export const routes: RouteObject[] = [
       { path: '/natives/:slug', element: <Native /> },
       { path: '/tools', element: <Tools /> },
       { path: '/roadmap', element: <Roadmap /> },
+      { path: '/ia', element: <AiUsage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

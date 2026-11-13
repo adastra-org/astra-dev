@@ -7,6 +7,11 @@ export interface Crumb {
   to: string
 }
 
+/** Páginas con ruta propia que no están en la navegación (se llega por URL o por el palette). */
+const HIDDEN_PAGES: readonly { to: string; label: MessageKey }[] = [
+  { to: '/ia', label: 'ai.title' },
+]
+
 /** Traductor de claves del diccionario; por defecto español (para probar sin React). */
 export type Tr = (key: MessageKey) => string
 const es: Tr = (key) => t('es', key)
@@ -32,6 +37,11 @@ export function crumbsFor(
   if (!home) return []
   const crumbs: Crumb[] = [{ label: tr(home.label), to: home.to }]
   if (pathname === '/') return crumbs
+
+  const hidden = HIDDEN_PAGES.find(
+    (p) => pathname === p.to || pathname === `${p.to}/`,
+  )
+  if (hidden) return [...crumbs, { label: tr(hidden.label), to: hidden.to }]
 
   const section = sections.find(
     (n) => pathname === n.to || pathname.startsWith(`${n.to}/`),
