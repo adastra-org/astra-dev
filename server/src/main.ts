@@ -28,6 +28,7 @@ try {
 
   const stop = () => {
     logger.info('stopping')
+    deps.usage?.flush?.()
     void app.stop().finally(() => process.exit(0))
   }
   process.on('SIGTERM', stop)

@@ -88,7 +88,7 @@ La respuesta cita con `[n]`; `n` indexa `sources`. `path` es el enlace al sitio 
 
 ## Permisos
 
-`Viewer = { id, handle, role: 'public' | 'subscriber' | 'staff', emailVerified, entitlements: [{ kind, validUntil }] }`, resuelto por el puerto `ViewerPort` (`server/src/viewer.ts`). El contrato de cuentas está en `docs/accounts/README.md` de `adastra-site` (PR #21):
+`Viewer = { id, handle, role: 'public' | 'subscriber' | 'staff' | 'owner', emailVerified, entitlements: [{ kind, validUntil }] }`, resuelto por el puerto `ViewerPort` (`server/src/viewer.ts`). El contrato de cuentas está en `docs/accounts/README.md` de `adastra-site` (PR #21):
 
 - **`HttpViewerPort`** (producción): reenvía solo la cabecera `Cookie` a `GET {ACCOUNTS_BASE_URL}{ACCOUNTS_VIEWER_PATH}` (por defecto `https://adastrarp.com/api/auth/viewer`). `401/403/404` = anónimo. Error de red o 5xx = `viewer_unavailable`. Caché en memoria de 5 s por cookie (cuentas pide pocos segundos como máximo: una sesión o entitlement revocado puede seguir 5 s).
 - **`DevStubViewerPort`**: `ASTRA_DEV_VIEWER=public|subscriber|staff`. Ignorado en producción.
@@ -111,7 +111,31 @@ Cuentas solo lista entitlements activos; aun así se descartan los vencidos. `em
 
 > El contrato sale del doc de cuentas (PR #21 de `adastra-site`, aún abierto). Si cambia, solo cambia `parseViewer`.
 
-Hoy `subscriber` y `staff` pueden chatear. `staff` read-write queda para cuando haya herramientas de escritura (no las hay: el chat es de solo lectura).
+Hoy `subscriber`, `staff` y `owner` pueden chatear. `staff` read-write queda para cuando haya herramientas de escritura (no las hay: el chat es de solo lectura).
+
+### Dashboard de IA (v0.14.0)
+
+`aiUsage(days)` (GraphQL, solo `owner`) devuelve los agregados del registro de uso: totales, tokens y GPU por día, por modelo, top 10 de usuarios y resultados. Errores: `unauthenticated`, `owner_required`, `usage_unavailable` (sin `USAGE_DB_PATH`). `days` va de 1 a 180. La página es `/dashboard`, ver [chat/README.md](../chat/README.md).
+
+### Rol `owner` (v0.13.0)
+
+`owner` no viene de cuentas: es un rol del server que exige dos cosas a la vez, `OWNER_IDS` (ids separados por comas) **y** `role: staff` en cuentas (`OwnerOverlayViewerPort`, sobre el puerto de cuentas). Quitar staff en cuentas revoca owner dentro de la caché de 5 s; `OWNER_IDS` vacío = nadie es owner; una entrada mal formada hace fallar el arranque. `owner` implica todo lo de staff (`atLeast(role, 'staff')`, un solo helper para los chequeos).
+
+Qué se saltea, decidido en un solo lugar (`server/src/policy.ts`, `policyFor`):
+
+| Límite                                                                                         | Owner                                               | Resto   |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------- |
+| Rate limits (chat por viewer e IP, search, project)                                            | no aplican                                          | aplican |
+| Presupuesto diario de tokens, por viewer y global                                              | no aplica, y sus tokens no consumen el de los demás | aplica  |
+| `CHAT_MAX_QUESTION_CHARS`, `CHAT_MAX_HISTORY_*`, `CHAT_MAX_OUTPUT_*`, `CHAT_CONTEXT_MAX_CHARS` | techos altos fijos (`OWNER_CHAT_SETTINGS`)          | aplican |
+| `CHAT_MAX_BODY_BYTES`                                                                          | aplica (protege al server)                          | aplica  |
+| Circuito del embedder (30 s) y caché                                                           | aplican                                             | aplican |
+
+El único freno del owner es `OWNER_MAX_ROUNDS` (8): rondas internas (herramientas, subagents) en un mensaje antes de pedir confirmación para seguir. El contador y el evento SSE `confirm` llegan con las fases 2 y 5; hoy solo existe en la política. Ver [chat/README.md](../chat/README.md).
+
+### Registro de uso (v0.13.0)
+
+Con `USAGE_DB_PATH` el server guarda una fila por request de `/chat` en SQLite (`server/src/usage/`, WAL, compartido por blue y green): quién (id, handle, rol), proveedor y modelo, si hubo fallback, tokens, `ttft_ms`, duración, `gen_tps`, resultado (`ok`, `cached`, `refused`, `rate_limited`, `budget_exceeded`, …), caché, `gpu_ms` (solo modelos locales, de los `timings` de llama.cpp) y costo estimado (solo DeepSeek). **Nunca** la pregunta, la respuesta, fragmentos, IP ni secretos. Las peticiones anónimas no se registran. Las filas se encolan en memoria y se escriben por lotes en una transacción (cada 250 ms o 100 filas, y al apagar el server), así que la escritura no está en la ruta de la request; si el disco se traba, la cola tiene tope (5.000) y descarta las más viejas contándolas. Un fallo de escritura nunca rompe la respuesta. El handler solo conoce la interfaz `UsageSink`: cambiar SQLite por otro almacén (Postgres, un colector HTTP) no toca el chat. Se purga a los `USAGE_RETENTION_DAYS` al arrancar.
 
 ## Índice semántico
 
@@ -186,6 +210,11 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `CHAT_CACHE_TTL_SECONDS`, `CHAT_CACHE_MAX_ENTRIES`                               | 3600, 500                                                       | Caché de respuestas. 0 en cualquiera = apagada                                                                 |
 | `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`                               | 6, 20                                                           | Ventana deslizante de 60 s                                                                                     |
 | `RATE_SEARCH_IP_PER_MIN`                                                         | 60                                                              | `searchDocs` público                                                                                           |
+| `OWNER_IDS`                                                                      | —                                                               | Ids de cuentas que pueden ser `owner` (además deben ser `staff` en cuentas)                                    |
+| `OWNER_MAX_ROUNDS`                                                               | 8                                                               | Rondas por mensaje del owner antes de pedir confirmación                                                       |
+| `USAGE_DB_PATH`                                                                  | — (sin registro)                                                | SQLite de uso. Fuera de los slots, para que blue y green lo compartan                                          |
+| `USAGE_RETENTION_DAYS`                                                           | 180                                                             | Se purga al arrancar                                                                                           |
+| `USAGE_PRICE_IN_PER_MTOK`, `USAGE_PRICE_OUT_PER_MTOK`                            | 0.14, 0.28                                                      | USD por millón de tokens, para estimar el costo de modelos alojados                                            |
 | `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                                     | 120000, 1000000                                                 | Reset 00:00 UTC                                                                                                |
 | `ASTRA_GITHUB_TOKEN`                                                             | —                                                               | Secreto, solo lectura. Sin él, `project` queda apagado                                                         |
 | `PROJECT_REPO`, `PROJECT_REF`                                                    | `adastra-org/astra-dev`, `dev`                                  | Repo y rama de los que se leen plan, complejidad y commits                                                     |

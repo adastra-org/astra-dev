@@ -67,6 +67,11 @@ export class DeepSeekProvider implements LlmProvider {
       throw unavailable()
     }
 
+    yield {
+      type: 'served',
+      provider: this.#o.name ?? 'deepseek',
+      model: this.#o.model,
+    }
     const decoder = new TextDecoder()
     let buf = ''
     try {
@@ -84,6 +89,7 @@ export class DeepSeekProvider implements LlmProvider {
               delta?: { content?: unknown; reasoning_content?: unknown }
             }[]
             usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
+            timings?: { prompt_ms?: unknown; predicted_ms?: unknown }
           }
           try {
             json = JSON.parse(data)
@@ -96,6 +102,14 @@ export class DeepSeekProvider implements LlmProvider {
             yield { type: 'thinking', text: thought }
           const text = delta?.content
           if (typeof text === 'string' && text) yield { type: 'delta', text }
+          // llama.cpp reports how long the machine worked. Only a local model has a GPU time.
+          const tm = json.timings
+          if (this.name === 'local' && tm) {
+            const ms =
+              (typeof tm.prompt_ms === 'number' ? tm.prompt_ms : 0) +
+              (typeof tm.predicted_ms === 'number' ? tm.predicted_ms : 0)
+            if (ms > 0) yield { type: 'timing', gpuMs: Math.round(ms) }
+          }
           const u = json.usage
           if (
             u &&

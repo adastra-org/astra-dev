@@ -8,7 +8,9 @@ import { sseResponse } from './chat/sse.ts'
 import type { AppDeps } from './context.ts'
 import { AppError, toAppError } from './errors.ts'
 import { createGraphqlHandler } from './graphql.ts'
-import { requireChatAccess } from './viewer.ts'
+import { policyFor } from './policy.ts'
+import { UsageCollector } from './usage/collector.ts'
+import { atLeast, requireChatAccess } from './viewer.ts'
 
 type ServerLike = { requestIP(req: Request): { address: string } | null } | null
 
@@ -125,15 +127,27 @@ export function createApp(deps: AppDeps) {
         route: 'chat',
         ip: ipHash(ip),
       }
+      const usage = deps.usage
+        ? new UsageCollector(deps.usage, config, requestId, 'chat', started)
+        : null
       try {
         checkOrigin(request, config.allowedOrigins)
         const viewer = await deps.viewers.resolve(request)
         log.viewer = viewer.id
         log.role = viewer.role
+        if (usage)
+          usage.who = {
+            id: viewer.id,
+            handle: viewer.handle,
+            role: viewer.role,
+          }
         requireChatAccess(viewer)
 
-        deps.limiters.chatIp.hit(ip)
-        deps.limiters.chatViewer.hit(viewer.id!)
+        const policy = policyFor(viewer, config)
+        if (policy.rateLimits) {
+          deps.limiters.chatIp.hit(ip)
+          deps.limiters.chatViewer.hit(viewer.id!)
+        }
 
         if (!deps.chat)
           throw new AppError(
@@ -153,12 +167,17 @@ export function createApp(deps: AppDeps) {
           history,
           lang,
           user: { handle: viewer.handle },
-          showThinking: viewer.role === 'staff',
+          showThinking: atLeast(viewer.role, 'staff'),
+          policy,
         })
         log.mode = run.mode
         log.degraded = run.degraded
         log.sources = run.sources.length
         log.cache = run.cacheHit ? 'hit' : 'miss'
+        if (usage) {
+          usage.cacheHit = run.cacheHit === true
+          usage.telemetry = run.telemetry
+        }
         if (run.usedHistory != null) log.usedHistory = run.usedHistory
         if (run.gate) log.gate = `${run.gate.kept}/${run.gate.total}`
 
@@ -172,10 +191,23 @@ export function createApp(deps: AppDeps) {
                 if (ev.type === 'done') {
                   tokens = ev.usage.inputTokens + ev.usage.outputTokens
                   Object.assign(log, citedLog(ev))
+                  if (usage) {
+                    usage.tokens = {
+                      input: ev.usage.inputTokens,
+                      output: ev.usage.outputTokens,
+                    }
+                    if (ev.refused) outcome = 'refused'
+                    else if (ev.cached) outcome = 'cached'
+                    else if (ev.truncated) outcome = 'truncated'
+                  }
                 }
                 yield ev
               }
             } finally {
+              if (usage) {
+                usage.outcome = outcome
+                usage.finish(now() - started)
+              }
               logger.info('request', {
                 ...log,
                 status: 200,
@@ -190,6 +222,10 @@ export function createApp(deps: AppDeps) {
       } catch (e) {
         const err = toAppError(e)
         if (err.code === 'internal') logger.error('chat_failed', { requestId })
+        if (usage) {
+          usage.outcome = err.code
+          usage.finish(now() - started)
+        }
         logger.info('request', {
           ...log,
           status: err.status,
