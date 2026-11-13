@@ -4,15 +4,15 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 
 ## Estado
 
-| Fase | Qué                                                                      | Estado                                                              |
-| ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| 0    | Rol `owner` + registro de uso (telemetría)                               | **Implementada en v0.13.0**; tests y verificación local abajo       |
-| 0b   | Dashboard de IA (solo owner)                                             | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
-| 1    | `/chat` workspace + context budget + output speed + editar/rewind/resend | Esqueleto                                                           |
-| 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                 | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
-| 3    | Memorias (localStorage)                                                  | Esqueleto                                                           |
-| 4    | Cross-session                                                            | Esqueleto                                                           |
-| 5    | Subagents                                                                | Esqueleto                                                           |
+| Fase | Qué                                                                                                                              | Estado                                                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 0    | Rol `owner` + registro de uso (telemetría)                                                                                       | **Implementada en v0.13.0**; tests y verificación local abajo       |
+| 0b   | Dashboard de IA (solo owner)                                                                                                     | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
+| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | Esqueleto                                                           |
+| 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
+| 3    | Memorias (localStorage)                                                                                                          | Esqueleto                                                           |
+| 4    | Cross-session                                                                                                                    | Esqueleto                                                           |
+| 5    | Subagents                                                                                                                        | Esqueleto                                                           |
 
 ## Estado actual del código (base 9670ca7)
 
@@ -191,8 +191,8 @@ Todos sin red: `fetch` simulado, como los tests actuales.
 
 ## Fases siguientes (esqueleto)
 
-- **0b Dashboard de IA** (`/ask`, owner): endpoint que agrega `usage_events` (día/semana/mes, por proveedor y modelo, top viewers, rate limits, errores/fallbacks, cache hit, TTFT y tokens/s promedio, GPU time total y por modelo, costo estimado). Sigue `~/.claude/standards/DESIGN.md` y el `DESIGN.md` del proyecto. Sin librerías de chart nuevas si el DS trae `charts.css`.
-- **1 `/chat`**: workspace (transcript, composer, rail). Context budget con `contextWindow` por proveedor (nuevo `LLM_CONTEXT_WINDOW`) y `usage` de `done`. Output speed medido en cliente. Editar mensaje = rewind + resend en cliente.
+- **0b Dashboard de IA** (`/dashboard`, owner): endpoint que agrega `usage_events` (día/semana/mes, por proveedor y modelo, top viewers, rate limits, errores/fallbacks, cache hit, TTFT y tokens/s promedio, GPU time total y por modelo, costo estimado). Sigue `~/.claude/standards/DESIGN.md` y el `DESIGN.md` del proyecto. Sin librerías de chart nuevas si el DS trae `charts.css`.
+- **1 `/ask`** (página; el endpoint sigue siendo `POST /chat`): workspace (transcript, composer, rail). Context budget con `contextWindow` por proveedor (nuevo `LLM_CONTEXT_WINDOW`) y `usage` de `done`. Output speed medido en cliente. Editar mensaje = rewind + resend en cliente.
 - **2 Herramientas**: protocolo `<herramienta nombre="ejecutar">` (corte de stream en el server, ejecución en el navegador con wasmoon, resultado como rol `tool` escapado, máx. 3 rondas). `check` determinista en cliente sobre bloques `lua` pegados. Bloqueada por revisión de seguridad de M4.
 - **3 Memorias**: localStorage, inyectadas como dato en bloque propio con tope, no cacheadas.
 - **4 Cross-session**: sesiones locales, el usuario elige cuáles adjuntar, resumen para el presupuesto.
@@ -205,7 +205,7 @@ Todos sin red: `fetch` simulado, como los tests actuales.
 
 ## Fase 0b: dashboard de IA (v0.14.0)
 
-Página `/ask` (solo owner), servida por la query GraphQL `aiUsage(days)` del server, que agrega sobre `usage_events`.
+Página `/dashboard` (solo owner), servida por la query GraphQL `aiUsage(days)` del server, que agrega sobre `usage_events`.
 
 - **Acceso:** `aiUsage` exige `owner` (`unauthenticated` si no hay sesión, `owner_required` para cualquier otro rol, `usage_unavailable` sin `USAGE_DB_PATH`). La página muestra un solo aviso a quien no es owner. No está en el sidebar: se llega por URL o por el palette (Ctrl+K, entrada visible solo para owner).
 - **Periodos:** hoy, 7, 30 y 90 días (el server admite 1 a 180). Los días son UTC y todos aparecen, los vacíos como cero.

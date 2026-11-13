@@ -24,7 +24,7 @@ export const routes: RouteObject[] = [
       { path: '/natives/:slug', element: <Native /> },
       { path: '/tools', element: <Tools /> },
       { path: '/roadmap', element: <Roadmap /> },
-      { path: '/ask', element: <AiUsage /> },
+      { path: '/dashboard', element: <AiUsage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

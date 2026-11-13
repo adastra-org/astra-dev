@@ -55,7 +55,7 @@ describe('palette provider', () => {
 
   test('shows without a query and for related words, hides for unrelated ones', async () => {
     const empty = await aiUsageProvider.search('', ctx, sig)
-    expect(empty.map((i) => i.to)).toEqual(['/ask'])
+    expect(empty.map((i) => i.to)).toEqual(['/dashboard'])
     expect(await aiUsageProvider.search('tokens', ctx, sig)).toHaveLength(1)
     expect(await aiUsageProvider.search('uso de ia', ctx, sig)).toHaveLength(1)
     expect(await aiUsageProvider.search('rollback', ctx, sig)).toHaveLength(0)

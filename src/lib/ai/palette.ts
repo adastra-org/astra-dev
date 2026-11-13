@@ -16,7 +16,7 @@ export const aiUsageProvider: PaletteProvider = {
       title: t(ctx.lang, 'ai.palette.title'),
       subtitle: t(ctx.lang, 'ai.palette.hint'),
       icon: 'tools' as const,
-      to: '/ask',
+      to: '/dashboard',
     }
     if (!q.trim()) return [item]
     const hit = scoreMatch(q, {

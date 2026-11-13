@@ -110,7 +110,7 @@ export function serverEnv(
   }
   // Sin viewer el panel pide iniciar sesión y en dev no hay dónde (cuentas viven en adastra-site).
   // Quien corre `bun dev` es el dueño de su máquina: owner (sin límites) y con el registro de uso
-  // prendido, para ver `/ask` con datos reales.
+  // prendido, para ver `/dashboard` con datos reales.
   setDefault('ASTRA_DEV_VIEWER', 'owner')
   setDefault('USAGE_DB_PATH', 'data/usage.sqlite')
   if (flags.fake) out.LLM_PROVIDER = 'fake'

@@ -115,7 +115,7 @@ Hoy `subscriber`, `staff` y `owner` pueden chatear. `staff` read-write queda par
 
 ### Dashboard de IA (v0.14.0)
 
-`aiUsage(days)` (GraphQL, solo `owner`) devuelve los agregados del registro de uso: totales, tokens y GPU por día, por modelo, top 10 de usuarios y resultados. Errores: `unauthenticated`, `owner_required`, `usage_unavailable` (sin `USAGE_DB_PATH`). `days` va de 1 a 180. La página es `/ask`, ver [chat/README.md](../chat/README.md).
+`aiUsage(days)` (GraphQL, solo `owner`) devuelve los agregados del registro de uso: totales, tokens y GPU por día, por modelo, top 10 de usuarios y resultados. Errores: `unauthenticated`, `owner_required`, `usage_unavailable` (sin `USAGE_DB_PATH`). `days` va de 1 a 180. La página es `/dashboard`, ver [chat/README.md](../chat/README.md).
 
 ### Rol `owner` (v0.13.0)
 
