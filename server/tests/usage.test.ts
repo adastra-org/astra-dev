@@ -143,6 +143,7 @@ describe('usage records over HTTP', () => {
     const r = await h.call('/chat', { json: { question: 'deploy' } })
     expect(r.status).toBe(200)
     expect(parseSse(await r.text()).map((e) => e.event)).toContain('done')
+    store.flush()
     expect(store.writeErrors).toBeGreaterThan(0)
   })
 
@@ -206,12 +207,43 @@ describe('usage store', () => {
       a.record(rec())
       b.record(rec())
     }
+    a.flush()
+    b.flush()
     expect(a.writeErrors + b.writeErrors).toBe(0)
     expect(
       a.query<{ n: number }>('SELECT COUNT(*) n FROM usage_events')[0]!.n,
     ).toBe(200)
     a.close()
     b.close()
+  })
+
+  test('record() does not touch the disk: rows appear on flush or after a short delay', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'usage-'))
+    const path = join(dir, 'usage.sqlite')
+    const writer = new UsageStore(path)
+    const reader = new UsageStore(path)
+    const count = () =>
+      reader.query<{ n: number }>('SELECT COUNT(*) n FROM usage_events')[0]!.n
+    writer.record(rec())
+    expect(count()).toBe(0)
+    writer.flush()
+    expect(count()).toBe(1)
+    writer.record(rec())
+    expect(count()).toBe(1)
+    await new Promise((r) => setTimeout(r, 450))
+    expect(count()).toBe(2)
+    writer.close()
+    reader.close()
+  })
+
+  test('a failed batch is counted and dropped, not retried', () => {
+    const s = new UsageStore(':memory:')
+    // The table is gone, so the batch cannot be written.
+    s.query('DROP TABLE usage_events')
+    for (let i = 0; i < 99; i++) s.record(rec())
+    expect(s.writeErrors).toBe(0)
+    s.flush()
+    expect(s.writeErrors).toBe(99)
   })
 
   test('purge removes only what is older than the retention', () => {

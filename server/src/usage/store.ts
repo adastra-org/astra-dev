@@ -59,13 +59,24 @@ CREATE INDEX IF NOT EXISTS usage_viewer_day ON usage_events(viewer_id, day);
 `
 
 export interface UsageSink {
+  /** Hands a record over. Never blocks the request and never throws. */
   record(r: UsageRecord): void
+  /** Writes whatever is still waiting. Called on shutdown. */
+  flush?(): void
 }
+
+/** Records wait in memory and are written in one transaction: off the request path, one fsync per batch. */
+const FLUSH_MS = 250
+const FLUSH_AT = 100
+/** If the disk stalls this long a backlog can build; past this many records the oldest are dropped. */
+const MAX_QUEUE = 5000
 
 export class UsageStore implements UsageSink {
   readonly #db: Database
   readonly #insert
-  /** Writes that failed since boot. Exposed for logs and tests. */
+  #queue: UsageRecord[] = []
+  #timer: ReturnType<typeof setTimeout> | null = null
+  /** Records lost since boot (failed write or full queue). Exposed for logs and tests. */
   writeErrors = 0
 
   constructor(path: string) {
@@ -87,7 +98,39 @@ export class UsageStore implements UsageSink {
   }
 
   record(r: UsageRecord): void {
+    if (this.#queue.length >= MAX_QUEUE) {
+      this.#queue.shift()
+      this.writeErrors++
+    }
+    this.#queue.push(r)
+    if (this.#queue.length >= FLUSH_AT) this.flush()
+    else if (!this.#timer) {
+      this.#timer = setTimeout(() => this.flush(), FLUSH_MS)
+      // A pending flush must not keep the process alive; shutdown calls flush() itself.
+      this.#timer.unref?.()
+    }
+  }
+
+  /** Writes the queue in one transaction. A failed batch is counted and dropped, never retried forever. */
+  flush(): void {
+    if (this.#timer) {
+      clearTimeout(this.#timer)
+      this.#timer = null
+    }
+    const batch = this.#queue
+    if (!batch.length) return
+    this.#queue = []
     try {
+      this.#db.transaction((rows: UsageRecord[]) => {
+        for (const r of rows) this.#write(r)
+      })(batch)
+    } catch {
+      this.writeErrors += batch.length
+    }
+  }
+
+  #write(r: UsageRecord): void {
+    {
       this.#insert.run({
         $ts: r.ts,
         $day: new Date(r.ts).toISOString().slice(0, 10),
@@ -109,13 +152,12 @@ export class UsageStore implements UsageSink {
         $gpuMs: r.gpuMs,
         $costUsdEst: r.costUsdEst,
       })
-    } catch {
-      this.writeErrors++
     }
   }
 
   /** Deletes records older than `retentionDays`. Returns how many were removed. */
   purge(retentionDays: number, now = Date.now()): number {
+    this.flush()
     try {
       const cutoff = now - retentionDays * 86_400_000
       return this.#db.run('DELETE FROM usage_events WHERE ts < ?', [cutoff])
@@ -128,10 +170,12 @@ export class UsageStore implements UsageSink {
 
   /** Read-only handle for tests and the dashboard queries (phase 0b). */
   query<T>(sql: string, ...params: (string | number | null)[]): T[] {
+    this.flush()
     return this.#db.query(sql).all(...params) as T[]
   }
 
   close() {
+    this.flush()
     this.#db.close()
   }
 }

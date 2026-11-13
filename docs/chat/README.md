@@ -73,6 +73,8 @@ Fase 0 solo deja `policy.maxRounds` y la config; el contador y el evento `confir
 
 ### 0.3 Registro de uso
 
+**Escala:** el handler solo depende de `UsageSink`; la escritura es por lotes fuera de la ruta de la request. SQLite alcanza para un host; si otro proyecto o varias instancias lo necesitan, se extrae `UsageSink` y el esquema a un paquete compartido con adaptadores (Postgres, colector HTTP). No se arma antes de tener el segundo consumidor.
+
 **Almacén: SQLite (`bun:sqlite`) en WAL**, en una ruta **fuera de los slots**, configurable con `USAGE_DB_PATH` (propuesta: `~/deploy/data/astra-dev/usage.sqlite`). Motivo: blue y green corren desde `~/deploy/astra-dev-server/<slot>` y un `server/data/` por slot dividiría el historial en dos. Con WAL y `busy_timeout`, dos procesos escriben sin problema. JSONL rotado se descarta: agregar sobre dos writers y rotaciones es más frágil que una consulta SQL.
 
 Escritura: **una fila por request** al terminar el handler de `/chat` (en `finally`, igual que el log actual), incluidos los rechazos (`rate_limited`, `budget_exceeded`, `subscription_required`), para que "rate limits golpeados" salga de la misma tabla. La escritura nunca rompe la petición: `try/catch` y contador de errores de escritura.
