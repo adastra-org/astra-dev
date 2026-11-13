@@ -13,6 +13,7 @@ import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { chatSettingsFor, type Policy } from '../policy.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
+import { renderStyle, styleLabel, type ChatStyle } from './style.ts'
 import {
   REFUSAL_ES,
   buildPrompt,
@@ -137,6 +138,8 @@ export interface ChatInput {
   sources?: string[]
   /** Validated user memories (`parseMemories`). Their presence turns the answer cache off. */
   memories?: string[]
+  /** Validated tone/length (`parseStyle`). Part of the cache key unless it is the default. */
+  style?: ChatStyle
   /** UI language of the visitor. */
   lang?: ChatLang
   /** Who asks. Only goes to the model inside <entorno>; never part of the cache key. */
@@ -278,11 +281,13 @@ ${question}`
 
     const now = (this.#d.now ?? (() => new Date()))()
     const lang: ChatLang = input.lang ?? 'es'
+    const styleBody = input.style ? renderStyle(input.style) : ''
     const built: BuiltPrompt = buildPrompt({
       question,
       history,
       hits,
       ...(input.memories?.length ? { memories: input.memories } : {}),
+      ...(styleBody ? { style: styleBody } : {}),
       contextMaxChars: s.contextMaxChars,
       env: renderEnv({
         lang,
@@ -366,7 +371,7 @@ ${question}`
             history,
             sourceIds: built.used.map((h) => h.id),
             // The answer can depend on these, so they split the cache; the user does not.
-            context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}`,
+            context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}${styleBody ? `|${styleLabel(input.style!)}` : ''}`,
           })
         : null
     const cached = key ? cache!.get(key) : null
