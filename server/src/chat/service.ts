@@ -64,7 +64,14 @@ export type ChatStep =
   | { id: 'cache'; ms: number }
 
 export type ChatEvent =
-  | { type: 'meta'; requestId: string; mode: SearchMode; degraded: boolean }
+  | {
+      type: 'meta'
+      requestId: string
+      mode: SearchMode
+      degraded: boolean
+      /** Tokens the model holds (prompt + answer). Absent when the deployment does not say. */
+      contextWindow?: number
+    }
   | { type: 'step'; step: ChatStep }
   /** The model's reasoning, only for viewers allowed to see it (`showThinking`). */
   | { type: 'thinking'; text: string }
@@ -78,6 +85,8 @@ export type ChatEvent =
       /** The answer came from the cache: no model call, no tokens spent. */
       cached?: boolean
       usage: { inputTokens: number; outputTokens: number }
+      /** The provider sent no usage: `usage` is a count from the text. */
+      usageEstimated?: boolean
     }
   | { type: 'error'; code: string; message: string }
 
@@ -111,6 +120,8 @@ export interface ChatDeps {
   head?: HeadSource
   /** Version of the running build, shown in <entorno>. */
   version?: string
+  /** Context window of the model, sent in `meta` so the client can show the budget. */
+  contextWindow?: number
   now?: () => Date
 }
 
@@ -266,12 +277,14 @@ export class ChatService {
     }))
 
     // First events of every stream: meta, then what the pipeline did.
+    const contextWindow = this.#d.contextWindow
     const lead = function* (extra: ChatStep[] = []): Generator<ChatEvent> {
       yield {
         type: 'meta',
         requestId: input.requestId,
         mode: found.mode,
         degraded: found.degraded,
+        ...(contextWindow === undefined ? {} : { contextWindow }),
       }
       for (const step of [...steps, ...extra]) yield { type: 'step', step }
     }
@@ -459,6 +472,7 @@ export class ChatService {
             inputTokens: estimateTokens(inputChars),
             outputTokens: estimateTokens(answer.length),
           },
+          usageEstimated: usage === null,
         }
       },
     }

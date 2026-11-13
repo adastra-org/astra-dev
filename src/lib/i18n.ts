@@ -502,6 +502,36 @@ print(("%.2f"):format(math.pi))
   'ask.err.request.hint': 'Prueba con una pregunta más corta.',
   'ask.err.other': 'Algo falló en el servidor de Ask Ether.',
   'ask.err.other.hint': 'Reintenta en unos segundos.',
+  'ask.page.eyebrow': 'Asistente',
+  'ask.page.title': 'Ask Ether',
+  'ask.page.lead':
+    'Pregunta sobre la documentación y las natives. Cada respuesta cita sus fuentes.',
+  'ask.page.open': 'Abrir en página completa',
+  'ask.edit': 'Editar',
+  'ask.editLabel': 'Editar la pregunta',
+  'ask.editSave': 'Enviar de nuevo',
+  'ask.editCancel': 'Cancelar',
+  'ask.resend': 'Reenviar',
+  'ask.turnActions': 'Acciones de la pregunta',
+  'ask.budget.title': 'Contexto',
+  'ask.budget.lead': 'Próximo envío',
+  'ask.budget.value': '{used} de {limit} tokens',
+  'ask.budget.draft': 'Incluye el borrador, estimado en {n} tokens.',
+  'ask.budget.estimated':
+    'El proveedor no informó el uso: el conteo es una estimación.',
+  'ask.budget.warn':
+    'Cerca del límite. Una conversación nueva deja lugar para respuestas largas.',
+  'ask.budget.full':
+    'No hay lugar para otro envío completo. Empieza una conversación nueva o acorta la pregunta.',
+  'ask.budget.empty': 'Se mide después de la primera respuesta.',
+  'ask.speed.title': 'Velocidad',
+  'ask.speed.tps': '{n} tokens por segundo',
+  'ask.speed.ttft': 'Primer texto a los {n} ms',
+  'ask.speed.none': 'Sin medida en la última respuesta.',
+  'ask.rail.title': 'Estado de la conversación',
+  'ask.rail.session': 'Sesión',
+  'ask.rail.questions': 'Preguntas: {n}',
+  'ask.rail.tokens': 'Tokens enviados y recibidos: {n}',
 } as const
 
 export type MessageKey = keyof typeof es
@@ -996,6 +1026,36 @@ print(("%.2f"):format(math.pi))
   'ask.err.request.hint': 'Try a shorter question.',
   'ask.err.other': 'Something failed on the Ask Ether server.',
   'ask.err.other.hint': 'Retry in a few seconds.',
+  'ask.page.eyebrow': 'Assistant',
+  'ask.page.title': 'Ask Ether',
+  'ask.page.lead':
+    'Ask about the documentation and the natives. Every answer cites its sources.',
+  'ask.page.open': 'Open full page',
+  'ask.edit': 'Edit',
+  'ask.editLabel': 'Edit the question',
+  'ask.editSave': 'Send again',
+  'ask.editCancel': 'Cancel',
+  'ask.resend': 'Resend',
+  'ask.turnActions': 'Question actions',
+  'ask.budget.title': 'Context',
+  'ask.budget.lead': 'Next send',
+  'ask.budget.value': '{used} of {limit} tokens',
+  'ask.budget.draft': 'Includes the draft, estimated at {n} tokens.',
+  'ask.budget.estimated':
+    'The provider did not report usage: the count is an estimate.',
+  'ask.budget.warn':
+    'Close to the limit. A new conversation leaves room for long answers.',
+  'ask.budget.full':
+    'There is no room for another full send. Start a new conversation or shorten the question.',
+  'ask.budget.empty': 'Measured after the first answer.',
+  'ask.speed.title': 'Speed',
+  'ask.speed.tps': '{n} tokens per second',
+  'ask.speed.ttft': 'First text at {n} ms',
+  'ask.speed.none': 'No measure for the last answer.',
+  'ask.rail.title': 'Conversation status',
+  'ask.rail.session': 'Session',
+  'ask.rail.questions': 'Questions: {n}',
+  'ask.rail.tokens': 'Tokens sent and received: {n}',
 }
 
 export const MESSAGES: Record<UiLang, Record<MessageKey, string>> = { es, en }

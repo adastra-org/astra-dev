@@ -181,6 +181,7 @@ export async function buildDeps(
         retriever,
         llm: createLlm(config, logger),
         version: build.version,
+        contextWindow: config.llm.contextWindow,
         head: config.project.githubToken
           ? new GithubHeadSource({
               github: new GithubClient({

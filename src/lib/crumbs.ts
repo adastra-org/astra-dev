@@ -9,6 +9,7 @@ export interface Crumb {
 
 /** Páginas con ruta propia que no están en la navegación (se llega por URL o por el palette). */
 const HIDDEN_PAGES: readonly { to: string; label: MessageKey }[] = [
+  { to: '/ask', label: 'ask.page.title' },
   { to: '/dashboard', label: 'ai.title' },
 ]
 
