@@ -6,6 +6,7 @@ import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
+import { prefsStore, type StyleBody } from './prefs'
 import { toWire, type ToolResult } from './tool-result'
 import { TOOL_NAMES, runTool } from './tools'
 import {
@@ -67,6 +68,8 @@ export interface Turn {
   /** Uso de tokens que informó el `done`. Null hasta que llega. */
   usage: { inputTokens: number; outputTokens: number } | null
   usageEstimated: boolean
+  /** Velocidad que midió el modelo (`done.tps`). Null si el proveedor no la informó. */
+  serverTps: number | null
   /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
   memoryTokens: number
   /** Herramientas que el modelo llamó en esta respuesta, en orden. */
@@ -107,6 +110,7 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   timing: { startedAt: null, firstDeltaAt: null, doneAt: null },
   usage: null,
   usageEstimated: false,
+  serverTps: null,
   memoryTokens: 0,
   tools: [],
   confirm: null,
@@ -174,6 +178,10 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
         cached: ev.cached === true,
         usage: ev.usage,
         usageEstimated: ev.usageEstimated === true,
+        serverTps:
+          typeof ev.tps === 'number' && Number.isFinite(ev.tps) && ev.tps > 0
+            ? ev.tps
+            : null,
         ...(at === undefined ? {} : { timing: { ...turn.timing, doneAt: at } }),
       }
     case 'error':
@@ -254,6 +262,8 @@ export interface AskStoreOptions {
   now?: () => number
   /** Memorias activas a enviar. Por defecto las del navegador (`memoryStore`). */
   memories?: () => string[]
+  /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
+  style?: () => StyleBody | undefined
   /** Herramientas que se ofrecen al modelo. Por defecto las del registro del cliente. */
   tools?: readonly string[]
   /** Ejecuta una llamada del modelo. Por defecto el sandbox del navegador. */
@@ -265,6 +275,7 @@ interface RunBase {
   history: HistoryTurn[]
   sources: string[]
   memories: string[]
+  style: StyleBody | undefined
 }
 
 export class AskStore {
@@ -357,6 +368,7 @@ export class AskStore {
     const history = historyFor(this.#state.turns)
     const sources = sourcesFor(this.#state.turns)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    const style = (this.#opts.style ?? (() => prefsStore.style()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
     const startedAt = this.#now()
@@ -374,7 +386,11 @@ export class AskStore {
 
     const ctl = new AbortController()
     this.#abort = ctl
-    await this.#drive(id, { question: q, history, sources, memories }, ctl)
+    await this.#drive(
+      id,
+      { question: q, history, sources, memories, style },
+      ctl,
+    )
   }
 
   /**
@@ -394,6 +410,7 @@ export class AskStore {
           question: base.question,
           history: base.history,
           memories: base.memories,
+          ...(base.style ? { style: base.style } : {}),
           sources: base.sources,
           tools: this.#opts.tools ?? TOOL_NAMES,
           steps: stepsFor(turn),
@@ -451,6 +468,7 @@ export class AskStore {
     if (!turn?.confirm || this.busy) return
     const prior = this.#state.turns.slice(0, idx)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    const style = (this.#opts.style ?? (() => prefsStore.style()))()
     this.#update(id, (t) => ({
       ...t,
       confirm: null,
@@ -466,6 +484,7 @@ export class AskStore {
         history: historyFor(prior),
         sources: sourcesFor(prior),
         memories,
+        style,
       },
       ctl,
     )

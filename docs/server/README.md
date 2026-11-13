@@ -50,26 +50,26 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 | `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
 | `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
 | `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, sources?, tools?, steps?, continued?, lang?}`. Respuesta SSE                                                                                                                                                                         |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, tools?, steps?, continued?, lang?}`. Respuesta SSE                                                                                                                                                                 |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
 ### `POST /chat`
 
-Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"], "sources": ["get-vehicle-class"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
+Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"], "style": {"tone":"formal","length":"brief"}, "sources": ["get-vehicle-class"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
 
-| Estado | `code`                  | Cuándo                                                                                                       |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories` o `sources` mal formados o sobre sus topes, tipo MIME |
-| 401    | `unauthenticated`       | Sin sesión                                                                                                   |
-| 403    | `subscription_required` | Con sesión pero rol `public`                                                                                 |
-| 403    | `forbidden_origin`      | `Origin` no permitido                                                                                        |
-| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES` (más `CHAT_MAX_STEPS_BYTES` si trae `steps`)                              |
-| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                          |
-| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                             |
-| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                      |
-| 503    | `viewer_unavailable`    | Cuentas no responde                                                                                          |
-| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                                         |
+| Estado | `code`                  | Cuándo                                                                                                                |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories`, `style` o `sources` mal formados o sobre sus topes, tipo MIME |
+| 401    | `unauthenticated`       | Sin sesión                                                                                                            |
+| 403    | `subscription_required` | Con sesión pero rol `public`                                                                                          |
+| 403    | `forbidden_origin`      | `Origin` no permitido                                                                                                 |
+| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES` (más `CHAT_MAX_STEPS_BYTES` si trae `steps`)                                       |
+| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                                   |
+| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                                      |
+| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                               |
+| 503    | `viewer_unavailable`    | Cuentas no responde                                                                                                   |
+| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                                                  |
 
 **`memories` (opcional, v0.16.0).** Lista de preferencias del usuario que el cliente guarda en su navegador y manda con cada pregunta. Validación estricta, sin recorte silencioso: tiene que ser un array de strings, como mucho 12, cada una de 1 a 280 caracteres (después de limpiar caracteres invisibles y de control), 2000 caracteres entre todas. Ausente, `null` o `[]` equivale a no mandar nada; cualquier otra forma o exceso es `400 bad_request` antes de buscar o llamar al modelo. Los topes valen también para `owner` (son el formato del campo, no una política de uso); `CHAT_MAX_BODY_BYTES` sigue aplicando al cuerpo completo.
 
@@ -77,6 +77,13 @@ Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":".
 - **No se cachean**: con memorias la respuesta ni se lee ni se guarda en la caché (la clave no las incluye a propósito).
 - **No se loguean**: el log de la request lleva solo `memories: <cantidad>`; ni el log ni `usage_events` tienen el texto. Probado en `server/tests/memories.test.ts`.
 - No cuentan para `CHAT_CONTEXT_MAX_CHARS` (eso recorta fuentes): se suman aparte, como mucho 2000 caracteres (unos 700 tokens).
+
+**`style` (opcional, v0.19.1).** Tono y largo de la respuesta, elegidos en el onboarding del chat (`/ask`). Es una preferencia **acotada**, nunca texto libre: un objeto plano `{ tone?, length? }` donde `tone` es `neutral` | `formal` | `cercano` y `length` es `brief` | `balanced` | `detailed`. Validación estricta: cualquier otra forma, una clave de más o un valor fuera del enum es `400 bad_request` antes de buscar o llamar al modelo. Ausente, `null` o `{}` equivale a `neutral`/`balanced`, que es el comportamiento de antes. Código: `server/src/chat/style.ts`.
+
+- Va al modelo en un bloque propio `<estilo>` (entre `<memorias>` y `<contexto>`) con frases fijas que el server elige a partir del enum (`tono: ...`, `largo: ...`), escapado con `escapeData`. Con los valores por defecto no hay bloque. La regla 10 del prompt dice que solo cambia la forma (no son fuentes, no se citan, no cambian las reglas) y que `brief`/`detailed` sustituyen el máximo de palabras de la regla 6 (120 / 400).
+- **Caché**: el estilo cambia la respuesta, así que entra a la clave (`context`) cuando no es el por defecto: el mismo texto con otro tono no comparte entrada. Con los valores por defecto la clave es la de siempre. A diferencia de `memories`, no apaga la caché: son pocos valores, no datos del usuario.
+- **Log**: la request lleva `style: "tono/largo"` (solo los enums) cuando no es el por defecto. No va a `usage_events`.
+- El nombre y el color que se eligen en el onboarding **no** viajan: se quedan en el navegador.
 
 **`sources` (opcional, v0.17.1).** Slugs de las fuentes que citó la respuesta anterior (los `slug` del evento `sources`). Sirve para los follow-ups: "explicame eso", "y cómo lo uso?", "dame un ejemplo". Validación estricta: array de strings, como mucho 8, cada una de hasta 160 caracteres con la forma de un slug (`[A-Za-z0-9][A-Za-z0-9._/-]*`); duplicados se juntan; ausente, `null` o `[]` es no mandar nada; cualquier otra forma es `400 bad_request`. Un slug desconocido no encuentra nada ni falla el pedido. El server solo los usa como filtro del índice, nunca como texto.
 
@@ -105,7 +112,7 @@ event: step     data: {"step":{"id":"history|search|gate|cache","ms":12,…}}   
 event: thinking data: {"text":"…"}                      (solo staff, entre `sources` y los `delta`)
 event: sources  data: {"sources":[{"n":1,"slug":"…","title":"…","heading":"…","anchor":"…","path":"/docs/slug#anchor","excerpt":"…","score":0.71}]}
 event: delta    data: {"text":"…"}                      (muchos)
-event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"cached":true,"usage":{"inputTokens":…,"outputTokens":…},"usageEstimated":false}   (`cached` solo si salió de la caché; `usageEstimated` true cuando el proveedor no informó uso)
+event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"cached":true,"usage":{"inputTokens":…,"outputTokens":…},"usageEstimated":false,"tps":125.4}   (`cached` solo si salió de la caché; `usageEstimated` true cuando el proveedor no informó uso; `tps` solo con un modelo local, v0.19.2: tokens por segundo que midió el propio modelo, razonamiento incluido. Ausente = no se informa y el cliente no la inventa)
 event: error    data: {"code":"llm_unavailable","message":"…"}   (en lugar de done)
 ```
 
@@ -396,6 +403,18 @@ Medición (2026-11-12, llama.cpp b12314, RTX 5070, `Q8_0`, 36 casos propios en e
 ### Preguntas en español sobre natives (v0.17.1)
 
 Los natives están indexados en inglés (`GET_VEHICLE_CLASS`) y el embedder cruza mal español-inglés en identificadores: "cómo obtengo la velocidad de un vehículo" dejaba fuera el native correcto aunque existiera. `Retriever.searchMany` ahora fusiona (RRF, k=60) el ranking semántico de natives con un match léxico sobre las palabras del _nombre_ (`server/src/index/names.ts`): la pregunta se traduce con un glosario ES->EN de verbos (`obtengo`->get, `cambio`->set, `elimino`->delete...) y sustantivos (`matrícula`->plate, `clase`->class...) en `server/src/index/glossary.ts`, y se puntúa con F1 ponderado por idf (los verbos casi no pesan, un verbo solo no matchea nada, mínimo 0,4 para votar). El mismo glosario expande la búsqueda BM25 cuando el embedder no responde. El glosario es vocabulario general: si falta una palabra, se agrega ahí, no se parchea una pregunta. Tests: `server/tests/retrieval-es.test.ts`.
+
+### Calidad de respuestas (v0.19.2)
+
+Tres fallas de una conversación real (`GetActualScreenResolution` → "¿tiene variables de entrada?" → "¿me mostrás un uso de ejemplo?", que derivó a natives de audio) y su causa:
+
+- **Follow-up sin tema.** La consulta era `último turno del usuario + pregunta`; ninguna nombra el native, y palabras como "variables" o "ejemplo" arrastran natives que las contienen (`SET_VARIABLE_ON_SOUND`). El gate, que juzgaba esa misma consulta, los dejaba pasar (8 de 8) y el modelo los usaba. Ahora, en un follow-up, el **tema** (el título de cada fuente que citó la respuesta anterior, que en un native es su nombre; sin `sources`, los natives nombrados en la conversación) va primero en la consulta, el gate lo recibe aparte (`select(q, hits, {topic})`: "¿trata del tema y hace falta para responder?"; medido con el 2B en ese caso: 0,91 el native correcto, ≤ 0,06 el audio, contra 0,75-0,86 sin tema), y el prompt lo muestra en `<tema>` con la regla 10: no mezclar nativas ni documentos sin relación con la pregunta. Las fuentes arrastradas van primero, nunca las juzga el gate y, si una pregunta vaga no puntúa ninguna, igual quedan.
+- **Un native nombrado en la pregunta** (`GetActualScreenResolution`, hash, alias) hace que la pregunta se sostenga sola: no se consulta al decisor (que la marcaba como follow-up y mezclaba el turno anterior), no se le suma historial y el gate no lo puede descartar (antes lo descartó con score 1).
+- **Velocidad absurda ("2852 tokens por segundo").** `usage.outputTokens` cuenta también los tokens de razonamiento, pero el reloj del cliente arrancaba en el primer texto visible: el modelo pensaba ~7 s y emitía la respuesta en una ráfaga. Ahora el server manda `done.tps` desde los `timings` de llama.cpp (`predicted_n / predicted_ms`); sin eso el cliente solo mide si no hubo razonamiento, hubo ≥ 500 ms de texto y ≥ 8 tokens, y descarta por encima de 1000 tok/s (muestra "— tokens por segundo"). El registro de uso (`gen_tps`) usa el mismo criterio.
+
+**Glosario de dibujo y texto.** Se sumaron al glosario ES→EN los verbos y sustantivos de `DRAW_*`, `SET_TEXT_*` y `*_TEXT_COMMAND_*` (dibujar, mostrar, escribir, rectángulo, línea, subtítulo, mensaje, pantalla, fuente, tamaño, contorno, sombra...). Con el embedder caído (solo BM25), "cómo dibujo un rectángulo" pasó de rechazo a `DRAW_RECT`.
+
+**Si todo se rechaza y no debería:** antes de tocar umbrales, comprobar que el índice corresponde al embedder que corre. Un `index.json` generado con otro GGUF da cosenos ~0 contra las consultas (un fragmento embebido hoy contra su propio vector daba −0,02), la búsqueda cae a palabras clave y "cómo dibujo texto en pantalla" no encuentra nada. Se arregla con `cd server && bun run index` (~1 min) con el embedder local arriba.
 
 ### Qué entra al prompt: gate y `<entorno>`
 

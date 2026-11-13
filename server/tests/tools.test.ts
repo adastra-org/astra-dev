@@ -655,6 +655,44 @@ describe('POST /chat with tools', () => {
   })
 })
 
+describe('tools alongside style, topic and sources (merge of #44/#46 into #45)', () => {
+  test('one continuation carries <estilo>, <contexto>, <pasos> and the tools block, in a sane order', async () => {
+    const h = await harness()
+    const res = await h.call('/chat', {
+      json: {
+        question: Q,
+        style: { tone: 'cercano', length: 'brief' },
+        tools: ['ejecutar'],
+        steps: [step()],
+      },
+    })
+    expect(res.status).toBe(200)
+    await res.text()
+    const req = h.llm.requests[0]!
+    const sys = req.messages[0]!.content
+    const user = req.messages.at(-1)!.content
+    expect(sys).toContain('<herramienta nombre="NOMBRE">')
+    // dev's rules 10 (estilo) and 11 (tema) are intact
+    expect(sys).toContain('10. <estilo>')
+    expect(sys).toContain('11. Responde solo lo que se preguntó')
+    expect(user).toContain('<estilo>\ntono: cercano')
+    const at = (t: string) => user.indexOf(t)
+    expect(at('<estilo>')).toBeGreaterThanOrEqual(0)
+    expect(at('<estilo>')).toBeLessThan(at('<contexto>'))
+    expect(at('<pregunta>')).toBeLessThan(at('<pasos>'))
+    expect(at('<pasos>')).toBeGreaterThan(0)
+  })
+
+  test('with steps the cache is never read, even for an identical request', async () => {
+    const h = await harness()
+    const call = (extra: object) =>
+      h.call('/chat', { json: { question: Q, ...extra } }).then((r) => r.text())
+    await call({ tools: ['ejecutar'], steps: [step()] })
+    await call({ tools: ['ejecutar'], steps: [step()] })
+    expect(h.llm.requests).toHaveLength(2)
+  })
+})
+
 describe('golden results from the client', () => {
   // docs/chat/tool-result.golden.json is written by the client test (src/lib/ask/chat-tools.test.ts)
   // from its own conversions: if the two sides drift apart, this is what breaks.

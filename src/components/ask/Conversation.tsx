@@ -376,10 +376,12 @@ function Speed({ turn }: { turn: Turn }) {
       <Gauge className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <span className="sr-only">{tr('ask.speed.title')}</span>
       {ttft !== null && <span>{tr('ask.speed.ttft', { n: ttft })}</span>}
-      {tps !== null && (
+      {tps !== null ? (
         <span className="tabular-nums">
           {tr('ask.speed.tps', { n: fmtCount(tps, lang) })}
         </span>
+      ) : (
+        <span className="tabular-nums">{tr('ask.speed.tpsNone')}</span>
       )}
     </p>
   )

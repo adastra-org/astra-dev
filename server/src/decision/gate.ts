@@ -5,12 +5,22 @@
 // (fail open), exactly like running without a gate.
 import type { Hit } from '../index/search.ts'
 
+export interface GateOptions {
+  signal?: AbortSignal
+  /**
+   * What the conversation is about (names of the natives or docs the previous answer used). Given
+   * on a follow-up: a vague question ("me mostrás un ejemplo?") cannot tell relevant from merely
+   * similar fragments, the topic can. Then a fragment must be about the topic to stay.
+   */
+  topic?: string
+}
+
 export interface ContextGate {
   /** The subset of `hits` to keep, in the same order; `null` = could not decide (keep all). */
   select(
     question: string,
     hits: readonly Hit[],
-    signal?: AbortSignal,
+    options?: GateOptions,
   ): Promise<Hit[] | null>
 }
 
@@ -29,6 +39,8 @@ export interface D1GateOptions {
 
 const INSTRUCTIONS =
   'El fragmento contiene información que hace falta para responder la pregunta del usuario (no solo comparte palabras con ella).'
+const TOPIC_INSTRUCTIONS =
+  'El fragmento trata del tema de la conversación y hace falta para responder la pregunta del usuario (no basta con compartir palabras con ella).'
 
 export class D1ContextGate implements ContextGate {
   readonly #o: D1GateOptions
@@ -39,11 +51,11 @@ export class D1ContextGate implements ContextGate {
   async select(
     question: string,
     hits: readonly Hit[],
-    signal?: AbortSignal,
+    options: GateOptions = {},
   ): Promise<Hit[] | null> {
     if (!hits.length) return []
     const probs = await Promise.all(
-      hits.map((h) => this.#probability(question, h, signal)),
+      hits.map((h) => this.#probability(question, h, options)),
     )
     // One failed fragment makes the whole decision unreliable: keep everything.
     if (probs.some((p) => p === null)) return null
@@ -58,7 +70,7 @@ export class D1ContextGate implements ContextGate {
   async #probability(
     question: string,
     hit: Hit,
-    signal?: AbortSignal,
+    { signal, topic }: GateOptions,
   ): Promise<number | null> {
     const f = this.#o.fetch ?? fetch
     const timeout = AbortSignal.timeout(this.#o.timeoutMs)
@@ -67,8 +79,13 @@ export class D1ContextGate implements ContextGate {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          state: `Pregunta del usuario: ${question}\n\nFragmento (${hit.title} / ${hit.heading ?? ''}):\n${hit.text.slice(0, this.#o.maxFragmentChars)}`,
-          questions: { relevant: { type: 'noul', instructions: INSTRUCTIONS } },
+          state: `${topic ? `Tema de la conversación: ${topic}\n` : ''}Pregunta del usuario: ${question}\n\nFragmento (${hit.title} / ${hit.heading ?? ''}):\n${hit.text.slice(0, this.#o.maxFragmentChars)}`,
+          questions: {
+            relevant: {
+              type: 'noul',
+              instructions: topic ? TOPIC_INSTRUCTIONS : INSTRUCTIONS,
+            },
+          },
         }),
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       })

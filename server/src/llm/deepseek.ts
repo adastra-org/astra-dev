@@ -89,7 +89,11 @@ export class DeepSeekProvider implements LlmProvider {
               delta?: { content?: unknown; reasoning_content?: unknown }
             }[]
             usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
-            timings?: { prompt_ms?: unknown; predicted_ms?: unknown }
+            timings?: {
+              prompt_ms?: unknown
+              predicted_ms?: unknown
+              predicted_n?: unknown
+            }
           }
           try {
             json = JSON.parse(data)
@@ -108,7 +112,19 @@ export class DeepSeekProvider implements LlmProvider {
             const ms =
               (typeof tm.prompt_ms === 'number' ? tm.prompt_ms : 0) +
               (typeof tm.predicted_ms === 'number' ? tm.predicted_ms : 0)
-            if (ms > 0) yield { type: 'timing', gpuMs: Math.round(ms) }
+            const n = tm.predicted_n
+            const pm = tm.predicted_ms
+            if (ms > 0)
+              yield {
+                type: 'timing',
+                gpuMs: Math.round(ms),
+                ...(typeof n === 'number' &&
+                typeof pm === 'number' &&
+                n > 0 &&
+                pm > 0
+                  ? { predictedTokens: n, predictedMs: pm }
+                  : {}),
+              }
           }
           const u = json.usage
           if (

@@ -9,7 +9,7 @@ import {
   sessionTotals,
   ttftMs,
 } from './budget'
-import { emptyTurn, type Turn } from './store'
+import { applyEvent, emptyTurn, type Turn } from './store'
 
 /** Turno ya respondido, con uso y tiempos dados. */
 const answered = (
@@ -89,6 +89,65 @@ describe('velocidad de salida', () => {
     })
     expect(outputSpeed(t)).toBe(50)
     expect(ttftMs(t)).toBe(300)
+  })
+
+  test('el caso real: respuesta de un modelo que razonó, "2852 tok/s"', () => {
+    // 1000 tokens de salida (casi todos razonamiento) y el texto visible llegó en 350 ms.
+    const t = answered(1, {
+      out: 1000,
+      timing: { startedAt: 0, firstDeltaAt: 6973, doneAt: 7323 },
+    })
+    expect(outputSpeed(t)).toBeNull()
+    // Y con una ventana larga pero imposible (más de 1000 tok/s) tampoco.
+    expect(
+      outputSpeed(
+        answered(1, {
+          out: 5000,
+          timing: { startedAt: 0, firstDeltaAt: 100, doneAt: 2100 },
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  test('con razonamiento visible el reloj del texto no vale', () => {
+    expect(
+      outputSpeed(answered(1, { out: 50, thinking: 'pienso…' })),
+    ).toBeNull()
+  })
+
+  test('pocos tokens: ruido, no medida', () => {
+    expect(outputSpeed(answered(1, { out: 3 }))).toBeNull()
+  })
+
+  test('la velocidad del propio modelo manda sobre la del navegador', () => {
+    const t = answered(1, {
+      out: 1000,
+      serverTps: 125.4,
+      timing: { startedAt: 0, firstDeltaAt: 6973, doneAt: 7323 },
+    })
+    expect(outputSpeed(t)).toBe(125.4)
+    expect(outputSpeed({ ...t, serverTps: 9000 })).toBeNull()
+  })
+
+  test('el done guarda el tps del server; ausente o inválido = null', () => {
+    const base = emptyTurn(1, 'q')
+    const ev = (extra: object) =>
+      applyEvent(
+        base,
+        {
+          type: 'done',
+          cited: [],
+          refused: false,
+          truncated: false,
+          usage: { inputTokens: 1, outputTokens: 1 },
+          ...extra,
+        },
+        10,
+      ).serverTps
+    expect(ev({ tps: 87.5 })).toBe(87.5)
+    expect(ev({})).toBeNull()
+    expect(ev({ tps: -3 })).toBeNull()
+    expect(ev({ tps: Number.NaN })).toBeNull()
   })
 
   test('menos de 200 ms de stream no es una medida', () => {
