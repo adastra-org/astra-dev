@@ -91,6 +91,8 @@ export interface PromptInput {
   env?: string
   /** User memories, already validated (`parseMemories`). Escaped here. */
   memories?: string[]
+  /** Number them (1., 2., …) so a memory tool can point at one. Only when the chat has such tools. */
+  numberMemories?: boolean
   /** Fixed tools text for the system message (`toolsPrompt`). Empty/absent = the chat has no tools. */
   tools?: string
   /** Rendered `<pasos>` block (`renderSteps`): already escaped. */
@@ -129,7 +131,12 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
 
   const env = input.env ? `<entorno>\n${input.env}\n</entorno>\n` : ''
   const memories = input.memories?.length
-    ? `<memorias>\n${input.memories.map((m) => `- ${escapeData(m)}`).join('\n')}\n</memorias>\n`
+    ? `<memorias>\n${input.memories
+        .map(
+          (m, i) =>
+            `${input.numberMemories ? `${i + 1}.` : '-'} ${escapeData(m)}`,
+        )
+        .join('\n')}\n</memorias>\n`
     : ''
   const steps = input.steps ? `\n\n${input.steps}` : ''
   const user = `${env}${memories}<contexto>\n${blocks.join('\n')}\n</contexto>${history}\n\n<pregunta>\n${escapeData(input.question)}\n</pregunta>${steps}`

@@ -132,6 +132,13 @@ Editar una pregunta corta la conversación en ese punto y la reenvía; Reenviar 
 
 Lógica pura en `lib/ask/budget.ts` y `lib/ask/status.ts`; pruebas en `budget.test.ts`, `workspace.test.ts` y `components/ask/ask-page.test.tsx`.
 
+## Memorias que guarda Ether (v0.19.3, #41)
+
+- Ether puede proponer **guardar, cambiar o borrar** una memoria cuando dices una preferencia duradera ("respóndeme siempre corto"). Cada propuesta aparece como una tarjeta **"Ether quiere recordar: …"** con el texto (editable), **Guardar** y **Descartar**. Hasta que decides no se escribe nada.
+- En Memorias, el interruptor **"Permitir que Ether recuerde sin preguntar"** (apagado por defecto) deja que guarde y cambie **sus propias** memorias sin preguntar. Borrar, o cambiar una que escribiste tú, siempre pregunta.
+- Las que guardó Ether llevan una marca discreta "Ether" y se editan, desactivan o borran como cualquier otra (editarla la hace tuya). Mismos topes que las manuales (12, 280 caracteres, 2000 activos); si no entra, Ether lo ve como error y te lo dice. Máximo 3 propuestas por respuesta.
+- Viven solo en este navegador. Archivos: `src/lib/ask/memory-tools.ts`, `memories.ts` (`source`, `auto`), `store.ts` (`decideMemory`), `src/components/ask/MemoryStep.tsx`. Tests: `memory-tools.test.ts`, `memory-flow.test.ts`, `memory-step.test.tsx`.
+
 ## Herramientas del chat (v0.19.0, fase 2)
 
 > Bloqueado para merge hasta la revisión de seguridad humana de M4. Amenazas, controles y checklist: [chat/tools-security.md](../chat/tools-security.md). Protocolo y esquema: [chat/README.md](../chat/README.md#fase-2-herramientas-ejecutar-y-check-v0190-rama-featchat-tools-issue-40).

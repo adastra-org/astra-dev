@@ -13,7 +13,13 @@ import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { chatSettingsFor, type Policy } from '../policy.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
-import { ToolTagScanner, renderSteps, toolsPrompt, type Step } from './tools.ts'
+import {
+  ToolTagScanner,
+  hasMemoryTools,
+  renderSteps,
+  toolsPrompt,
+  type Step,
+} from './tools.ts'
 import {
   REFUSAL_ES,
   buildPrompt,
@@ -350,7 +356,9 @@ ${question}`
       question,
       history,
       hits,
-      ...(input.memories?.length ? { memories: input.memories } : {}),
+      ...(input.memories?.length
+        ? { memories: input.memories, numberMemories: hasMemoryTools(tools) }
+        : {}),
       ...(tools.length ? { tools: toolsPrompt(tools, roundsLeft) } : {}),
       ...(toolSteps.length ? { steps: renderSteps(toolSteps) } : {}),
       contextMaxChars: s.contextMaxChars,

@@ -7,10 +7,13 @@ import type { LlmChunk, LlmProvider, LlmRequest } from './provider.ts'
  * Deterministic tool script for `bun dev --fake` and the manual checklist (docs/chat/tools-security.md).
  * Only when the chat has tools: a question carrying `[[ejecutar: CODE]]` or `[[check: CODE]]` makes the
  * fake "model" call that tool; once `<pasos>` is present it answers with the result EXACTLY as the
- * prompt shows it (escaped), so you can read what a real model would be given.
+ * prompt shows it (escaped), so you can read what a real model would be given. The memory tools
+ * (#41) take `[[guardar_memoria: texto]]`, `[[editar_memoria: 2 | texto nuevo]]` (the `|` becomes
+ * the newline the tag body needs) and `[[borrar_memoria: 2]]`; `[[repetir_memoria: a | b | c | d]]`
+ * saves one memory per round and keeps going, to see the per-answer cap.
  */
 const TOOL_QUESTION =
-  /<pregunta>[\s\S]*?\[\[(ejecutar|check|repetir):([\s\S]*?)\]\][\s\S]*?<\/pregunta>/
+  /<pregunta>[\s\S]*?\[\[(ejecutar|check|repetir|repetir_memoria|guardar_memoria|editar_memoria|borrar_memoria):([\s\S]*?)\]\][\s\S]*?<\/pregunta>/
 const RESULT = /<resultado herramienta="[a-z_]+">([\s\S]*?)<\/resultado>/g
 /** The prompt escaped `&` and `<`; the model's tag body is plain code. */
 const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&amp;/g, '&')
@@ -24,9 +27,37 @@ export function scriptedToolAnswer(req: LlmRequest): string | null {
   // `[[repetir: code]]` calls `ejecutar` on every turn, whatever came back: the endless-rounds case.
   if (m?.[1] === 'repetir')
     return `Ronda ${results.length + 1}.\n<herramienta nombre="ejecutar">\n${unescape(m[2]!.trim())}\n</herramienta>`
+  // `[[repetir_memoria: a | b | c | d]]`: one `guardar_memoria` per round, whatever came back.
+  if (m?.[1] === 'repetir_memoria') {
+    const items = unescape(m[2]!)
+      .split('|')
+      .map((x) => x.trim())
+      .filter(Boolean)
+    const next = items[results.length]
+    if (next !== undefined)
+      return `Guardo la ${results.length + 1}.
+<herramienta nombre="guardar_memoria">
+${next}
+</herramienta>`
+  }
   if (results.length)
     return `El modelo recibió ${results.length} resultado(s). El último, tal como lo ve: ${results.at(-1)}`
   if (!m) return null
+  if (m[1] === 'guardar_memoria' || m[1] === 'borrar_memoria')
+    return `Anoto eso [1].
+<herramienta nombre="${m[1]}">
+${unescape(m[2]!.trim())}
+</herramienta>
+Texto después de la etiqueta que no debe salir.`
+  if (m[1] === 'editar_memoria') {
+    // `n | texto` → the tag body is the number on its own line, then the text.
+    const [n = '', ...rest] = unescape(m[2]!).split('|')
+    return `Lo cambio [1].
+<herramienta nombre="editar_memoria">
+${n.trim()}
+${rest.join('|').trim()}
+</herramienta>`
+  }
   return `Voy a probar tu código [1].\n<herramienta nombre="${m[1]}">\n${unescape(m[2]!.trim())}\n</herramienta>\nTexto después de la etiqueta que no debe salir.`
 }
 

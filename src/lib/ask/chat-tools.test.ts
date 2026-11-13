@@ -327,7 +327,13 @@ function fakeDeps(over: Partial<SandboxDeps> = {}) {
 
 describe('client registry', () => {
   test('offers exactly the tools the server knows', () => {
-    expect([...TOOL_NAMES].sort()).toEqual(['check', 'ejecutar'])
+    expect([...TOOL_NAMES].sort()).toEqual([
+      'borrar_memoria',
+      'check',
+      'editar_memoria',
+      'ejecutar',
+      'guardar_memoria',
+    ])
   })
 
   test('ejecutar runs the body in the sandbox and maps the result', async () => {
