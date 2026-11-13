@@ -1,5 +1,5 @@
 // La tarjeta de memoria del modelo y la marca en el panel (SSR a cadena, sin navegador).
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { renderToString } from 'react-dom/server'
 import { memoryStore } from '@/lib/ask/memories'
 import { rejected, succeeded } from '@/lib/ask/tool-result'
@@ -151,6 +151,14 @@ describe('MemoryStep', () => {
 })
 
 describe('MemoriesPanel: model memories', () => {
+  // `memoryStore` is a singleton shared by every test file of the run: leave it as found, or
+  // memories-panel.test.tsx (which expects an empty store) breaks depending on file order.
+  afterEach(() => {
+    for (const m of [...memoryStore.getState().items]) memoryStore.remove(m.id)
+    memoryStore.dismissRemoved()
+    memoryStore.setAuto(false)
+  })
+
   test('a discrete mark on the ones Ether saved, and the off-by-default switch', () => {
     memoryStore.add('mía')
     memoryStore.add('de Ether', 'model')
