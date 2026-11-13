@@ -140,6 +140,21 @@ export function historyFor(turns: readonly Turn[]): HistoryTurn[] {
   ])
 }
 
+const MAX_CARRIED_SOURCES = 8
+
+/** Slugs que usó la última respuesta buena: el server los vuelve a usar en un follow-up ("explicame eso"). */
+export function sourcesFor(turns: readonly Turn[]): string[] {
+  const last = turns.findLast(
+    (t) =>
+      (t.status === 'done' || t.status === 'stopped') && t.text && !t.refused,
+  )
+  if (!last) return []
+  return [...new Set(last.sources.map((s) => s.slug))].slice(
+    0,
+    MAX_CARRIED_SOURCES,
+  )
+}
+
 const isPermission = (v: unknown): v is Permission =>
   v === 'public' || v === 'subscriber' || v === 'staff' || v === 'owner'
 
@@ -240,6 +255,7 @@ export class AskStore {
     const q = (question ?? this.#state.draft).trim()
     if (!q || this.busy) return
     const history = historyFor(this.#state.turns)
+    const sources = sourcesFor(this.#state.turns)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
@@ -263,6 +279,7 @@ export class AskStore {
         question: q,
         history,
         memories,
+        sources,
         signal: ctl.signal,
         onEvent: (ev) => {
           if (ev.type === 'meta' && typeof ev.contextWindow === 'number')

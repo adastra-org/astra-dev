@@ -49,26 +49,26 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 | `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
 | `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
 | `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, lang?}`. Respuesta SSE                                                                                                                                                                                                               |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                                     |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
 ### `POST /chat`
 
-Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
+Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"], "sources": ["get-vehicle-class"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
 
-| Estado | `code`                  | Cuándo                                                                                          |
-| ------ | ----------------------- | ----------------------------------------------------------------------------------------------- |
-| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories` mal formado o sobre sus topes, tipo MIME |
-| 401    | `unauthenticated`       | Sin sesión                                                                                      |
-| 403    | `subscription_required` | Con sesión pero rol `public`                                                                    |
-| 403    | `forbidden_origin`      | `Origin` no permitido                                                                           |
-| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                              |
-| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                             |
-| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                |
-| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                         |
-| 503    | `viewer_unavailable`    | Cuentas no responde                                                                             |
-| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                            |
+| Estado | `code`                  | Cuándo                                                                                                       |
+| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories` o `sources` mal formados o sobre sus topes, tipo MIME |
+| 401    | `unauthenticated`       | Sin sesión                                                                                                   |
+| 403    | `subscription_required` | Con sesión pero rol `public`                                                                                 |
+| 403    | `forbidden_origin`      | `Origin` no permitido                                                                                        |
+| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                                           |
+| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                          |
+| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                             |
+| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                      |
+| 503    | `viewer_unavailable`    | Cuentas no responde                                                                                          |
+| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                                         |
 
 **`memories` (opcional, v0.16.0).** Lista de preferencias del usuario que el cliente guarda en su navegador y manda con cada pregunta. Validación estricta, sin recorte silencioso: tiene que ser un array de strings, como mucho 12, cada una de 1 a 280 caracteres (después de limpiar caracteres invisibles y de control), 2000 caracteres entre todas. Ausente, `null` o `[]` equivale a no mandar nada; cualquier otra forma o exceso es `400 bad_request` antes de buscar o llamar al modelo. Los topes valen también para `owner` (son el formato del campo, no una política de uso); `CHAT_MAX_BODY_BYTES` sigue aplicando al cuerpo completo.
 
@@ -76,6 +76,13 @@ Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":".
 - **No se cachean**: con memorias la respuesta ni se lee ni se guarda en la caché (la clave no las incluye a propósito).
 - **No se loguean**: el log de la request lleva solo `memories: <cantidad>`; ni el log ni `usage_events` tienen el texto. Probado en `server/tests/memories.test.ts`.
 - No cuentan para `CHAT_CONTEXT_MAX_CHARS` (eso recorta fuentes): se suman aparte, como mucho 2000 caracteres (unos 700 tokens).
+
+**`sources` (opcional, v0.17.1).** Slugs de las fuentes que citó la respuesta anterior (los `slug` del evento `sources`). Sirve para los follow-ups: "explicame eso", "y cómo lo uso?", "dame un ejemplo". Validación estricta: array de strings, como mucho 8, cada una de hasta 160 caracteres con la forma de un slug (`[A-Za-z0-9][A-Za-z0-9._/-]*`); duplicados se juntan; ausente, `null` o `[]` es no mandar nada; cualquier otra forma es `400 bad_request`. Un slug desconocido no encuentra nada ni falla el pedido. El server solo los usa como filtro del índice, nunca como texto.
+
+- **Cuándo cuentan**: solo si la pregunta depende de la charla (hay `history` y el decider no dijo "standalone"; sin decider o sin respuesta del decider cuenta como dependiente). Con `history` vacío o decider en `false`, se ignoran.
+- **Qué hacen**: se rankean aparte, dentro de esos slugs, con la consulta (turno anterior + pregunta), hasta 4 fragmentos, y van primero en `<contexto>`. El gate no los descarta (es lo que se acaba de hablar), y a los demás fragmentos el gate los juzga con la consulta completa, no con "explicame eso" a secas.
+- **Sin fuentes**: si no llegan `sources` la búsqueda sigue con el turno anterior en la consulta. Si aun así no hay ningún fragmento pero la pregunta es un follow-up de una respuesta real del asistente (no un rechazo), el modelo se llama igual con `<historial>` como material; la regla 1 del prompt le permite reformular, ampliar o ilustrar lo ya dicho, no agregar hechos. Sin charla previa, o tras un rechazo, o con una pregunta de otro tema (decider `false`), sigue el rechazo sin llamar al modelo.
+- Cubierto en `server/tests/followup.test.ts`.
 
 Eventos SSE (`Content-Type: text/event-stream`, `X-Accel-Buffering: no`, `X-Request-Id`):
 
@@ -371,6 +378,10 @@ Medición (2026-11-12, llama.cpp b12314, RTX 5070, `Q8_0`, 36 casos propios en e
 - **El 600M no sirve** para esto. El **2B sí** para el follow-up, y con un umbral bajo: la probabilidad queda por debajo de 0,5 incluso en follow-ups reales. Por eso el umbral por defecto es 0,25 (perder contexto cuesta más que arrastrarlo).
 - **`route` no se usa.** El 2B marca `offtopic` en ~16 % de preguntas válidas con confianza 0,5-0,65 ("¿Qué es una native?" con historial, "¿Qué pasa si no hay saldo?"). Bloquear con eso rechazaría preguntas buenas. Hoy el rechazo sale del puntaje de retrieval.
 - **Efecto en la búsqueda, medido con el índice real (5 docs, solo palabras clave) y el 2B:** el decisor acertó 14/14 (8 independientes → `false`, 6 follow-ups → `true`, ~16 ms). El top-1 de las preguntas independientes tras un historial ajeno pasó de 4/8 a 5/8; los follow-ups quedaron en 6/6. La mejora es chica porque el buscador por palabras clave falla solo en varias de esas preguntas aun sin historial, y una (`¿Qué es un backlink?`) empeoró: el historial la ayudaba por casualidad. Falta medirlo con embedder y el índice de natives.
+
+### Preguntas en español sobre natives (v0.17.1)
+
+Los natives están indexados en inglés (`GET_VEHICLE_CLASS`) y el embedder cruza mal español-inglés en identificadores: "cómo obtengo la velocidad de un vehículo" dejaba fuera el native correcto aunque existiera. `Retriever.searchMany` ahora fusiona (RRF, k=60) el ranking semántico de natives con un match léxico sobre las palabras del _nombre_ (`server/src/index/names.ts`): la pregunta se traduce con un glosario ES->EN de verbos (`obtengo`->get, `cambio`->set, `elimino`->delete...) y sustantivos (`matrícula`->plate, `clase`->class...) en `server/src/index/glossary.ts`, y se puntúa con F1 ponderado por idf (los verbos casi no pesan, un verbo solo no matchea nada, mínimo 0,4 para votar). El mismo glosario expande la búsqueda BM25 cuando el embedder no responde. El glosario es vocabulario general: si falta una palabra, se agrega ahí, no se parchea una pregunta. Tests: `server/tests/retrieval-es.test.ts`.
 
 ### Qué entra al prompt: gate y `<entorno>`
 
