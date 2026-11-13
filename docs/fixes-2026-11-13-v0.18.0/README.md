@@ -4,7 +4,7 @@
 
 ## UI
 
-- [ ] Los pasos que muestra el chat (búsqueda, historial, gate, etc.) se pueden compactar, y el razonamiento (thinking) va en el mismo grupo, no aparte. Código: `src/components/ask/Activity.tsx`.
+- [x] Los pasos que muestra el chat (búsqueda, historial, gate, etc.) se pueden compactar, y el razonamiento (thinking) va en el mismo grupo, no aparte. Código: `src/components/ask/Activity.tsx`. Hecho en v0.18.1: un solo grupo plegable por respuesta (`aria-expanded`), abierto mientras se genera y compacto al terminar con resumen `N pasos · razonamiento · 1,2 s`; el razonamiento es una entrada más. Public/subscriber: solo pasos. Verificado en Edge (1280 y 375 px, claro y oscuro, owner y public, teclado Enter/Espacio).
 
 ## UX (largo plazo, ROADMAP)
 
