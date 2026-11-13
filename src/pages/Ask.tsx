@@ -2,7 +2,9 @@ import { Gauge, SquarePen } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { ContextBudget } from '@/components/ask/ContextBudget'
 import { Composer, Transcript } from '@/components/ask/Conversation'
+import { MemoriesPanel } from '@/components/ask/MemoriesPanel'
 import { useAsk } from '@/components/ask/useAsk'
+import { useMemories } from '@/components/ask/useMemories'
 import { PageHeader } from '@/components/doc/PageHeader'
 import {
   contextUsage,
@@ -10,6 +12,7 @@ import {
   lastSpeed,
   sessionTotals,
 } from '@/lib/ask/budget'
+import { memoryTokens } from '@/lib/ask/memories'
 import { isTurnBusy, turnStatusText } from '@/lib/ask/status'
 import { askStore } from '@/lib/ask/store'
 import { useTitle } from '@/lib/title'
@@ -26,6 +29,7 @@ export default function Ask() {
   const { tr, lang } = useLang()
   useTitle(tr('ask.page.title'))
   const { turns, draft, viewerRole, contextWindow } = useAsk()
+  const memories = useMemories()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const last = turns.at(-1)
@@ -40,7 +44,12 @@ export default function Ask() {
     if (near) endRef.current?.scrollIntoView({ block: 'end' })
   }, [tail])
 
-  const usage = contextUsage(turns, contextWindow, draft)
+  const usage = contextUsage(
+    turns,
+    contextWindow,
+    draft,
+    memoryTokens(memories.items),
+  )
   const speed = lastSpeed(turns)
   const session = sessionTotals(turns)
 
@@ -115,6 +124,8 @@ export default function Ask() {
               {tr('ask.newChat')}
             </button>
           </section>
+
+          <MemoriesPanel />
         </aside>
       </div>
     </div>

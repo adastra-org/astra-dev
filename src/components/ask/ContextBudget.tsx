@@ -62,6 +62,11 @@ export function ContextBudget({ usage }: { usage: ContextUsage | null }) {
           {tr('ask.budget.draft', { n: fmtCount(usage.draft, lang) })}
         </p>
       )}
+      {usage.memories > 0 && (
+        <p className="text-caption text-ink-subtle">
+          {tr('ask.budget.memories', { n: fmtCount(usage.memories, lang) })}
+        </p>
+      )}
       {usage.estimated && (
         <p className="text-caption text-ink-subtle">
           {tr('ask.budget.estimated')}

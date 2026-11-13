@@ -524,6 +524,36 @@ print(("%.2f"):format(math.pi))
   'ask.budget.full':
     'No hay lugar para otro envío completo. Empieza una conversación nueva o acorta la pregunta.',
   'ask.budget.empty': 'Se mide después de la primera respuesta.',
+  'ask.budget.memories':
+    'Incluye las memorias activas, estimadas en {n} tokens.',
+  'ask.memories.title': 'Memorias',
+  'ask.memories.lead':
+    'Preferencias que se envían con cada pregunta. Quedan solo en este navegador.',
+  'ask.memories.count': '{active} activas de {total}',
+  'ask.memories.empty': 'Todavía no hay memorias.',
+  'ask.memories.add': 'Agregar',
+  'ask.memories.newLabel': 'Nueva memoria',
+  'ask.memories.placeholder': 'Ej.: responde corto, uso Windows',
+  'ask.memories.toggle': 'Usar en las respuestas: {text}',
+  'ask.memories.edit': 'Editar',
+  'ask.memories.editLabel': 'Editar memoria',
+  'ask.memories.save': 'Guardar',
+  'ask.memories.cancel': 'Cancelar',
+  'ask.memories.delete': 'Borrar',
+  'ask.memories.deleted': 'Memoria borrada.',
+  'ask.memories.undo': 'Deshacer',
+  'ask.memories.saved': 'Memoria guardada.',
+  'ask.memories.unsaved':
+    'No se pueden guardar en este navegador: se pierden al cerrar la pestaña.',
+  'ask.memories.err.empty': 'Escribe algo para guardar.',
+  'ask.memories.err.too_long': 'Máximo {n} caracteres por memoria.',
+  'ask.memories.err.duplicate': 'Esa memoria ya existe.',
+  'ask.memories.err.max_items':
+    'Máximo {n} memorias. Borra una para agregar otra.',
+  'ask.memories.err.max_total':
+    'Las memorias activas suman más de {n} caracteres. Desactiva o acorta alguna.',
+  'ask.memories.err.not_found': 'La memoria ya no existe.',
+  'ask.memories.chars': '{n} de {max} caracteres',
   'ask.speed.title': 'Velocidad',
   'ask.speed.tps': '{n} tokens por segundo',
   'ask.speed.ttft': 'Primer texto a los {n} ms',
@@ -1048,6 +1078,36 @@ print(("%.2f"):format(math.pi))
   'ask.budget.full':
     'There is no room for another full send. Start a new conversation or shorten the question.',
   'ask.budget.empty': 'Measured after the first answer.',
+  'ask.budget.memories':
+    'Includes the active memories, estimated at {n} tokens.',
+  'ask.memories.title': 'Memories',
+  'ask.memories.lead':
+    'Preferences sent with every question. They stay in this browser only.',
+  'ask.memories.count': '{active} active of {total}',
+  'ask.memories.empty': 'No memories yet.',
+  'ask.memories.add': 'Add',
+  'ask.memories.newLabel': 'New memory',
+  'ask.memories.placeholder': 'E.g. keep answers short, I use Windows',
+  'ask.memories.toggle': 'Use in answers: {text}',
+  'ask.memories.edit': 'Edit',
+  'ask.memories.editLabel': 'Edit memory',
+  'ask.memories.save': 'Save',
+  'ask.memories.cancel': 'Cancel',
+  'ask.memories.delete': 'Delete',
+  'ask.memories.deleted': 'Memory deleted.',
+  'ask.memories.undo': 'Undo',
+  'ask.memories.saved': 'Memory saved.',
+  'ask.memories.unsaved':
+    'They cannot be saved in this browser: they are lost when the tab closes.',
+  'ask.memories.err.empty': 'Write something to save.',
+  'ask.memories.err.too_long': 'At most {n} characters per memory.',
+  'ask.memories.err.duplicate': 'That memory already exists.',
+  'ask.memories.err.max_items':
+    'At most {n} memories. Delete one to add another.',
+  'ask.memories.err.max_total':
+    'Active memories add up to more than {n} characters. Turn one off or shorten it.',
+  'ask.memories.err.not_found': 'That memory no longer exists.',
+  'ask.memories.chars': '{n} of {max} characters',
   'ask.speed.title': 'Speed',
   'ask.speed.tps': '{n} tokens per second',
   'ask.speed.ttft': 'First text at {n} ms',

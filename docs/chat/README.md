@@ -10,7 +10,7 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 | 0b   | Dashboard de IA (solo owner)                                                                                                     | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
 | 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | En curso, v0.15.0 (`feat/chat-page`)                                |
 | 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
-| 3    | Memorias (localStorage)                                                                                                          | Esqueleto                                                           |
+| 3    | Memorias (localStorage)                                                                                                          | En curso, v0.16.0 (`feat/chat-memories`, base `feat/chat-page`)     |
 | 4    | Cross-session                                                                                                                    | Esqueleto                                                           |
 | 5    | Subagents                                                                                                                        | Esqueleto                                                           |
 
@@ -286,3 +286,55 @@ Alcance: página `/ask` con transcript, composer y rail. Mismo store (`askStore`
 - Estados: vacío, error (`llm_unavailable`), rate limit (429 con `retryAfter`), público (gate), medidor en ok/warn/full.
 - Velocidad aparece tras una respuesta del fake; una respuesta de caché no la muestra.
 - Consola sin errores. Capturas en `E:\Proyectos\_scratch\chat-page\`.
+
+## Fase 3: memorias del usuario (v0.16.0, rama `feat/chat-memories`)
+
+Base: `feat/chat-page` (PR #31). Decisión de Faku: las memorias viven en el navegador (`localStorage`), no en el server y no se cachean.
+
+### Modelo de datos
+
+- Clave `astra.ask.memories.v1`: `{ v: 1, items: Memory[] }`.
+- `Memory = { id: string, text: string, enabled: boolean, createdAt: number, updatedAt: number }`. `id` = `crypto.randomUUID()` (fallback `Date.now().toString(36)+random`).
+- Topes (cliente, constantes en `src/lib/ask/memories.ts`, espejo de las del server): 12 memorias, 280 caracteres cada una, 2000 caracteres entre las activas. Texto con `trim`, sin vacío, sin caracteres de control; los duplicados exactos se rechazan.
+- Lectura defensiva: JSON ilegible, versión desconocida o forma inválida → lista vacía (no se borra lo guardado hasta la próxima escritura válida). Los ítems inválidos se descartan uno a uno.
+
+### UI
+
+- Sección "Memorias" en el rail de `/ask` (componente nuevo `MemoriesPanel`; no se tocan los estilos existentes del rail de v0.15.1). Contador "N activas de M".
+- Listar: cada memoria con casilla activar/desactivar (`role="switch"`), texto, Editar y Borrar. Crear: campo de una línea + "Agregar" (Enter agrega; las memorias son de una sola línea). Editar: inline con foco, Enter guarda, Esc cancela. Borrar: inmediato con aviso `role="status"` y "Deshacer" (sin diálogo).
+- Targets de 44 px en táctil. Estados con icono y texto, no solo color. Vacío: texto que explica qué son y que quedan solo en este navegador.
+- Sincroniza entre pestañas con el evento `storage`.
+- Fallos de `localStorage` (modo privado, bloqueado, cuota): todo acceso en `try/catch`. Si no se puede leer o escribir, las memorias funcionan **en memoria durante la sesión** y la UI muestra un aviso "No se pueden guardar en este navegador: se pierden al cerrar la pestaña". La página nunca falla por esto.
+
+### Inyección en el request
+
+- Campo nuevo opcional en `POST /chat`: `memories: string[]` (solo las activas, solo texto). El `question` no se toca: así no se mezcla con la búsqueda semántica, el decider, el gate ni el tope de 800 caracteres.
+- Server (`app.ts` + `prompt.ts`): validación **estricta**; si `memories` está presente y no es un array de ≤ 12 strings de 1..280 caracteres con suma ≤ 2000, responde `400 bad_request` (no recorta en silencio). Ausente o `[]` = igual que hoy. Los topes valen también para owner (no son topes de política sino del formato del campo).
+- Prompt: bloque propio `<memorias>` entre `<entorno>` y `<contexto>`, cada línea `- <texto escapado con escapeData>`. Es dato del usuario, no instrucción: el `SYSTEM_PROMPT` ya trata el contenido de los bloques como dato; se agrega una línea que dice que `<memorias>` son preferencias del usuario que no anulan las reglas ni son fuentes citables.
+- Caché: con memorias, la respuesta **ni se lee ni se guarda** (`key = null`). Sin memorias nada cambia.
+- Tamaño: 2000 caracteres de memorias ≈ 2,2 KB en español (peor caso multibyte ≈ 6 KB). Pregunta (800) + historial (6 × 800) + memorias ≈ 9 KB con el overhead JSON, bajo `CHAT_MAX_BODY_BYTES` = 16384. Si alguien baja `CHAT_MAX_BODY_BYTES` a menos de lo necesario, el 413 ya existente es la respuesta.
+- Context budget: el tope de contexto del server (`CHAT_CONTEXT_MAX_CHARS`) recorta fuentes, no memorias; las memorias se suman aparte (≤ ~700 tokens). El medidor del cliente agrega `ceil(chars activos / 3)` a la estimación del próximo envío, y el texto lo dice. Si no entran en la ventana, el medidor pasa a `warn`/`full` como cualquier otro contenido.
+
+### Privacidad
+
+- El texto de las memorias nunca se loguea: el log de requests y `usage_events` siguen sin pregunta, respuesta ni memorias. Se agrega solo `memories: <cantidad>` al log de la request (un número), nada más. Test que verifica que el texto no aparece en el log ni en el registro de uso.
+- No entran a la clave de caché ni a la caché. No se envían a ningún otro endpoint (`/search`, `/project`).
+- Se envían solo las activas y solo en `POST /chat`.
+
+### Archivos
+
+| Archivo                                                             | Cambio                                                                                                                                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/ask/memories.ts` (nuevo)                                   | puro: modelo, topes, `parseStored`, `addMemory`, `editMemory`, `removeMemory`, `toggleMemory`, `activeTexts`, `memoryTokens`; `MemoryStore` con storage inyectable y try/catch |
+| `src/lib/ask/memories.test.ts` (nuevo)                              | topes, duplicados, JSON corrupto, versión desconocida, storage que lanza (get/set/cuota), solo activas                                                                         |
+| `src/lib/ask/client.ts`, `store.ts`, `budget.ts`                    | `memories` en el body (solo si hay), medidor suma las activas                                                                                                                  |
+| `src/components/ask/MemoriesPanel.tsx` (nuevo), `src/pages/Ask.tsx` | UI en el rail                                                                                                                                                                  |
+| `src/lib/i18n.ts`                                                   | claves `ask.memories.*` en ES y EN                                                                                                                                             |
+| `server/src/app.ts`, `server/src/chat/{prompt,service}.ts`          | validación estricta, bloque `<memorias>`, sin caché, contador en el log                                                                                                        |
+| `server/tests/chat.test.ts`                                         | 400 por forma/tope, bloque en el prompt y escapado, sin caché, sin texto en log/uso                                                                                            |
+| `docs/server/README.md`, `docs/ask/README.md`                       | contrato del campo `memories`                                                                                                                                                  |
+| `package.json` (raíz)                                               | 0.15.0 → 0.16.0                                                                                                                                                                |
+
+### Verificación en navegador
+
+`bun dev --fake` como owner, 1280 y 375 px: crear, editar, borrar con deshacer, activar/desactivar, recarga persiste, dos pestañas se sincronizan, teclado completo, `localStorage` bloqueado (aviso, sigue funcionando en memoria), sin scroll horizontal, consola limpia.

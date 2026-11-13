@@ -5,6 +5,7 @@
 import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
+import { memoryStore, textsTokens } from './memories'
 import {
   AskError,
   type AskEvent,
@@ -44,6 +45,8 @@ export interface Turn {
   /** Uso de tokens que informó el `done`. Null hasta que llega. */
   usage: { inputTokens: number; outputTokens: number } | null
   usageEstimated: boolean
+  /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
+  memoryTokens: number
 }
 
 export type ViewerRole = Permission | 'unknown'
@@ -76,6 +79,7 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   timing: { startedAt: null, firstDeltaAt: null, doneAt: null },
   usage: null,
   usageEstimated: false,
+  memoryTokens: 0,
 })
 
 /**
@@ -144,6 +148,8 @@ export interface AskStoreOptions {
   base?: string
   /** Reloj en milisegundos para medir tiempos. Por defecto `performance.now`. */
   now?: () => number
+  /** Memorias activas a enviar. Por defecto las del navegador (`memoryStore`). */
+  memories?: () => string[]
 }
 
 export class AskStore {
@@ -234,6 +240,7 @@ export class AskStore {
     const q = (question ?? this.#state.draft).trim()
     if (!q || this.busy) return
     const history = historyFor(this.#state.turns)
+    const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
     const startedAt = this.#now()
@@ -242,6 +249,7 @@ export class AskStore {
         ...this.#state.turns,
         {
           ...emptyTurn(id, q),
+          memoryTokens: textsTokens(memories),
           timing: { startedAt, firstDeltaAt: null, doneAt: null },
         },
       ],
@@ -254,6 +262,7 @@ export class AskStore {
       await streamChat({
         question: q,
         history,
+        memories,
         signal: ctl.signal,
         onEvent: (ev) => {
           if (ev.type === 'meta' && typeof ev.contextWindow === 'number')

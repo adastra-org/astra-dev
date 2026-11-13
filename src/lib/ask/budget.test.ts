@@ -132,6 +132,34 @@ describe('velocidad de salida', () => {
   })
 })
 
+describe('memorias en el presupuesto', () => {
+  test('suma solo la diferencia con las memorias del último envío', () => {
+    const turns = [answered(1, { in: 500, out: 100, memoryTokens: 40 })] // usado = 600
+    // Mismas memorias que en el envío: no se cuentan dos veces.
+    expect(contextUsage(turns, 1000, '', 40)!.next).toBe(600)
+    // Se agregaron 60 tokens de memorias desde el último envío.
+    const more = contextUsage(turns, 1000, '', 100)!
+    expect(more.next).toBe(660)
+    expect(more.memories).toBe(100)
+    // Se borraron: baja.
+    expect(contextUsage(turns, 1000, '', 0)!.next).toBe(560)
+    // Nunca negativo.
+    const tiny = [answered(1, { in: 0, out: 1, memoryTokens: 90 })]
+    expect(contextUsage(tiny, 1000, '', 0)!.next).toBe(0)
+  })
+
+  test('las memorias pueden llevar el medidor a warn', () => {
+    const turns = [answered(1, { in: 700, out: 50 })] // 750 de 1000
+    expect(contextUsage(turns, 1000, '', 0)!.level).toBe('ok')
+    expect(contextUsage(turns, 1000, '', 60)!.level).toBe('warn')
+  })
+
+  test('sin memorias el cálculo es el de siempre', () => {
+    const u = contextUsage([answered(1, { in: 500, out: 100 })], 1000, 'abc')!
+    expect(u).toMatchObject({ next: 601, memories: 0 })
+  })
+})
+
 describe('totales de sesión y formato', () => {
   test('suma tokens de envíos medidos, sin caché', () => {
     const totals = sessionTotals([

@@ -13,6 +13,8 @@ export const API_BASE: string =
 export interface StreamOptions {
   question: string
   history: HistoryTurn[]
+  /** Memorias activas del usuario (solo texto). Se omite el campo si no hay. */
+  memories?: string[]
   /** Idioma de la interfaz; por defecto el guardado. */
   lang?: UiLang
   signal?: AbortSignal
@@ -64,6 +66,7 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
       body: JSON.stringify({
         question: opts.question,
         history: opts.history,
+        ...(opts.memories?.length ? { memories: opts.memories } : {}),
         lang: opts.lang ?? readStoredLang(),
       }),
       ...(opts.signal ? { signal: opts.signal } : {}),

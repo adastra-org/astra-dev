@@ -19,7 +19,7 @@ Quién puede usarlo lo decide el server (`subscriber` o `staff`). Para quien no,
 
 ```
 askStore.ask(pregunta)
-  └─ streamChat ── POST /api/chat {question, history} ─► eventos SSE
+  └─ streamChat ── POST /api/chat {question, history, memories?} ─► eventos SSE
        meta → sources → delta* → done | error
   └─ applyEvent (puro) acumula en el Turn: texto, fuentes, citadas, rechazo, caché
   └─ AskPanel ── useSyncExternalStore ── pinta cada Turn (AnswerBody + Fuentes + avisos)
@@ -57,6 +57,16 @@ La respuesta del modelo es texto no confiable (el server ya lo acota, esto es la
 - Se renderizan párrafos, énfasis, código en línea, bloques de código (con Copiar), listas, citas, tablas (con scroll horizontal propio) y títulos como negrita.
 
 Probado en `src/lib/ask/ask.test.ts`.
+
+## Memorias (v0.16.0)
+
+En `/ask`, el rail tiene una sección **Memorias**: frases cortas ("responde corto", "uso Windows") que se mandan con cada pregunta como `memories` y el modelo usa para adaptar el tono y el nivel. Viven **solo en este navegador** (`localStorage`, clave `astra.ask.memories.v1`); el server no las guarda, no las cachea y no escribe su texto en ningún log. Plan, topes y privacidad: [chat/README.md](../chat/README.md#fase-3-memorias-del-usuario-v0160-rama-featchat-memories).
+
+- Lógica en `src/lib/ask/memories.ts` (puro + `MemoryStore`, storage inyectable); UI en `src/components/ask/MemoriesPanel.tsx`.
+- Topes: 12 memorias, 280 caracteres cada una, 2000 entre las activas. Solo viajan las activas.
+- Si `localStorage` no está disponible (modo privado, bloqueado, cuota), las memorias siguen funcionando en memoria durante la sesión y el panel avisa que no se guardan.
+- El medidor de contexto suma los tokens estimados de las memorias activas.
+- Tests: `memories.test.ts`, `memories-panel.test.tsx`, y los casos de `memories` en `ask.test.ts` y `budget.test.ts`.
 
 Las citas a **natives** (`kind: "native"`) enlazan a `/natives/<slug>` (páginas publicadas en M2, v0.7.0; el slug es el del importador, el mismo del índice del server). `NATIVE_PAGES_PUBLISHED` en `src/lib/ask/sources.ts` es el interruptor si hubiera que volver a texto plano.
 
