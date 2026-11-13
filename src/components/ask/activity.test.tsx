@@ -100,7 +100,10 @@ describe('Activity', () => {
     expect(html).toContain('140 ms')
     expect(html).toContain('Pensando…')
     expect(html).toContain('Veo el slot anterior.')
-    expect(html).not.toContain('<details')
+    // El razonamiento es un <details> propio y plegable; el bloque de pasos no lo es.
+    expect(html.match(/<details/g)?.length).toBe(1)
+    expect(html).toContain('Razonamiento del modelo')
+    expect(html).not.toContain('Cómo se armó la respuesta')
   })
 
   test('escribiendo: pasa de pensar a escribir', () => {
