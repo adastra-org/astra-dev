@@ -133,6 +133,8 @@ export interface ChatInput {
   role: Role
   question: string
   history: unknown
+  /** Slugs the previous answer cited (`parseSources`). Used only when the question depends on the history. */
+  sources?: string[]
   /** Validated user memories (`parseMemories`). Their presence turns the answer cache off. */
   memories?: string[]
   /** UI language of the visitor. */
@@ -213,15 +215,29 @@ export class ChatService {
       if (usedHistory !== null)
         steps.push({ id: 'history', ms: since(t0), usedHistory })
     }
-    const query =
-      lastUser && usedHistory !== false
-        ? `${lastUser.content}\n${question}`
-        : question
+    // A follow-up is a question that needs the conversation: no decider or no answer counts as one.
+    const followUp = lastUser !== undefined && usedHistory !== false
+    const query = followUp
+      ? `${lastUser.content}
+${question}`
+      : question
+    // What the previous answer cited is searched apart (only within those slugs), because a vague
+    // follow-up ("explicame eso") cannot drive a new search on its own.
+    const carrySlugs =
+      followUp && input.sources?.length ? new Set(input.sources) : null
     // Docs and natives are ranked apart: ~7,000 natives would otherwise crowd the docs out. A
     // native named in the question (by name or hash) always comes first.
     const tSearch = performance.now()
     const [found, head] = await Promise.all([
       this.#d.retriever.searchMany(query.slice(0, s.maxQuestionChars * 2), [
+        ...(carrySlugs
+          ? [
+              {
+                k: Math.min(s.topK, 4),
+                slugs: carrySlugs as ReadonlySet<string>,
+              },
+            ]
+          : []),
         { kind: 'doc', k: s.topK },
         ...(s.nativesTopK > 0
           ? [{ kind: 'native' as const, k: s.nativesTopK }]
@@ -238,16 +254,25 @@ export class ChatService {
       natives: found.hits.filter((h) => h.kind === 'native').length,
     })
 
-    // The gate only removes fragments. null = it could not decide: everything stays.
+    // The gate only removes fragments. null = it could not decide: everything stays. It judges the
+    // question with the topic it refers to, and never drops what the previous answer was built on.
     let hits = found.hits
     let gate: { kept: number; total: number } | null = null
     if (this.#d.gate && hits.length) {
       const tGate = performance.now()
-      const kept = await this.#d.gate.select(question, hits)
+      const gated = hits.filter((h) => !carrySlugs?.has(h.slug))
+      const asked = followUp ? query : question
+      const kept = gated.length
+        ? await this.#d.gate.select(
+            asked.slice(0, s.maxQuestionChars * 2),
+            gated,
+          )
+        : []
       if (kept) {
-        gate = { kept: kept.length, total: hits.length }
+        gate = { kept: kept.length, total: gated.length }
         steps.push({ id: 'gate', ms: since(tGate), ...gate })
-        hits = kept
+        const keep = new Set(kept.map((h) => h.id))
+        hits = hits.filter((h) => carrySlugs?.has(h.slug) || keep.has(h.id))
       }
     }
 
@@ -301,8 +326,17 @@ export class ChatService {
       gate,
     }
 
-    // Nothing retrieved: refuse without calling the model (and without spending budget).
-    if (!built.used.length) {
+    // Nothing retrieved: refuse without calling the model (and without spending budget). Unless the
+    // question is a follow-up to an answer the assistant really gave: then the conversation is the
+    // material (the prompt only lets the model clarify it, never add facts).
+    const lastAssistant = [...history]
+      .reverse()
+      .find((t) => t.role === 'assistant')
+    const talk =
+      followUp &&
+      lastAssistant !== undefined &&
+      !isRefusal(lastAssistant.content)
+    if (!built.used.length && !talk) {
       return {
         ...base,
         async *events() {

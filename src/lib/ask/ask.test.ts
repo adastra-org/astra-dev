@@ -290,6 +290,26 @@ describe('applyEvent / historyFor', () => {
   })
 })
 
+describe('AskStore: fuentes de la respuesta anterior', () => {
+  test('el follow-up manda los slugs de la última respuesta buena; la primera pregunta no manda nada', async () => {
+    const bodies: any[] = []
+    const store = new AskStore({
+      memories: () => [],
+      fetch: (async (_u: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)))
+        return streamed(sse(LIVE), 64)
+      }) as unknown as typeof fetch,
+    })
+    await store.ask('hola')
+    await store.ask('explicame eso')
+    expect('sources' in bodies[0]).toBe(false)
+    expect(bodies[1].sources).toEqual(
+      store.getState().turns[0]!.sources.map((s) => s.slug),
+    )
+    expect(bodies[1].sources.length).toBeGreaterThan(0)
+  })
+})
+
 describe('AskStore', () => {
   const make = (handler: (call: number) => Response | Promise<Response>) => {
     let calls = 0

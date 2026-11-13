@@ -15,6 +15,8 @@ export interface StreamOptions {
   history: HistoryTurn[]
   /** Memorias activas del usuario (solo texto). Se omite el campo si no hay. */
   memories?: string[]
+  /** Slugs de las fuentes de la respuesta anterior: el server las usa si la pregunta sigue la charla. */
+  sources?: string[]
   /** Idioma de la interfaz; por defecto el guardado. */
   lang?: UiLang
   signal?: AbortSignal
@@ -67,6 +69,7 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
         question: opts.question,
         history: opts.history,
         ...(opts.memories?.length ? { memories: opts.memories } : {}),
+        ...(opts.sources?.length ? { sources: opts.sources } : {}),
         lang: opts.lang ?? readStoredLang(),
       }),
       ...(opts.signal ? { signal: opts.signal } : {}),

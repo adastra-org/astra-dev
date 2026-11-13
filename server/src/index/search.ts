@@ -4,6 +4,8 @@
 import { cosine, truncate, type EmbedderClient } from '@wefaber/embed'
 import type { ChunkKind, NativeMeta } from '../docs/chunk.ts'
 import { NativeLookup } from './lookup.ts'
+import { NativeNameIndex } from './names.ts'
+import { translate } from './glossary.ts'
 import type { DocsIndex, IndexedChunk } from './store.ts'
 import { queryPrompt } from './prompts.ts'
 
@@ -67,6 +69,12 @@ export function tokenize(text: string): string[] {
     .map((t) => (t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t))
 }
 
+/** The tokens plus their English forms (glossary), so Spanish questions reach English text. */
+export const expandTokens = (tokens: readonly string[]): string[] => [
+  ...tokens,
+  ...tokens.flatMap((t) => translate(t)),
+]
+
 export class KeywordIndex {
   readonly #chunks: readonly IndexedChunk[]
   readonly #tf: Map<string, number>[] = []
@@ -98,15 +106,20 @@ export class KeywordIndex {
     this.#avg = total / Math.max(1, chunks.length) || 1
   }
 
-  search(query: string, k: number, kind?: ChunkKind): Hit[] {
-    const terms = [...new Set(tokenize(query))]
+  search(
+    query: string,
+    k: number,
+    kind?: ChunkKind,
+    only?: ReadonlySet<string>,
+  ): Hit[] {
+    const terms = [...new Set(expandTokens(tokenize(query)))]
     if (!terms.length) return []
     const N = this.#chunks.length
     const k1 = 1.2
     const b = 0.75
     const scored: Hit[] = []
     this.#chunks.forEach((c, i) => {
-      if (kind && c.kind !== kind) return
+      if ((kind && c.kind !== kind) || (only && !only.has(c.slug))) return
       const tf = this.#tf[i]!
       let score = 0
       for (const t of terms) {
@@ -132,10 +145,12 @@ export function semanticSearch(
   k: number,
   minScore = 0,
   kind?: ChunkKind,
+  only?: ReadonlySet<string>,
 ): Hit[] {
   const out: Hit[] = []
   for (const c of index.chunks) {
     if (!c.vector || (kind && c.kind !== kind)) continue
+    if (only && !only.has(c.slug)) continue
     const s = cosine(query, c.vector)
     if (s >= minScore) out.push(toHit(c, s))
   }
@@ -155,6 +170,8 @@ export interface SearchRequest {
   /** Restrict to one kind; omitted = docs and natives together. */
   kind?: ChunkKind
   k: number
+  /** Only chunks of these slugs (the sources of the previous answer, for a follow-up). */
+  slugs?: ReadonlySet<string>
 }
 
 export class Retriever {
@@ -162,6 +179,7 @@ export class Retriever {
   readonly #embedder: EmbedderClient | null
   readonly #keyword: KeywordIndex
   readonly #lookup: NativeLookup
+  readonly #names: NativeNameIndex
   readonly #opts: RetrieverOptions
   #downUntil = 0
 
@@ -174,6 +192,7 @@ export class Retriever {
     this.#embedder = embedder
     this.#keyword = new KeywordIndex(index.chunks)
     this.#lookup = new NativeLookup(index.chunks)
+    this.#names = new NativeNameIndex(index.chunks)
     this.#opts = opts
   }
 
@@ -227,21 +246,27 @@ export class Retriever {
         hits.push(toHit(c, 1))
       }
     for (const r of requests) {
+      // Natives are fused with a lexical match on their names, so the pool is deeper than `k`.
+      const fuse = r.kind === 'native' && !r.slugs
+      const depth = fuse ? Math.max(r.k * 6, 24) : r.k
       const semantic = vector
         ? semanticSearch(
             this.#index,
             vector,
-            r.k,
+            depth,
             this.#opts.minSemanticScore,
             r.kind,
+            r.slugs,
           )
         : []
       // Nothing close enough semantically: keywords may still match exact identifiers.
       if (semantic.length) usedSemantic = true
-      const ranked = semantic.length
+      let ranked = semantic.length
         ? semantic
-        : this.#keyword.search(query, r.k, r.kind)
-      const pinned = r.kind === 'doc' ? [] : exact.map((c) => toHit(c, 1))
+        : this.#keyword.search(query, depth, r.kind, r.slugs)
+      if (fuse) ranked = this.#fuseNames(query, ranked, vector)
+      const pinned =
+        r.kind === 'doc' || r.slugs ? [] : exact.map((c) => toHit(c, 1))
       const local = new Set<string>()
       for (const h of [...pinned, ...ranked]) {
         if (local.has(h.id)) continue
@@ -259,6 +284,43 @@ export class Retriever {
       degraded: vector === null,
       hits,
     }
+  }
+
+  /**
+   * Reciprocal-rank fusion of the base ranking with the native-name match. Hits keep their own
+   * score (cosine when there is a vector), so what the client shows does not change meaning.
+   */
+  #fuseNames(
+    query: string,
+    ranked: readonly Hit[],
+    vector: readonly number[] | null,
+  ): Hit[] {
+    const lexical = this.#names.search(tokenize(query), 24)
+    // A weak name match is noise: only a decent F1 gets a vote.
+    const strong = lexical.filter((l) => l.score >= 0.4)
+    if (!strong.length) return [...ranked]
+    const RRF = 60
+    const score = new Map<string, number>()
+    const byId = new Map<string, Hit>()
+    ranked.forEach((h, i) => {
+      score.set(h.id, (score.get(h.id) ?? 0) + 1 / (RRF + i))
+      byId.set(h.id, h)
+    })
+    strong.forEach((l, i) => {
+      const id = l.chunk.id
+      score.set(id, (score.get(id) ?? 0) + 1 / (RRF + i))
+      if (!byId.has(id))
+        byId.set(
+          id,
+          toHit(
+            l.chunk,
+            vector && l.chunk.vector ? cosine(vector, l.chunk.vector) : l.score,
+          ),
+        )
+    })
+    return [...byId.values()].sort(
+      (a, b) => score.get(b.id)! - score.get(a.id)!,
+    )
   }
 
   /** The query embedding, or null when the embedder is not usable (never throws). */
