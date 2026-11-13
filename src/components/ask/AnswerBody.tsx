@@ -10,13 +10,24 @@ interface Props {
   sources: readonly AskSource[]
   /** Se llamó a un enlace de cita: el panel se cierra y el foco va al contenido. */
   onNavigate: () => void
+  /**
+   * La respuesta terminó: los bloques `lua` ganan Ejecutar / Revisar / Formatear. Es una acción
+   * explícita del usuario sobre el sandbox de M4; mientras se escribe no hay botones (el bloque
+   * puede estar a medias).
+   */
+  runnable?: boolean
 }
 
 /**
  * Respuesta del modelo como nodos de React: sin HTML crudo, imágenes ni enlaces del modelo
  * (`lib/ask/markdown.ts`). Las citas `[n]` enlazan a las fuentes del server.
  */
-export function AnswerBody({ text, sources, onNavigate }: Props) {
+export function AnswerBody({
+  text,
+  sources,
+  onNavigate,
+  runnable = false,
+}: Props) {
   const blocks = parseAnswer(text, sources.length)
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -26,6 +37,7 @@ export function AnswerBody({ text, sources, onNavigate }: Props) {
           block={b}
           sources={sources}
           onNavigate={onNavigate}
+          runnable={runnable}
         />
       ))}
     </div>
@@ -36,10 +48,12 @@ function BlockView({
   block,
   sources,
   onNavigate,
+  runnable,
 }: {
   block: Block
   sources: readonly AskSource[]
   onNavigate: () => void
+  runnable: boolean
 }): ReactNode {
   switch (block.kind) {
     case 'p':
@@ -53,7 +67,14 @@ function BlockView({
         </p>
       )
     case 'code':
-      return <CodeBlock code={block.text} lang={block.lang || undefined} bare />
+      return (
+        <CodeBlock
+          code={block.text}
+          lang={block.lang || undefined}
+          runnable={runnable && block.lang === 'lua'}
+          bare
+        />
+      )
     case 'list': {
       const Tag = block.ordered ? 'ol' : 'ul'
       return (
@@ -78,6 +99,7 @@ function BlockView({
                       block={b}
                       sources={sources}
                       onNavigate={onNavigate}
+                      runnable={runnable}
                     />
                   )}
                 </Fragment>
@@ -138,6 +160,7 @@ function BlockView({
               block={b}
               sources={sources}
               onNavigate={onNavigate}
+              runnable={runnable}
             />
           ))}
         </div>

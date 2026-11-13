@@ -64,6 +64,8 @@ export interface Config {
     contextMaxChars: number
     minSemanticScore: number
     maxBodyBytes: number
+    /** Extra body bytes allowed when the request carries tool `steps` (phase 2). */
+    maxStepsBytes: number
     /** Answer cache: seconds an answer is reused (0 = cache off) and how many are kept. */
     cacheTtlSeconds: number
     cacheMaxEntries: number
@@ -391,6 +393,7 @@ export function loadConfig(env: Env = process.env): Config {
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
       minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.25, 0, 1),
       maxBodyBytes: int('CHAT_MAX_BODY_BYTES', 16384, 1024, 262144),
+      maxStepsBytes: int('CHAT_MAX_STEPS_BYTES', 98304, 1024, 524288),
       cacheTtlSeconds: int('CHAT_CACHE_TTL_SECONDS', 3600, 0, 604800),
       cacheMaxEntries: int('CHAT_CACHE_MAX_ENTRIES', 500, 0, 5000),
     },

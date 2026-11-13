@@ -19,6 +19,7 @@ nginx quita el prefijo: el navegador llama `/api/chat`, el server recibe `/chat`
 
 El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el VPS). Es una completion con contexto recuperado y **sin herramientas**:
 
+- (Fase 2) Las herramientas `ejecutar`/`check` **no cambian esto**: el modelo las pide con texto y las ejecuta el navegador en el sandbox de M4; el server solo corta el stream y reenvía el resultado como dato escapado. Ver [chat/tools-security.md](../chat/tools-security.md).
 - `LlmProvider` solo recibe `messages` y un tope de salida (`server/src/llm/provider.ts`). No existe `tools`, `functions` ni nada equivalente en la interfaz ni en la llamada a DeepSeek; un test lo verifica.
 - El server no ejecuta nada ni lee archivos a pedido del usuario. Sus únicos destinos de red son el LLM (`LLM_BASE_URL`), el embedder local y el servicio de cuentas (`ACCOUNTS_BASE_URL`), los tres fijados por entorno, nunca por la petición.
 - Los secretos (`DEEPSEEK_API_KEY`) viven en `~/deploy/env/astra-dev.env`, no en el repo ni en el navegador, y no se loguean.
@@ -49,7 +50,7 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 | `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
 | `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
 | `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                             |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, tools?, steps?, continued?, lang?}`. Respuesta SSE                                                                                                                                                                 |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
@@ -63,7 +64,7 @@ Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":".
 | 401    | `unauthenticated`       | Sin sesión                                                                                                            |
 | 403    | `subscription_required` | Con sesión pero rol `public`                                                                                          |
 | 403    | `forbidden_origin`      | `Origin` no permitido                                                                                                 |
-| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                                                    |
+| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES` (más `CHAT_MAX_STEPS_BYTES` si trae `steps`)                                       |
 | 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                                   |
 | 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                                      |
 | 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                               |
@@ -85,6 +86,18 @@ Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":".
 - El nombre y el color que se eligen en el onboarding **no** viajan: se quedan en el navegador.
 
 **`sources` (opcional, v0.17.1).** Slugs de las fuentes que citó la respuesta anterior (los `slug` del evento `sources`). Sirve para los follow-ups: "explicame eso", "y cómo lo uso?", "dame un ejemplo". Validación estricta: array de strings, como mucho 8, cada una de hasta 160 caracteres con la forma de un slug (`[A-Za-z0-9][A-Za-z0-9._/-]*`); duplicados se juntan; ausente, `null` o `[]` es no mandar nada; cualquier otra forma es `400 bad_request`. Un slug desconocido no encuentra nada ni falla el pedido. El server solo los usa como filtro del índice, nunca como texto.
+
+**`tools`, `steps`, `continued` (opcionales, v0.19.0, fase 2, bloqueada por la revisión de seguridad de M4).** Herramientas que el modelo puede pedir y que ejecuta el **navegador**, no el server. Todo estricto: cualquier forma o tope incumplido es `400 bad_request` antes de buscar o llamar al modelo.
+
+- `tools`: array de nombres del registro (`ejecutar`, `check`), como mucho 8, sin repetidos. Ausente o `[]` = el chat no tiene herramientas (regla 3 del prompt, como antes). El nombre desconocido es 400.
+- `steps`: rondas ya hechas en esta respuesta, `[{ text, tool, body, result }]`, como mucho 24. `text` ≤ 2000 caracteres (lo que el modelo escribió antes de la etiqueta), `body` de 1 a 4000 (el código), `tool` habilitada en `tools`, `result` = `ToolResult` v1 (esquema en [chat/README.md](../chat/README.md#esquema-de-resultado-toolresult-versión-1); validado campo por campo, sin campos de más, con los topes `RESULT_CAPS`). Suma de texto + código + resultado serializado ≤ 24000 caracteres (owner: 80000). `steps` sin `tools` es 400. Un paso nunca se repite como turno del asistente: entra al mensaje de usuario como bloque `<pasos>` con todo escapado (`escapeData`).
+- `continued`: entero 0..100, cuántas veces el **owner** confirmó "Seguir". Solo lo acepta quien tiene `confirmRounds` (owner); para el resto es 400. No puede superar `floor(steps.length / maxRounds)` (no se confirma un tope que no se alcanzó) y `steps.length` no puede pasar de `maxRounds × (continued + 1)`.
+- Rondas: `policy.maxRounds` (3; owner `OWNER_MAX_ROUNDS`, def. 8). Las que ya hubo desde la última confirmación se descuentan; con 0 restantes las herramientas se apagan (el prompt dice "ya no quedan llamadas" y una etiqueta que igual aparezca es texto). Al tope, el owner recibe `confirm` en vez de una llamada al modelo.
+- Cuerpo: `CHAT_MAX_BODY_BYTES` para una request normal; con un `steps` no vacío se suma `CHAT_MAX_STEPS_BYTES` (def. 98304). Sin `steps` un cuerpo grande sigue siendo 413.
+- No se cachea: con `steps` la respuesta ni se lee ni se guarda; una respuesta que terminó en llamada nunca se guarda; `tools` entra a la clave de caché.
+- No se loguea ni el código ni su salida: el log lleva solo `tools: <n>` y `rounds: <n>`. Probado en `server/tests/tools.test.ts`.
+
+Eventos SSE nuevos: `tool_call {round, name, body}` (el modelo pidió una herramienta; el server ya cortó su stream) y `confirm {reason:"max_rounds", rounds}` (owner); en ambos el `done` que sigue lleva `stop: "tool_call" | "confirm"` y no hay respuesta final todavía. Registro de uso: `outcome` = `tool_call` o `confirm`. Cada continuación es una request más (cuenta para los rate limits de quien no es owner). Modelo de amenazas y checklist: [chat/tools-security.md](../chat/tools-security.md).
 
 - **Cuándo cuentan**: solo si la pregunta depende de la charla (hay `history` y el decider no dijo "standalone"; sin decider o sin respuesta del decider cuenta como dependiente). Con `history` vacío o decider en `false`, se ignoran.
 - **Qué hacen**: se rankean aparte, dentro de esos slugs, con la consulta (turno anterior + pregunta), hasta 4 fragmentos, y van primero en `<contexto>`. El gate no los descarta (es lo que se acaba de hablar), y a los demás fragmentos el gate los juzga con la consulta completa, no con "explicame eso" a secas.
@@ -229,6 +242,7 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `CHAT_NATIVES_TOP_K`                                                             | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs                                                   |
 | `CHAT_MIN_SEMANTIC_SCORE`                                                        | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`                                              |
 | `CHAT_MAX_BODY_BYTES`                                                            | 16384                                                           |                                                                                                                 |
+| `CHAT_MAX_STEPS_BYTES`                                                           | 98304                                                           | Bytes extra de cuerpo cuando la request trae `steps` (fase 2)                                                   |
 | `CHAT_CACHE_TTL_SECONDS`, `CHAT_CACHE_MAX_ENTRIES`                               | 3600, 500                                                       | Caché de respuestas. 0 en cualquiera = apagada                                                                  |
 | `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`                               | 6, 20                                                           | Ventana deslizante de 60 s                                                                                      |
 | `RATE_SEARCH_IP_PER_MIN`                                                         | 60                                                              | `searchDocs` público                                                                                            |

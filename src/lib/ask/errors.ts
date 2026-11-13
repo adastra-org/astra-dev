@@ -71,6 +71,12 @@ export function describeError(
             : tr('ask.err.budget.resetIn', { wait }),
         retry: false,
       }
+    case 'too_many_rounds':
+      return {
+        title: tr('ask.err.rounds'),
+        hint: tr('ask.err.rounds.hint'),
+        retry: true,
+      }
     case 'llm_unavailable':
       return {
         title: tr('ask.err.llm'),

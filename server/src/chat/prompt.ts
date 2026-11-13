@@ -73,6 +73,17 @@ export function sanitizeHistory(
   return out.slice(-maxTurns)
 }
 
+/** Rule 3 as written when the chat has tools (the tools block below it says which). */
+const RULE3_TOOLS =
+  '3. Solo tienes las herramientas descritas al final de estas reglas, ninguna otra: no navegas, no lees archivos, no llamas a servicios ni ejecutas comandos fuera de ellas. No finjas hacerlo.'
+const RULE3_RE = /^3\. No tienes herramientas:.*$/m
+
+/** The system message. Fixed text: no user or document text ever goes in it; `tools` comes from the registry. */
+export function systemPrompt(tools?: string): string {
+  if (!tools) return SYSTEM_PROMPT
+  return `${SYSTEM_PROMPT.replace(RULE3_RE, RULE3_TOOLS)}\n\n${tools}`
+}
+
 export interface PromptInput {
   question: string
   history: HistoryTurn[]
@@ -86,6 +97,10 @@ export interface PromptInput {
   topic?: string[]
   /** Rendered `<estilo>` body (see style.ts). Fixed sentences chosen from an enum; empty = defaults. */
   style?: string
+  /** Fixed tools text for the system message (`toolsPrompt`). Empty/absent = the chat has no tools. */
+  tools?: string
+  /** Rendered `<pasos>` block (`renderSteps`): already escaped. */
+  steps?: string
 }
 
 export interface BuiltPrompt {
@@ -126,16 +141,14 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
     ? `\n\n<tema>\n${input.topic.map(escapeData).join('\n')}\n</tema>`
     : ''
   const style = input.style
-    ? `<estilo>
-${escapeData(input.style)}
-</estilo>
-`
+    ? `<estilo>\n${escapeData(input.style)}\n</estilo>\n`
     : ''
-  const user = `${env}${memories}${style}<contexto>\n${blocks.join('\n')}\n</contexto>${topic}${history}\n\n<pregunta>\n${escapeData(input.question)}\n</pregunta>`
+  const steps = input.steps ? `\n\n${input.steps}` : ''
+  const user = `${env}${memories}${style}<contexto>\n${blocks.join('\n')}\n</contexto>${topic}${history}\n\n<pregunta>\n${escapeData(input.question)}\n</pregunta>${steps}`
 
   return {
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt(input.tools) },
       { role: 'user', content: user },
     ],
     used,

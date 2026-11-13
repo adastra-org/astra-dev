@@ -13,7 +13,7 @@ import {
   Square,
   TriangleAlert,
 } from 'lucide-react'
-import { useState, type RefObject } from 'react'
+import { useState, type ReactNode, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { describeError, type ErrorView } from '@/lib/ask/errors'
 import { fmtCount, outputSpeed, ttftMs } from '@/lib/ask/budget'
@@ -24,6 +24,7 @@ import { ASK_MAX_QUESTION, type AskSource } from '@/lib/ask/types'
 import type { Permission } from '@/lib/palette/types'
 import { useLang } from '@/lib/use-lang'
 import { Activity } from './Activity'
+import { ToolStep } from './ToolStep'
 import { AnswerBody } from './AnswerBody'
 import { EtherOrb } from './EtherOrb'
 import { useAsk } from './useAsk'
@@ -147,12 +148,10 @@ export function TurnView({
 
       <Activity turn={turn} />
 
-      {turn.text && (
-        <AnswerBody
-          text={turn.text}
-          sources={turn.sources}
-          onNavigate={navigate}
-        />
+      <TurnBody turn={turn} settled={settled} onNavigate={navigate} />
+
+      {turn.confirm && settled && (
+        <ContinuePrompt turn={turn} locked={locked} />
       )}
 
       {turn.refused && settled && <RefusedNote onNavigate={navigate} />}
@@ -162,7 +161,9 @@ export function TurnView({
       )}
 
       {settled && turn.status !== 'error' && <Notes turn={turn} />}
-      {settled && turn.status === 'done' && <Speed turn={turn} />}
+      {settled && turn.status === 'done' && !turn.tools.length && (
+        <Speed turn={turn} />
+      )}
 
       {shown.length > 0 && (
         <section
@@ -178,6 +179,74 @@ export function TurnView({
         </section>
       )}
     </>
+  )
+}
+
+/**
+ * El texto de la respuesta con las llamadas a herramientas en el lugar donde ocurrieron: texto,
+ * tarjeta, texto, tarjeta. Sin llamadas es un solo `AnswerBody`.
+ */
+function TurnBody({
+  turn,
+  settled,
+  onNavigate,
+}: {
+  turn: Turn
+  settled: boolean
+  onNavigate: () => void
+}) {
+  const parts: ReactNode[] = []
+  let from = 0
+  for (const run of turn.tools) {
+    const text = turn.text.slice(from, run.at)
+    if (text.trim())
+      parts.push(
+        <AnswerBody
+          key={`t${run.round}`}
+          text={text}
+          sources={turn.sources}
+          onNavigate={onNavigate}
+          runnable={settled}
+        />,
+      )
+    parts.push(<ToolStep key={`c${run.round}`} run={run} />)
+    from = run.at
+  }
+  const rest = turn.text.slice(from)
+  if (rest.trim() || (!turn.tools.length && turn.text))
+    parts.push(
+      <AnswerBody
+        key="rest"
+        text={rest}
+        sources={turn.sources}
+        onNavigate={onNavigate}
+        runnable={settled}
+      />,
+    )
+  if (!parts.length) return null
+  return <>{parts}</>
+}
+
+/** El owner llegó al tope de rondas: el server pidió confirmar. Seguir reinicia el contador. */
+function ContinuePrompt({ turn, locked }: { turn: Turn; locked: boolean }) {
+  const { tr } = useLang()
+  return (
+    <div
+      role="status"
+      className="bg-surface-sunken text-body-sm flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3"
+    >
+      <p className="text-ink-muted min-w-0">
+        {tr('ask.tool.confirm', { n: turn.confirm?.rounds ?? 0 })}
+      </p>
+      <button
+        type="button"
+        disabled={locked}
+        onClick={() => askStore.continueTurn(turn.id)}
+        className="text-label bg-accent-fill text-on-accent hover:bg-accent-fill-hover min-h-11 rounded-md px-4 disabled:opacity-50 md:min-h-8"
+      >
+        {tr('ask.tool.continue')}
+      </button>
+    </div>
   )
 }
 

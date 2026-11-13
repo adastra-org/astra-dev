@@ -14,6 +14,7 @@ import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { chatSettingsFor, type Policy } from '../policy.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
 import { renderStyle, styleLabel, type ChatStyle } from './style.ts'
+import { ToolTagScanner, renderSteps, toolsPrompt, type Step } from './tools.ts'
 import {
   REFUSAL_ES,
   buildPrompt,
@@ -88,6 +89,8 @@ export type ChatEvent =
       usage: { inputTokens: number; outputTokens: number }
       /** The provider sent no usage: `usage` is a count from the text. */
       usageEstimated?: boolean
+      /** The stream ended waiting for the client: a tool result or the owner's confirmation. */
+      stop?: 'tool_call' | 'confirm'
       /**
        * Tokens per second the model really generated (reasoning included), from the local model's
        * own timings. Absent when the provider does not say: the client must not guess it from the
@@ -95,6 +98,10 @@ export type ChatEvent =
        */
       tps?: number
     }
+  /** The model asked for a tool. The browser runs it and continues with a new request (`steps`). */
+  | { type: 'tool_call'; round: number; name: string; body: string }
+  /** The owner hit the round cap: the client offers "keep going" (`continued`). */
+  | { type: 'confirm'; reason: 'max_rounds'; rounds: number }
   | { type: 'error'; code: string; message: string }
 
 export interface ChatRun {
@@ -154,6 +161,12 @@ export interface ChatInput {
   showThinking?: boolean
   /** Which limits apply. Absent = the strict one every non-owner gets. */
   policy?: Policy
+  /** Tools the client can run (`parseTools`). Absent or empty = the chat has none. */
+  tools?: string[]
+  /** Tool rounds already done in this answer (`parseSteps`). Not trusted beyond what parse checked. */
+  steps?: Step[]
+  /** Times the owner confirmed "keep going" (`parseContinued`). */
+  continued?: number
 }
 
 const STRICT: Policy = {
@@ -162,6 +175,7 @@ const STRICT: Policy = {
   globalBudget: true,
   sizeCaps: true,
   maxRounds: 3,
+  confirmRounds: false,
 }
 
 /** Facts about one run that the usage record needs. Filled while `events` runs; never any text. */
@@ -233,6 +247,60 @@ export class ChatService {
       s.maxHistoryTurns,
       s.maxHistoryTurnChars,
     )
+
+    // Tool rounds. `steps` were validated by the caller; here only the arithmetic with the policy.
+    // A step the server never asked for (more than the policy allows) is refused, not trusted.
+    const tools = input.tools ?? []
+    const toolSteps = input.steps ?? []
+    const continued = input.continued ?? 0
+    const cap = policy.maxRounds
+    if (toolSteps.length && !tools.length)
+      throw new AppError('bad_request', '`steps` needs `tools`.')
+    if (continued > 0 && !policy.confirmRounds)
+      throw new AppError('bad_request', '`continued` is not allowed here.')
+    // The owner can only confirm a cap that was reached, and the server never allowed more than
+    // one window per confirmation.
+    if (continued > Math.floor(toolSteps.length / cap))
+      throw new AppError('bad_request', '`continued` is ahead of the steps.')
+    if (toolSteps.length > cap * (continued + 1))
+      throw new AppError('bad_request', 'Too many tool steps.')
+    // Rounds spent since the last confirmation.
+    const spent = toolSteps.length - continued * cap
+    if (tools.length && spent >= cap && policy.confirmRounds) {
+      const confirmWindow = this.#d.contextWindow
+      return {
+        telemetry,
+        mode: 'keyword' as SearchMode,
+        degraded: false,
+        sources: [],
+        async *events() {
+          yield {
+            type: 'meta',
+            requestId: input.requestId,
+            mode: 'keyword',
+            degraded: false,
+            ...(confirmWindow === undefined
+              ? {}
+              : { contextWindow: confirmWindow }),
+          }
+          yield {
+            type: 'confirm',
+            reason: 'max_rounds',
+            rounds: toolSteps.length,
+          }
+          yield {
+            type: 'done',
+            cited: [],
+            refused: false,
+            truncated: false,
+            usage: { inputTokens: 0, outputTokens: 0 },
+            stop: 'confirm',
+          }
+        },
+      }
+    }
+    const roundsLeft = Math.max(0, cap - spent)
+    const toolsOn = tools.length > 0 && roundsLeft > 0
 
     // The query is the question plus the last user turn, so follow-ups ("and how do I draw it?") retrieve well.
     // With a decider, a question that stands on its own is searched alone: the previous topic would
@@ -345,6 +413,8 @@ export class ChatService {
         : hits,
       ...(topic.length ? { topic } : {}),
       ...(input.memories?.length ? { memories: input.memories } : {}),
+      ...(tools.length ? { tools: toolsPrompt(tools, roundsLeft) } : {}),
+      ...(toolSteps.length ? { steps: renderSteps(toolSteps) } : {}),
       ...(styleBody ? { style: styleBody } : {}),
       contextMaxChars: s.contextMaxChars,
       env: renderEnv({
@@ -395,10 +465,12 @@ export class ChatService {
     const lastAssistant = [...history]
       .reverse()
       .find((t) => t.role === 'assistant')
+    // Mid-run (steps present) the question was already answered from sources: never refuse now.
     const talk =
-      followUp &&
-      lastAssistant !== undefined &&
-      !isRefusal(lastAssistant.content)
+      toolSteps.length > 0 ||
+      (followUp &&
+        lastAssistant !== undefined &&
+        !isRefusal(lastAssistant.content))
     if (!built.used.length && !talk) {
       return {
         ...base,
@@ -422,14 +494,14 @@ export class ChatService {
     const { cache } = this.#d
     // Memories shape the answer and are the user's own: such an answer is neither read from nor stored in the cache.
     const key =
-      cache?.enabled && !input.memories?.length
+      cache?.enabled && !input.memories?.length && !toolSteps.length
         ? cacheKey({
             role: input.role,
             question,
             history,
             sourceIds: built.used.map((h) => h.id),
             // The answer can depend on these, so they split the cache; the user does not.
-            context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}${styleBody ? `|${styleLabel(input.style!)}` : ''}`,
+            context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}|${tools.join(',')}${styleBody ? `|${styleLabel(input.style!)}` : ''}`,
           })
         : null
     const cached = key ? cache!.get(key) : null
@@ -482,6 +554,8 @@ export class ChatService {
         let thinkingSent = 0
         let firstDeltaAt: number | null = null
         let lastDeltaAt = 0
+        const scanner = toolsOn ? new ToolTagScanner(tools) : null
+        let call: { name: string; body: string } | null = null
         try {
           for await (const chunk of llm.stream({
             messages: built.messages,
@@ -521,9 +595,14 @@ export class ChatService {
               telemetry.ttftMs = Math.round(firstDeltaAt - t0Run)
             }
             lastDeltaAt = performance.now()
+            // With tools on, the scanner holds back anything that may be half a tag and, when it
+            // sees a whole call, ends the model's stream right there.
+            const scanned = scanner
+              ? scanner.push(chunk.text)
+              : { text: chunk.text, call: null }
             const room = s.maxOutputChars - answer.length
-            if (chunk.text.length > room) {
-              const part = chunk.text.slice(0, Math.max(0, room))
+            if (scanned.text.length > room) {
+              const part = scanned.text.slice(0, Math.max(0, room))
               if (part) {
                 answer += part
                 yield { type: 'delta', text: part }
@@ -532,8 +611,26 @@ export class ChatService {
               stop.abort()
               break
             }
-            answer += chunk.text
-            yield { type: 'delta', text: chunk.text }
+            if (scanned.text) {
+              answer += scanned.text
+              yield { type: 'delta', text: scanned.text }
+            }
+            if (scanned.call) {
+              call = scanned.call
+              stop.abort()
+              break
+            }
+          }
+          // The stream ended without a call: whatever the scanner held is plain text.
+          if (scanner && !call && !truncated) {
+            const rest = scanner.end()
+            const room = s.maxOutputChars - answer.length
+            const part = rest.slice(0, Math.max(0, room))
+            if (part) {
+              answer += part
+              yield { type: 'delta', text: part }
+            }
+            if (rest.length > room) truncated = true
           }
         } catch (e) {
           failed = true
@@ -553,6 +650,29 @@ export class ChatService {
             budget.settle(input.viewerKey, reserved, actual, Date.now(), scope)
         }
         if (failed) return
+
+        if (call) {
+          // The model's turn ends at the tag. Nothing is cached: the answer is not finished.
+          yield {
+            type: 'tool_call',
+            round: toolSteps.length + 1,
+            name: call.name,
+            body: call.body,
+          }
+          yield {
+            type: 'done',
+            cited: citedNumbers(answer, sources.length),
+            refused: false,
+            truncated: false,
+            usage: usage ?? {
+              inputTokens: estimateTokens(inputChars),
+              outputTokens: estimateTokens(answer.length),
+            },
+            usageEstimated: usage === null,
+            stop: 'tool_call',
+          }
+          return
+        }
 
         // A small model can degenerate into whitespace. That is a failed answer, not an empty one:
         // never show it as success and never cache it.

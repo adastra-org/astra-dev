@@ -4,7 +4,12 @@
 import { readStoredLang, type UiLang } from '@/lib/i18n'
 import type { StyleBody } from './prefs'
 import { SseParser } from './sse'
-import { AskError, type AskEvent, type HistoryTurn } from './types'
+import {
+  AskError,
+  type AskEvent,
+  type HistoryTurn,
+  type ToolStepWire,
+} from './types'
 
 /** Prefijo de la API. `VITE_API_BASE` solo para apuntar a otro origen. */
 export const API_BASE: string =
@@ -20,6 +25,12 @@ export interface StreamOptions {
   style?: StyleBody
   /** Slugs de las fuentes de la respuesta anterior: el server las usa si la pregunta sigue la charla. */
   sources?: string[]
+  /** Herramientas que este cliente sabe ejecutar. Sin ellas el chat no tiene herramientas. */
+  tools?: readonly string[]
+  /** Rondas de herramientas ya hechas en esta respuesta (la continuación de un `tool_call`). */
+  steps?: ToolStepWire[]
+  /** Veces que el owner confirmó "Seguir". */
+  continued?: number
   /** Idioma de la interfaz; por defecto el guardado. */
   lang?: UiLang
   signal?: AbortSignal
@@ -76,6 +87,9 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
           ? { style: opts.style }
           : {}),
         ...(opts.sources?.length ? { sources: opts.sources } : {}),
+        ...(opts.tools?.length ? { tools: opts.tools } : {}),
+        ...(opts.steps?.length ? { steps: opts.steps } : {}),
+        ...(opts.continued ? { continued: opts.continued } : {}),
         lang: opts.lang ?? readStoredLang(),
       }),
       ...(opts.signal ? { signal: opts.signal } : {}),
