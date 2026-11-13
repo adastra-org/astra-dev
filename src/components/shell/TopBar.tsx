@@ -1,4 +1,5 @@
 import { Menu } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { AskTrigger } from '@/components/ask/AskTrigger'
 import { PaletteTrigger } from '@/components/palette/PaletteTrigger'
 import { useLang } from '@/lib/use-lang'
@@ -18,6 +19,8 @@ interface Props {
  */
 export function TopBar({ menuOpen, onMenu, onSearch }: Props) {
   const { tr } = useLang()
+  // /ask ya es el chat: el acceso al panel sobra.
+  const onAskPage = useLocation().pathname.replace(/\/+$/, '') === '/ask'
   return (
     <header className="pointer-events-none sticky top-0 z-20 flex shrink-0 items-center gap-2 px-4 pt-3 md:px-8">
       <div className="pointer-events-auto contents">
@@ -37,7 +40,7 @@ export function TopBar({ menuOpen, onMenu, onSearch }: Props) {
           aria-hidden="true"
         />
         <PaletteTrigger onOpen={onSearch} />
-        <AskTrigger />
+        {!onAskPage && <AskTrigger />}
         <LangSwitch />
       </div>
     </header>
