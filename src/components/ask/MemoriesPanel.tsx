@@ -89,9 +89,9 @@ export function MemoriesPanel() {
       aria-labelledby="ask-memories-title"
       className="flex flex-col gap-2"
     >
-      <h3 id="ask-memories-title" className="text-eyebrow">
+      <h2 id="ask-memories-title" className="text-eyebrow">
         {tr('ask.memories.title')}
-      </h3>
+      </h2>
       <p className="text-body-sm text-ink-muted">{tr('ask.memories.lead')}</p>
 
       {!persisted && (
