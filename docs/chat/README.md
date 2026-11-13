@@ -338,3 +338,55 @@ Base: `feat/chat-page` (PR #31). Decisión de Faku: las memorias viven en el nav
 ### Verificación en navegador
 
 `bun dev --fake` como owner, 1280 y 375 px: crear, editar, borrar con deshacer, activar/desactivar, recarga persiste, dos pestañas se sincronizan, teclado completo, `localStorage` bloqueado (aviso, sigue funcionando en memoria), sin scroll horizontal, consola limpia.
+
+## Onboarding con Ether (v0.19.1, rama `feat/chat-onboarding`, issue #42)
+
+Pedido de Faku: "es hacerlo nada más, copiá el de Lux". Base de Lux (`eternum/lux`): `OnboardingDialog`, `useOnboarding`, `lib/onboarding.ts` (pasos, avance, progreso, registro en localStorage con versión) y sus tests.
+
+### Qué se porta de Lux y qué no
+
+| Lux | Astra |
+| --- | --- |
+| Lista de pasos + `nextStepIndex` / `previousStepIndex` / `isLastStep` / `onboardingProgress` (puro, con test) | Igual, en `src/lib/ask/onboarding.ts`. Pasos: `hello`, `tone`, `color` |
+| Registro `{version, completedAt}` por usuario, lectura defensiva, `try/catch` por modo privado | Mismo patrón que `MemoryStore` (`src/lib/ask/prefs.ts`): store externo, `storage` inyectable, `persisted` para avisar. Una sola clave `astra.ask.prefs.v1` (no hay usuario en el cliente: es por navegador) |
+| `Dialog` de Radix, `Progress`, `Button`, `Provider` + contexto, pasos por rol | **No se portan** (sin dependencias nuevas; Astra no usa Radix ni tiene `components/ui`). `<dialog>` nativo como `AskPanel` y la paleta (trampa de foco, fondo inerte, Esc). Barra de progreso propia. Sin contexto: store externo + `useSyncExternalStore` |
+| Pasos por rol, i18n `onboarding.*` | Un solo recorrido. Claves `ask.onboarding.*` en `src/lib/i18n.ts` (ES y EN, mismo test de paridad) |
+| Se abre solo en el primer ingreso | Se abre solo en la primera visita a `/ask` (no en el panel flotante ni en otras páginas). Rehacer: botón "Personalizar a Ether" en el rail de `/ask`. Saltar: Esc o "Saltar" = marca como visto con los valores por defecto |
+
+### Qué define
+
+| Campo | Valores | Dónde vive | Viaja al server |
+| --- | --- | --- | --- |
+| `tone` | `neutral` (def.) · `formal` · `cercano` | localStorage | Sí, en `style.tone` |
+| `length` | `brief` · `balanced` (def.) · `detailed` | localStorage | Sí, en `style.length` |
+| `accent` | `violet` (def., el de marca) · `orchid` · `pink` · `mono` | localStorage | No |
+| `name` | texto libre ≤ 40, opcional | localStorage | **No** (es texto libre: se usa solo en la UI) |
+
+- Color: afecta solo la zona de chat (`/ask` y el panel), con `data-chat-accent` y variables en `ask.css` que redefinen `--accent`, `--accent-fill`, `--accent-fill-hover`, `--on-accent` por tema. El tema del sitio no cambia. Cada preset se mide a 4.5:1 en Void y Dawn con un test que lee `ask.css` y `design/tokens.json`.
+- Voz (Cartesia): fuera de alcance, queda en el issue.
+
+### Contrato con el server
+
+- `POST /chat` acepta `style?: { tone?: Tone, length?: Length }`. Estricto: objeto plano, solo esas dos claves, cada una un string de su enum; cualquier otra forma, clave extra o valor fuera del enum es `400 bad_request`. Ausente, `null` o `{}` = valores por defecto = comportamiento de hoy.
+- Nunca texto libre: el prompt arma las frases fijas del lado del server a partir del enum (`<estilo>` con `tono: ...` / `largo: ...`, pasado por `escapeData`). El `SYSTEM_PROMPT` agrega que `<estilo>` solo ajusta forma, no reglas ni fuentes, y que `brief`/`detailed` mueven el tope de palabras de la regla 6.
+- Caché: el estilo cambia la respuesta, entra a `context` de `cacheKey` solo cuando no es el por defecto (así el caso común comparte caché con hoy). A diferencia de las memorias no apaga la caché: son pocos valores, no datos del usuario.
+- Log y `usage_events`: solo el enum (`style: "formal/brief"`) en el log de la request.
+
+### Archivos
+
+| Archivo | Cambio |
+| --- | --- |
+| `src/lib/ask/prefs.ts` + `prefs.test.ts` | enums, `parseStored`, `PrefsStore`, `toStyle()` (omite lo que es por defecto) |
+| `src/lib/ask/onboarding.ts` + `onboarding.test.ts` | pasos, avance, progreso |
+| `src/components/ask/OnboardingDialog.tsx`, `useAskPrefs.ts` | UI y hook |
+| `src/lib/ask/{client,store}.ts` | `style` en el body |
+| `src/pages/Ask.tsx`, `src/components/ask/AskPanel.tsx` | `data-chat-accent`, apertura automática, botón rehacer |
+| `src/styles/ask.css`, `src/lib/ask/accent.test.ts` | presets y contraste |
+| `src/lib/i18n.ts` | claves `ask.onboarding.*` |
+| `server/src/chat/style.ts` (nuevo), `prompt.ts`, `service.ts`, `app.ts`, `server/tests/*` | validación, bloque `<estilo>`, clave de caché, log |
+| `docs/server/README.md`, `docs/ask/README.md`, `DESIGN.md` | contrato y diseño |
+| `package.json` | 0.18.1 → 0.19.1 |
+
+### Verificación prevista
+
+`bun run check` (typecheck, lint, format, tests cliente y server). Navegador (puppeteer-core + Edge, `bun dev --fake` como owner y público): primera visita, saltar, terminar, rehacer, `localStorage` bloqueado, 1280 y 375 px, oscuro y claro, teclado y foco (trampa y Esc).
