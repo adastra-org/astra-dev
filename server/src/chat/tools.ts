@@ -153,12 +153,12 @@ export function renderSteps(steps: readonly Step[]): string {
 // --- Scanner -------------------------------------------------------------------------------
 
 const CLOSE = '</herramienta>'
-const OPEN_FULL =
-  /^[ \t]{0,3}<herramienta[ \t]+nombre="([A-Za-z_]{1,32})"[ \t]*>/
+const OPEN_FULL = /^ {0,3}<herramienta[ \t]+nombre="([A-Za-z_]{1,32})"[ \t]*>/
 // A line that could still become an opener: whitespace, then a prefix of `<herramienta nombre="x">`.
 const OPEN_PREFIX =
-  /^[ \t]{0,3}(?:<(?:h(?:e(?:r(?:r(?:a(?:m(?:i(?:e(?:n(?:t(?:a)?)?)?)?)?)?)?)?)?)?)?|<herramienta(?:[ \t]+(?:n(?:o(?:m(?:b(?:r(?:e(?:=(?:"[A-Za-z_]{0,32}"?)?)?)?)?)?)?)?)?[ \t]*)?)?$/
-const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/
+  /^ {0,3}(?:<(?:h(?:e(?:r(?:r(?:a(?:m(?:i(?:e(?:n(?:t(?:a)?)?)?)?)?)?)?)?)?)?)?|<herramienta(?:[ \t]+(?:n(?:o(?:m(?:b(?:r(?:e(?:=(?:"[A-Za-z_]{0,32}"?)?)?)?)?)?)?)?)?[ \t]*)?)?$/
+// Indent is SPACES only (0-3): a tab counts as 4 columns in CommonMark, so it is no fence/opener.
+const FENCE = /^ {0,3}(`{3,}|~{3,})/
 const HOLD_MAX = 80
 
 export interface ScanResult {
@@ -302,7 +302,7 @@ export class ToolTagScanner {
     } else if (
       this.#fence.ch === ch &&
       run.length >= this.#fence.len &&
-      line.slice(m[0].length).trim() === ''
+      /^[ \t\r]*$/.test(line.slice(m[0].length))
     )
       this.#fence = null
   }

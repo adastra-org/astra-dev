@@ -156,6 +156,31 @@ describe('ToolTagScanner', () => {
       executes(`${pre}${CALL}`, pre)
     })
 
+    test('H4: a TAB-indented closer does not close (tab = 4 columns)', () => {
+      // QA PoC: the quoted tag after the "closer" must stay text.
+      quoted(`${T}md\nejemplo\n\t${T}\n${CALL}\n${T}\n`)
+      quoted(`${T}md\nejemplo\n \t${T}\n${CALL}\n`)
+      quoted(`${T}md\nejemplo\n  \t${T}\n${CALL}\n`)
+      quoted(`~~~\nx\n\t~~~\n${CALL}\n`)
+    })
+
+    test('H4: a TAB before the opening fence is not a fence', () => {
+      const pre = `\t${T}md\nx\n`
+      executes(`${pre}${CALL}`, pre)
+    })
+
+    test('H4: tabs (and spaces) AFTER the closing run still close', () => {
+      const pre = `${T}md\nx\n${T}\t\n${T}\n`
+      // closes at line 3 (tab after is allowed), line 4 opens a new fence: the tag is quoted
+      quoted(`${pre}${CALL}\n`)
+      const pre2 = `${T}md\nx\n${T} \t \n`
+      executes(`${pre2}${CALL}`, pre2)
+    })
+
+    test('H4: a tab before a tag opener is not an opener', () => {
+      quoted(`\t${CALL}`)
+    })
+
     test('a closer with text after it does not close', () => {
       quoted(`${T}\n${T} lua\n${CALL}\n`)
     })
