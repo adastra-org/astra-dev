@@ -92,7 +92,7 @@ event: step     data: {"step":{"id":"history|search|gate|cache","ms":12,…}}   
 event: thinking data: {"text":"…"}                      (solo staff, entre `sources` y los `delta`)
 event: sources  data: {"sources":[{"n":1,"slug":"…","title":"…","heading":"…","anchor":"…","path":"/docs/slug#anchor","excerpt":"…","score":0.71}]}
 event: delta    data: {"text":"…"}                      (muchos)
-event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"cached":true,"usage":{"inputTokens":…,"outputTokens":…},"usageEstimated":false}   (`cached` solo si salió de la caché; `usageEstimated` true cuando el proveedor no informó uso)
+event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"cached":true,"usage":{"inputTokens":…,"outputTokens":…},"usageEstimated":false,"tps":125.4}   (`cached` solo si salió de la caché; `usageEstimated` true cuando el proveedor no informó uso; `tps` solo con un modelo local, v0.19.2: tokens por segundo que midió el propio modelo, razonamiento incluido. Ausente = no se informa y el cliente no la inventa)
 event: error    data: {"code":"llm_unavailable","message":"…"}   (en lugar de done)
 ```
 
@@ -382,6 +382,18 @@ Medición (2026-11-12, llama.cpp b12314, RTX 5070, `Q8_0`, 36 casos propios en e
 ### Preguntas en español sobre natives (v0.17.1)
 
 Los natives están indexados en inglés (`GET_VEHICLE_CLASS`) y el embedder cruza mal español-inglés en identificadores: "cómo obtengo la velocidad de un vehículo" dejaba fuera el native correcto aunque existiera. `Retriever.searchMany` ahora fusiona (RRF, k=60) el ranking semántico de natives con un match léxico sobre las palabras del _nombre_ (`server/src/index/names.ts`): la pregunta se traduce con un glosario ES->EN de verbos (`obtengo`->get, `cambio`->set, `elimino`->delete...) y sustantivos (`matrícula`->plate, `clase`->class...) en `server/src/index/glossary.ts`, y se puntúa con F1 ponderado por idf (los verbos casi no pesan, un verbo solo no matchea nada, mínimo 0,4 para votar). El mismo glosario expande la búsqueda BM25 cuando el embedder no responde. El glosario es vocabulario general: si falta una palabra, se agrega ahí, no se parchea una pregunta. Tests: `server/tests/retrieval-es.test.ts`.
+
+### Calidad de respuestas (v0.19.2)
+
+Tres fallas de una conversación real (`GetActualScreenResolution` → "¿tiene variables de entrada?" → "¿me mostrás un uso de ejemplo?", que derivó a natives de audio) y su causa:
+
+- **Follow-up sin tema.** La consulta era `último turno del usuario + pregunta`; ninguna nombra el native, y palabras como "variables" o "ejemplo" arrastran natives que las contienen (`SET_VARIABLE_ON_SOUND`). El gate, que juzgaba esa misma consulta, los dejaba pasar (8 de 8) y el modelo los usaba. Ahora, en un follow-up, el **tema** (el título de cada fuente que citó la respuesta anterior, que en un native es su nombre; sin `sources`, los natives nombrados en la conversación) va primero en la consulta, el gate lo recibe aparte (`select(q, hits, {topic})`: "¿trata del tema y hace falta para responder?"; medido con el 2B en ese caso: 0,91 el native correcto, ≤ 0,06 el audio, contra 0,75-0,86 sin tema), y el prompt lo muestra en `<tema>` con la regla 10: no mezclar nativas ni documentos sin relación con la pregunta. Las fuentes arrastradas van primero, nunca las juzga el gate y, si una pregunta vaga no puntúa ninguna, igual quedan.
+- **Un native nombrado en la pregunta** (`GetActualScreenResolution`, hash, alias) hace que la pregunta se sostenga sola: no se consulta al decisor (que la marcaba como follow-up y mezclaba el turno anterior), no se le suma historial y el gate no lo puede descartar (antes lo descartó con score 1).
+- **Velocidad absurda ("2852 tokens por segundo").** `usage.outputTokens` cuenta también los tokens de razonamiento, pero el reloj del cliente arrancaba en el primer texto visible: el modelo pensaba ~7 s y emitía la respuesta en una ráfaga. Ahora el server manda `done.tps` desde los `timings` de llama.cpp (`predicted_n / predicted_ms`); sin eso el cliente solo mide si no hubo razonamiento, hubo ≥ 500 ms de texto y ≥ 8 tokens, y descarta por encima de 1000 tok/s (muestra "— tokens por segundo"). El registro de uso (`gen_tps`) usa el mismo criterio.
+
+**Glosario de dibujo y texto.** Se sumaron al glosario ES→EN los verbos y sustantivos de `DRAW_*`, `SET_TEXT_*` y `*_TEXT_COMMAND_*` (dibujar, mostrar, escribir, rectángulo, línea, subtítulo, mensaje, pantalla, fuente, tamaño, contorno, sombra...). Con el embedder caído (solo BM25), "cómo dibujo un rectángulo" pasó de rechazo a `DRAW_RECT`.
+
+**Si todo se rechaza y no debería:** antes de tocar umbrales, comprobar que el índice corresponde al embedder que corre. Un `index.json` generado con otro GGUF da cosenos ~0 contra las consultas (un fragmento embebido hoy contra su propio vector daba −0,02), la búsqueda cae a palabras clave y "cómo dibujo texto en pantalla" no encuentra nada. Se arregla con `cd server && bun run index` (~1 min) con el embedder local arriba.
 
 ### Qué entra al prompt: gate y `<entorno>`
 
