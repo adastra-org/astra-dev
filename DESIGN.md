@@ -107,6 +107,13 @@ Detalle y archivos en `docs/ask/README.md`. Es el único elemento con movimiento
 - Envío con Intro, salto de línea con Mayús + Intro; el botón de enviar nunca se deshabilita (con la caja vacía devuelve el foco al campo) y se vuelve "Detener" mientras responde.
 - Copy: español neutro con tú, sin exclamaciones; dice qué se envía al modelo y qué guarda el server.
 
+### Onboarding con Ether y color del chat
+
+- `<dialog>` modal nativo centrado (un solo borde, el panel), a 375 px ocupa el ancho menos 16 px; trampa de foco, fondo inerte, Esc y fondo = saltar. Cada paso mueve el foco a su título; progreso con `role="progressbar"` y "Paso n de 3".
+- Opciones: radios nativos ocultos con tarjeta de 44 px; la elegida lleva marca (check) y borde `accent`, nunca solo color. Pie: Saltar a la izquierda; Atrás y Siguiente/Listo a la derecha (en móvil apilados, Saltar abajo).
+- Color: `data-chat-accent` (página `/ask` y panel) redefine `--accent`, `--accent-fill`, `--accent-fill-hover` y, en `mono`, `--on-accent`. Solo en la zona de chat; el tema del sitio no cambia. Cada preset cumple 4.5:1 en Void y Dawn (`accent.test.ts`). Las muestras del diálogo usan el propio preset, sin hex.
+- Copy: español neutro con tú, sin exclamaciones; dice qué se guarda (solo este navegador) y qué viaja al server (tono y largo, nunca texto escrito).
+
 ## Docs reading layout
 
 The reader is a developer in the middle of a task, possibly with ADHD. A doc page is built so the first screen already

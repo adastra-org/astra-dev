@@ -345,22 +345,22 @@ Pedido de Faku: "es hacerlo nada más, copiá el de Lux". Base de Lux (`eternum/
 
 ### Qué se porta de Lux y qué no
 
-| Lux | Astra |
-| --- | --- |
-| Lista de pasos + `nextStepIndex` / `previousStepIndex` / `isLastStep` / `onboardingProgress` (puro, con test) | Igual, en `src/lib/ask/onboarding.ts`. Pasos: `hello`, `tone`, `color` |
-| Registro `{version, completedAt}` por usuario, lectura defensiva, `try/catch` por modo privado | Mismo patrón que `MemoryStore` (`src/lib/ask/prefs.ts`): store externo, `storage` inyectable, `persisted` para avisar. Una sola clave `astra.ask.prefs.v1` (no hay usuario en el cliente: es por navegador) |
-| `Dialog` de Radix, `Progress`, `Button`, `Provider` + contexto, pasos por rol | **No se portan** (sin dependencias nuevas; Astra no usa Radix ni tiene `components/ui`). `<dialog>` nativo como `AskPanel` y la paleta (trampa de foco, fondo inerte, Esc). Barra de progreso propia. Sin contexto: store externo + `useSyncExternalStore` |
-| Pasos por rol, i18n `onboarding.*` | Un solo recorrido. Claves `ask.onboarding.*` en `src/lib/i18n.ts` (ES y EN, mismo test de paridad) |
-| Se abre solo en el primer ingreso | Se abre solo en la primera visita a `/ask` (no en el panel flotante ni en otras páginas). Rehacer: botón "Personalizar a Ether" en el rail de `/ask`. Saltar: Esc o "Saltar" = marca como visto con los valores por defecto |
+| Lux                                                                                                           | Astra                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lista de pasos + `nextStepIndex` / `previousStepIndex` / `isLastStep` / `onboardingProgress` (puro, con test) | Igual, en `src/lib/ask/onboarding.ts`. Pasos: `hello`, `tone`, `color`                                                                                                                                                                                     |
+| Registro `{version, completedAt}` por usuario, lectura defensiva, `try/catch` por modo privado                | Mismo patrón que `MemoryStore` (`src/lib/ask/prefs.ts`): store externo, `storage` inyectable, `persisted` para avisar. Una sola clave `astra.ask.prefs.v1` (no hay usuario en el cliente: es por navegador)                                                |
+| `Dialog` de Radix, `Progress`, `Button`, `Provider` + contexto, pasos por rol                                 | **No se portan** (sin dependencias nuevas; Astra no usa Radix ni tiene `components/ui`). `<dialog>` nativo como `AskPanel` y la paleta (trampa de foco, fondo inerte, Esc). Barra de progreso propia. Sin contexto: store externo + `useSyncExternalStore` |
+| Pasos por rol, i18n `onboarding.*`                                                                            | Un solo recorrido. Claves `ask.onb.*` en `src/lib/i18n.ts` (ES y EN, mismo test de paridad)                                                                                                                                                                |
+| Se abre solo en el primer ingreso                                                                             | Se abre solo en la primera visita a `/ask` (no en el panel flotante ni en otras páginas). Rehacer: botón "Personalizar a Ether" en el rail de `/ask`. Saltar: Esc o "Saltar" = marca como visto con los valores por defecto                                |
 
 ### Qué define
 
-| Campo | Valores | Dónde vive | Viaja al server |
-| --- | --- | --- | --- |
-| `tone` | `neutral` (def.) · `formal` · `cercano` | localStorage | Sí, en `style.tone` |
-| `length` | `brief` · `balanced` (def.) · `detailed` | localStorage | Sí, en `style.length` |
-| `accent` | `violet` (def., el de marca) · `orchid` · `pink` · `mono` | localStorage | No |
-| `name` | texto libre ≤ 40, opcional | localStorage | **No** (es texto libre: se usa solo en la UI) |
+| Campo    | Valores                                                   | Dónde vive   | Viaja al server                               |
+| -------- | --------------------------------------------------------- | ------------ | --------------------------------------------- |
+| `tone`   | `neutral` (def.) · `formal` · `cercano`                   | localStorage | Sí, en `style.tone`                           |
+| `length` | `brief` · `balanced` (def.) · `detailed`                  | localStorage | Sí, en `style.length`                         |
+| `accent` | `violet` (def., el de marca) · `orchid` · `pink` · `mono` | localStorage | No                                            |
+| `name`   | texto libre ≤ 40, opcional                                | localStorage | **No** (es texto libre: se usa solo en la UI) |
 
 - Color: afecta solo la zona de chat (`/ask` y el panel), con `data-chat-accent` y variables en `ask.css` que redefinen `--accent`, `--accent-fill`, `--accent-fill-hover`, `--on-accent` por tema. El tema del sitio no cambia. Cada preset se mide a 4.5:1 en Void y Dawn con un test que lee `ask.css` y `design/tokens.json`.
 - Voz (Cartesia): fuera de alcance, queda en el issue.
@@ -374,18 +374,18 @@ Pedido de Faku: "es hacerlo nada más, copiá el de Lux". Base de Lux (`eternum/
 
 ### Archivos
 
-| Archivo | Cambio |
-| --- | --- |
-| `src/lib/ask/prefs.ts` + `prefs.test.ts` | enums, `parseStored`, `PrefsStore`, `toStyle()` (omite lo que es por defecto) |
-| `src/lib/ask/onboarding.ts` + `onboarding.test.ts` | pasos, avance, progreso |
-| `src/components/ask/OnboardingDialog.tsx`, `useAskPrefs.ts` | UI y hook |
-| `src/lib/ask/{client,store}.ts` | `style` en el body |
-| `src/pages/Ask.tsx`, `src/components/ask/AskPanel.tsx` | `data-chat-accent`, apertura automática, botón rehacer |
-| `src/styles/ask.css`, `src/lib/ask/accent.test.ts` | presets y contraste |
-| `src/lib/i18n.ts` | claves `ask.onboarding.*` |
-| `server/src/chat/style.ts` (nuevo), `prompt.ts`, `service.ts`, `app.ts`, `server/tests/*` | validación, bloque `<estilo>`, clave de caché, log |
-| `docs/server/README.md`, `docs/ask/README.md`, `DESIGN.md` | contrato y diseño |
-| `package.json` | 0.18.1 → 0.19.1 |
+| Archivo                                                                                   | Cambio                                                                        |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `src/lib/ask/prefs.ts` + `prefs.test.ts`                                                  | enums, `parseStored`, `PrefsStore`, `toStyle()` (omite lo que es por defecto) |
+| `src/lib/ask/onboarding.ts` + `onboarding.test.ts`                                        | pasos, avance, progreso                                                       |
+| `src/components/ask/OnboardingDialog.tsx`, `useAskPrefs.ts`                               | UI y hook                                                                     |
+| `src/lib/ask/{client,store}.ts`                                                           | `style` en el body                                                            |
+| `src/pages/Ask.tsx`, `src/components/ask/AskPanel.tsx`                                    | `data-chat-accent`, apertura automática, botón rehacer                        |
+| `src/styles/ask.css`, `src/lib/ask/accent.test.ts`                                        | presets y contraste                                                           |
+| `src/lib/i18n.ts`                                                                         | claves `ask.onb.*`                                                            |
+| `server/src/chat/style.ts` (nuevo), `prompt.ts`, `service.ts`, `app.ts`, `server/tests/*` | validación, bloque `<estilo>`, clave de caché, log                            |
+| `docs/server/README.md`, `docs/ask/README.md`, `DESIGN.md`                                | contrato y diseño                                                             |
+| `package.json`                                                                            | 0.18.1 → 0.19.1                                                               |
 
 ### Verificación prevista
 
