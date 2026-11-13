@@ -70,6 +70,22 @@ describe('fromRun', () => {
     })
   })
 
+  test('the Lua traceback is dropped: the first lines say what and where', () => {
+    const r = fromRun(
+      'ejecutar',
+      finished({
+        status: 'error',
+        message:
+          "snippet:3: attempt to index a nil value (local 't')\nstack traceback:\n\tsnippet:3: in main chunk\n\t[C]: in ?",
+        line: 3,
+      }),
+    )
+    expect(r.error?.message).toBe(
+      "snippet:3: attempt to index a nil value (local 't')",
+    )
+    expect(r.truncated).toBe(false)
+  })
+
   test('a syntax error is told apart from a runtime one', () => {
     const r = fromRun(
       'ejecutar',

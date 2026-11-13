@@ -108,7 +108,9 @@ export function fromRun(tool: string, r: RunResult): ToolResult {
           status: 'limit',
           error: { type: 'limit', message: `limit:${o.reason}`, line: null },
         }
-      const message = clip(o.message, UI_CAPS.errorMessage)
+      // The Lua traceback is noise for the model and the reader: the first lines say what and where.
+      const brief = o.message.split(/\n\s*stack traceback:/)[0]!.trim()
+      const message = clip(brief, UI_CAPS.errorMessage)
       return {
         ...base,
         status: 'error',
@@ -117,7 +119,7 @@ export function fromRun(tool: string, r: RunResult): ToolResult {
           message,
           line: o.line,
         },
-        truncated: base.truncated || message.length < o.message.length,
+        truncated: base.truncated || message.length < brief.length,
       }
     }
     case 'timeout':

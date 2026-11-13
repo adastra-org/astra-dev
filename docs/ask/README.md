@@ -131,3 +131,14 @@ Misma conversación que el panel (`askStore`): transcript, composer y las accion
 Editar una pregunta corta la conversación en ese punto y la reenvía; Reenviar repite la pregunta. Sin endpoint nuevo: el historial que se manda es lo que queda antes del turno.
 
 Lógica pura en `lib/ask/budget.ts` y `lib/ask/status.ts`; pruebas en `budget.test.ts`, `workspace.test.ts` y `components/ask/ask-page.test.tsx`.
+
+## Herramientas del chat (v0.19.0, fase 2)
+
+> Bloqueado para merge hasta la revisión de seguridad humana de M4. Amenazas, controles y checklist: [chat/tools-security.md](../chat/tools-security.md). Protocolo y esquema: [chat/README.md](../chat/README.md#fase-2-herramientas-ejecutar-y-check-v0190-rama-featchat-tools-issue-40).
+
+- **El modelo puede probar su propio código.** Si escribe `<herramienta nombre="ejecutar">` con Lua, el server corta su respuesta, el navegador lo corre en el sandbox de M4 y la respuesta continúa con el resultado. `check` revisa sin ejecutar (sintaxis, locales sin usar, globales que el sandbox no tiene). Máximo 3 herramientas por pregunta; el owner llega a 8 y el panel le pregunta si sigue ("Seguir").
+- **Tarjeta por llamada**, en el lugar de la respuesta donde ocurrió: el código que mandó el modelo, y debajo el resultado (estado, salida, error con su línea, duración, aviso si se recortó). Todo se pinta como texto.
+- **Botón Ejecutar manual**: cada bloque de código `lua` de una respuesta terminada tiene Ejecutar, Revisar y Formatear (el mismo `CodeBlock` de M4). Es una acción explícita del usuario: nada se ejecuta solo por que el modelo lo escribió en un bloque. Otros lenguajes no tienen botón. Mientras la respuesta se escribe no hay botones (el bloque puede estar a medias).
+- **Detener** corta también la ejecución en curso (mata el worker del sandbox).
+- Archivos: `src/lib/ask/tools.ts` (registro del cliente), `tool-result.ts` (esquema), `store.ts` (bucle de rondas, `Turn.tools`, `continueTurn`), `src/components/ask/ToolStep.tsx` (tarjeta), `Conversation.tsx` (`TurnBody`, `ContinuePrompt`).
+- Tests: `chat-tools.test.ts` (esquema, registro, bucle con `fetch` simulado, golden compartido con el server), `tool-step.test.tsx`.
