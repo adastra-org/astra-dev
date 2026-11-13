@@ -30,8 +30,18 @@
 
 /* Color de acento de la zona de chat (onboarding con Ether). `data-chat-accent` va en la página
    /ask y en el panel; redefine solo los roles de acento, así `bg-accent-fill`, `text-accent` y
-   `text-on-accent` cambian ahí y en el resto del sitio no. `violet` es el de marca (sin reglas).
+   `text-on-accent` cambian ahí y en el resto del sitio no. `violet` es el de marca: repite los valores base para que una muestra dentro de otro preset (el diálogo de onboarding) no herede su color.
    Cada par se mide a 4.5:1 en Void y Dawn: `src/lib/ask/accent.test.ts`. */
+[data-chat-accent='violet'] {
+  --accent: var(--orchid-400);
+  --accent-fill: var(--primary-dark);
+  --accent-fill-hover: var(--violet-600);
+}
+[data-theme='light'] [data-chat-accent='violet'] {
+  --accent: var(--primary-dark);
+  --accent-fill: var(--primary-dark);
+  --accent-fill-hover: var(--violet-800);
+}
 [data-chat-accent='orchid'] {
   --accent: var(--orchid-400);
   --accent-fill: var(--orchid-700);

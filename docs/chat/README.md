@@ -390,3 +390,16 @@ Pedido de Faku: "es hacerlo nada más, copiá el de Lux". Base de Lux (`eternum/
 ### Verificación prevista
 
 `bun run check` (typecheck, lint, format, tests cliente y server). Navegador (puppeteer-core + Edge, `bun dev --fake` como owner y público): primera visita, saltar, terminar, rehacer, `localStorage` bloqueado, 1280 y 375 px, oscuro y claro, teclado y foco (trampa y Esc).
+
+### Estado de verificación (onboarding)
+
+Hecho en Edge headless (puppeteer-core, `E:\Proyectos\_scratch\browser\onb-verify.mjs`), Vite 5290 contra un server propio (4390, LLM fake, viewer `owner`; segunda pasada con viewer `public`): 45 chequeos en verde y consola sin errores.
+
+- Primera visita: se abre solo; foco al campo del nombre; Tab y Shift+Tab no salen del diálogo (como mucho pasan a la interfaz del navegador, que es el comportamiento del `<dialog>` modal); Enter avanza; cada paso mueve el foco al título; radios con flechas; Atrás deshabilitado en el paso 1.
+- Terminar guarda tono, largo, color y nombre; recargar no reabre; el color se ve en la página y en el panel flotante, no en el resto del sitio; el rail resume lo elegido.
+- `POST /chat` real: lleva `style: {tone, length}` (solo lo que difiere del defecto) y nunca el nombre ni el color; sin elecciones no lleva `style`; el server responde 400 a `{"tone":"pirata"}`.
+- Saltar, Esc y clic en el fondo cierran, marcan visto y no guardan lo editado; rehacer parte de lo guardado y devuelve el foco al botón del rail.
+- `localStorage` bloqueado (getter que lanza): el diálogo funciona, avisa que no se guarda y la elección viaja igual durante la sesión.
+- 1280 y 375 px, oscuro y claro: el diálogo entra en pantalla, objetivos táctiles ≥ 44 px a 375 px, sin scroll horizontal. Capturas en `E:\Proyectos\_scratch\chat-onboarding\`.
+- Bug encontrado y corregido en la verificación: la muestra "Violeta" heredaba el color del preset activo; `violet` ahora repite los valores base en `ask.css`.
+- No verificado con lector de pantalla real (solo roles, nombres y foco por DOM).

@@ -27,7 +27,6 @@ for (const { id } of file.color.themes) {
   const base = resolveTheme(file, id)
   describe(`acento del chat en ${id}`, () => {
     for (const accent of ACCENTS) {
-      if (accent === DEFAULT_PREFS.accent) continue
       const own = block(
         id === 'light'
           ? `[data-theme='light'] [data-chat-accent='${accent}']`
@@ -63,3 +62,17 @@ for (const { id } of file.color.themes) {
     }
   })
 }
+
+test('el acento por defecto repite los valores base del tema', () => {
+  for (const { id } of file.color.themes) {
+    const base = resolveTheme(file, id)
+    const sel =
+      id === 'light'
+        ? `[data-theme='light'] [data-chat-accent='${DEFAULT_PREFS.accent}']`
+        : `[data-chat-accent='${DEFAULT_PREFS.accent}']`
+    const v = block(sel)
+    expect(base[v.accent!]).toBe(base.accent)
+    expect(base[v['accent-fill']!]).toBe(base['accent-fill'])
+    expect(base[v['accent-fill-hover']!]).toBe(base['accent-fill-hover'])
+  }
+})

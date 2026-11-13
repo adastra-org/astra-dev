@@ -72,6 +72,8 @@ export function OnboardingDialog({
         name: prefs.name,
       })
       d.showModal()
+      // El navegador enfoca el primer elemento enfocable (el título): se lleva al campo del nombre.
+      d.querySelector<HTMLElement>('input[type=text]')?.focus()
     } else if (!open && d.open) d.close()
     // `prefs` se lee solo al abrir.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -180,7 +182,6 @@ export function OnboardingDialog({
                 <input
                   id={`${uid}-name`}
                   type="text"
-                  autoFocus
                   autoComplete="off"
                   value={draft.name}
                   maxLength={NAME_MAX}
@@ -239,7 +240,7 @@ export function OnboardingDialog({
                   <legend className="text-label mb-2">
                     {tr('ask.onb.color.label')}
                   </legend>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2">
                     {ACCENTS.map((a) => (
                       <Swatch
                         key={a}
