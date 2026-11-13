@@ -207,7 +207,7 @@ export class ToolTagScanner {
   readonly #enabled: ReadonlySet<string>
   #line = ''
   #emitted = 0
-  #fence: string | null = null
+  #fence: { ch: string; len: number } | null = null
   #mode: 'text' | 'body' | 'off' = 'text'
   #name = ''
   #opener = ''
@@ -315,14 +315,23 @@ export class ToolTagScanner {
     return t
   }
 
+  /**
+   * CommonMark fences: an opener is 3+ backticks or tildes (a backtick info string cannot contain a
+   * backtick); it closes only on a line of the SAME character, AT LEAST as long, with nothing but
+   * blanks after. A shorter run inside (``` within ````) is content. Unclosed: quoted to the end.
+   */
   #trackFence(line: string) {
     const m = FENCE.exec(line)
     if (!m) return
-    const ch = m[1]![0]!
-    if (this.#fence === null) this.#fence = ch
-    else if (
-      this.#fence === ch &&
-      new RegExp(`^[ \\t]{0,3}\\${ch}{3,}[ \\t]*$`).test(line)
+    const run = m[1]!
+    const ch = run[0]!
+    if (this.#fence === null) {
+      if (ch === '`' && line.slice(m[0].length).includes('`')) return
+      this.#fence = { ch, len: run.length }
+    } else if (
+      this.#fence.ch === ch &&
+      run.length >= this.#fence.len &&
+      line.slice(m[0].length).trim() === ''
     )
       this.#fence = null
   }
