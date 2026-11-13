@@ -27,3 +27,45 @@
   --orb-plate: var(--brand-dark);
   --orb-auto-plate: var(--brand-dark);
 }
+
+/* Color de acento de la zona de chat (onboarding con Ether). `data-chat-accent` va en la página
+   /ask y en el panel; redefine solo los roles de acento, así `bg-accent-fill`, `text-accent` y
+   `text-on-accent` cambian ahí y en el resto del sitio no. `violet` es el de marca: repite los valores base para que una muestra dentro de otro preset (el diálogo de onboarding) no herede su color.
+   Cada par se mide a 4.5:1 en Void y Dawn: `src/lib/ask/accent.test.ts`. */
+[data-chat-accent='violet'] {
+  --accent: var(--orchid-400);
+  --accent-fill: var(--primary-dark);
+  --accent-fill-hover: var(--violet-600);
+}
+[data-theme='light'] [data-chat-accent='violet'] {
+  --accent: var(--primary-dark);
+  --accent-fill: var(--primary-dark);
+  --accent-fill-hover: var(--violet-800);
+}
+[data-chat-accent='orchid'] {
+  --accent: var(--orchid-400);
+  --accent-fill: var(--orchid-700);
+  --accent-fill-hover: var(--orchid-800);
+}
+[data-theme='light'] [data-chat-accent='orchid'] {
+  --accent: var(--orchid-700);
+  --accent-fill: var(--orchid-700);
+  --accent-fill-hover: var(--orchid-800);
+}
+[data-chat-accent='pink'] {
+  --accent: var(--pink-400);
+  --accent-fill: var(--pink-700);
+  --accent-fill-hover: var(--pink-800);
+}
+[data-theme='light'] [data-chat-accent='pink'] {
+  --accent: var(--pink-700);
+  --accent-fill: var(--pink-700);
+  --accent-fill-hover: var(--pink-800);
+}
+/* Monocromo: la tinta del tema como acento; el texto sobre el relleno es el fondo. */
+[data-chat-accent='mono'] {
+  --accent: var(--ink);
+  --accent-fill: var(--ink);
+  --accent-fill-hover: var(--ink-muted);
+  --on-accent: var(--surface);
+}

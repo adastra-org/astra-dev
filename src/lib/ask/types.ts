@@ -56,6 +56,8 @@ export type AskEvent =
       usageEstimated?: boolean
       /** The stream ended waiting for the client: a tool result or the owner's confirmation. */
       stop?: 'tool_call' | 'confirm'
+      /** Tokens por segundo que midió el propio modelo local (con su razonamiento). Ausente si no los informa. */
+      tps?: number
     }
   /** The model asked for a tool; the browser runs it and continues with `steps`. */
   | { type: 'tool_call'; round: number; name: string; body: string }

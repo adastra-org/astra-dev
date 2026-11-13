@@ -11,6 +11,7 @@ import {
   type MemoryDecision,
   type MemoryProposal,
 } from './memory-tools'
+import { prefsStore, type StyleBody } from './prefs'
 import { toWire, type ToolResult } from './tool-result'
 import { TOOL_NAMES, runTool } from './tools'
 import {
@@ -74,6 +75,8 @@ export interface Turn {
   /** Uso de tokens que informó el `done`. Null hasta que llega. */
   usage: { inputTokens: number; outputTokens: number } | null
   usageEstimated: boolean
+  /** Velocidad que midió el modelo (`done.tps`). Null si el proveedor no la informó. */
+  serverTps: number | null
   /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
   memoryTokens: number
   /** Herramientas que el modelo llamó en esta respuesta, en orden. */
@@ -114,6 +117,7 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   timing: { startedAt: null, firstDeltaAt: null, doneAt: null },
   usage: null,
   usageEstimated: false,
+  serverTps: null,
   memoryTokens: 0,
   tools: [],
   confirm: null,
@@ -182,6 +186,10 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
         cached: ev.cached === true,
         usage: ev.usage,
         usageEstimated: ev.usageEstimated === true,
+        serverTps:
+          typeof ev.tps === 'number' && Number.isFinite(ev.tps) && ev.tps > 0
+            ? ev.tps
+            : null,
         ...(at === undefined ? {} : { timing: { ...turn.timing, doneAt: at } }),
       }
     case 'error':
@@ -264,6 +272,8 @@ export interface AskStoreOptions {
   memories?: () => string[]
   /** Las mismas con su `id`, para que las herramientas de memoria apunten a una. Por defecto las del navegador. */
   memoryRefs?: () => MemoryRef[]
+  /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
+  style?: () => StyleBody | undefined
   /** Herramientas que se ofrecen al modelo. Por defecto las del registro del cliente. */
   tools?: readonly string[]
   /** Ejecuta una llamada del modelo. Por defecto el sandbox del navegador. */
@@ -277,6 +287,7 @@ interface RunBase {
   memories: string[]
   /** Foto de las memorias enviadas: el número que ve el modelo es la posición en esta lista. */
   refs: MemoryRef[]
+  style: StyleBody | undefined
 }
 
 export class AskStore {
@@ -379,6 +390,7 @@ export class AskStore {
     const history = historyFor(this.#state.turns)
     const sources = sourcesFor(this.#state.turns)
     const { memories, refs } = this.#memorySnapshot()
+    const style = (this.#opts.style ?? (() => prefsStore.style()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
     const startedAt = this.#now()
@@ -398,7 +410,7 @@ export class AskStore {
     this.#abort = ctl
     await this.#drive(
       id,
-      { question: q, history, sources, memories, refs },
+      { question: q, history, sources, memories, refs, style },
       ctl,
     )
   }
@@ -420,6 +432,7 @@ export class AskStore {
           question: base.question,
           history: base.history,
           memories: base.memories,
+          ...(base.style ? { style: base.style } : {}),
           sources: base.sources,
           tools: this.#opts.tools ?? TOOL_NAMES,
           steps: stepsFor(turn),
@@ -487,6 +500,7 @@ export class AskStore {
     if (!turn?.confirm || this.busy) return
     const prior = this.#state.turns.slice(0, idx)
     const { memories, refs } = this.#memorySnapshot()
+    const style = (this.#opts.style ?? (() => prefsStore.style()))()
     this.#update(id, (t) => ({
       ...t,
       confirm: null,
@@ -503,6 +517,7 @@ export class AskStore {
         sources: sourcesFor(prior),
         memories,
         refs,
+        style,
       },
       ctl,
     )

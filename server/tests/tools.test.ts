@@ -156,6 +156,31 @@ describe('ToolTagScanner', () => {
       executes(`${pre}${CALL}`, pre)
     })
 
+    test('H4: a TAB-indented closer does not close (tab = 4 columns)', () => {
+      // QA PoC: the quoted tag after the "closer" must stay text.
+      quoted(`${T}md\nejemplo\n\t${T}\n${CALL}\n${T}\n`)
+      quoted(`${T}md\nejemplo\n \t${T}\n${CALL}\n`)
+      quoted(`${T}md\nejemplo\n  \t${T}\n${CALL}\n`)
+      quoted(`~~~\nx\n\t~~~\n${CALL}\n`)
+    })
+
+    test('H4: a TAB before the opening fence is not a fence', () => {
+      const pre = `\t${T}md\nx\n`
+      executes(`${pre}${CALL}`, pre)
+    })
+
+    test('H4: tabs (and spaces) AFTER the closing run still close', () => {
+      const pre = `${T}md\nx\n${T}\t\n${T}\n`
+      // closes at line 3 (tab after is allowed), line 4 opens a new fence: the tag is quoted
+      quoted(`${pre}${CALL}\n`)
+      const pre2 = `${T}md\nx\n${T} \t \n`
+      executes(`${pre2}${CALL}`, pre2)
+    })
+
+    test('H4: a tab before a tag opener is not an opener', () => {
+      quoted(`\t${CALL}`)
+    })
+
     test('a closer with text after it does not close', () => {
       quoted(`${T}\n${T} lua\n${CALL}\n`)
     })
@@ -627,6 +652,44 @@ describe('POST /chat with tools', () => {
     const log = h.logs.join('\n')
     expect(log).not.toContain(marker)
     expect(log).toContain('"rounds":1')
+  })
+})
+
+describe('tools alongside style, topic and sources (merge of #44/#46 into #45)', () => {
+  test('one continuation carries <estilo>, <contexto>, <pasos> and the tools block, in a sane order', async () => {
+    const h = await harness()
+    const res = await h.call('/chat', {
+      json: {
+        question: Q,
+        style: { tone: 'cercano', length: 'brief' },
+        tools: ['ejecutar'],
+        steps: [step()],
+      },
+    })
+    expect(res.status).toBe(200)
+    await res.text()
+    const req = h.llm.requests[0]!
+    const sys = req.messages[0]!.content
+    const user = req.messages.at(-1)!.content
+    expect(sys).toContain('<herramienta nombre="NOMBRE">')
+    // dev's rules 10 (estilo) and 11 (tema) are intact
+    expect(sys).toContain('10. <estilo>')
+    expect(sys).toContain('11. Responde solo lo que se preguntó')
+    expect(user).toContain('<estilo>\ntono: cercano')
+    const at = (t: string) => user.indexOf(t)
+    expect(at('<estilo>')).toBeGreaterThanOrEqual(0)
+    expect(at('<estilo>')).toBeLessThan(at('<contexto>'))
+    expect(at('<pregunta>')).toBeLessThan(at('<pasos>'))
+    expect(at('<pasos>')).toBeGreaterThan(0)
+  })
+
+  test('with steps the cache is never read, even for an identical request', async () => {
+    const h = await harness()
+    const call = (extra: object) =>
+      h.call('/chat', { json: { question: Q, ...extra } }).then((r) => r.text())
+    await call({ tools: ['ejecutar'], steps: [step()] })
+    await call({ tools: ['ejecutar'], steps: [step()] })
+    expect(h.llm.requests).toHaveLength(2)
   })
 })
 

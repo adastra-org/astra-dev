@@ -6,6 +6,7 @@ import { parseLang } from './chat/environment.ts'
 import { citedLog } from './chat/log.ts'
 import { parseSources } from './chat/carry.ts'
 import { parseMemories } from './chat/memories.ts'
+import { isDefaultStyle, parseStyle, styleLabel } from './chat/style.ts'
 import { sseResponse } from './chat/sse.ts'
 import {
   STEPS_MAX_CHARS,
@@ -103,6 +104,7 @@ async function readChatBody(
     lang,
     memories,
     sources,
+    style,
     tools,
     steps,
     continued,
@@ -112,6 +114,7 @@ async function readChatBody(
     lang?: unknown
     memories?: unknown
     sources?: unknown
+    style?: unknown
     tools?: unknown
     steps?: unknown
     continued?: unknown
@@ -125,6 +128,7 @@ async function readChatBody(
     history,
     lang: parseLang(lang),
     memories: parseMemories(memories),
+    style: parseStyle(style),
     sources: parseSources(sources),
     tools: parseTools(tools),
     rawSteps: steps,
@@ -203,6 +207,7 @@ export function createApp(deps: AppDeps) {
           lang,
           memories,
           sources,
+          style,
           tools,
           rawSteps,
           continued,
@@ -225,6 +230,7 @@ export function createApp(deps: AppDeps) {
           question,
           history,
           memories,
+          style,
           sources,
           lang,
           user: { handle: viewer.handle },
@@ -248,6 +254,8 @@ export function createApp(deps: AppDeps) {
         // Counts only: neither the code nor its output reaches a log.
         if (tools.length) log.tools = tools.length
         if (steps.length) log.rounds = steps.length
+        // Enums only (tone/length): safe to log.
+        if (!isDefaultStyle(style)) log.style = styleLabel(style)
         if (run.gate) log.gate = `${run.gate.kept}/${run.gate.total}`
 
         return sseResponse(
