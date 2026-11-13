@@ -133,6 +133,8 @@ export interface ChatInput {
   role: Role
   question: string
   history: unknown
+  /** Validated user memories (`parseMemories`). Their presence turns the answer cache off. */
+  memories?: string[]
   /** UI language of the visitor. */
   lang?: ChatLang
   /** Who asks. Only goes to the model inside <entorno>; never part of the cache key. */
@@ -255,6 +257,7 @@ export class ChatService {
       question,
       history,
       hits,
+      ...(input.memories?.length ? { memories: input.memories } : {}),
       contextMaxChars: s.contextMaxChars,
       env: renderEnv({
         lang,
@@ -320,16 +323,18 @@ export class ChatService {
     // Same question over the same sources for the same role: replay the stored answer. No model
     // call and no budget spent.
     const { cache } = this.#d
-    const key = cache?.enabled
-      ? cacheKey({
-          role: input.role,
-          question,
-          history,
-          sourceIds: built.used.map((h) => h.id),
-          // The answer can depend on these, so they split the cache; the user does not.
-          context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}`,
-        })
-      : null
+    // Memories shape the answer and are the user's own: such an answer is neither read from nor stored in the cache.
+    const key =
+      cache?.enabled && !input.memories?.length
+        ? cacheKey({
+            role: input.role,
+            question,
+            history,
+            sourceIds: built.used.map((h) => h.id),
+            // The answer can depend on these, so they split the cache; the user does not.
+            context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}`,
+          })
+        : null
     const cached = key ? cache!.get(key) : null
     if (cached) {
       return {

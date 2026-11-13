@@ -49,26 +49,33 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 | `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
 | `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
 | `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?}`. Respuesta SSE                                                                                                                                                                                                                                 |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, lang?}`. Respuesta SSE                                                                                                                                                                                                               |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
 ### `POST /chat`
 
-Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
+Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
 
-| Estado | `code`                  | Cuándo                                                |
-| ------ | ----------------------- | ----------------------------------------------------- |
-| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, tipo MIME |
-| 401    | `unauthenticated`       | Sin sesión                                            |
-| 403    | `subscription_required` | Con sesión pero rol `public`                          |
-| 403    | `forbidden_origin`      | `Origin` no permitido                                 |
-| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                    |
-| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                   |
-| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)      |
-| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)               |
-| 503    | `viewer_unavailable`    | Cuentas no responde                                   |
-| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                  |
+| Estado | `code`                  | Cuándo                                                                                          |
+| ------ | ----------------------- | ----------------------------------------------------------------------------------------------- |
+| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories` mal formado o sobre sus topes, tipo MIME |
+| 401    | `unauthenticated`       | Sin sesión                                                                                      |
+| 403    | `subscription_required` | Con sesión pero rol `public`                                                                    |
+| 403    | `forbidden_origin`      | `Origin` no permitido                                                                           |
+| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                              |
+| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                             |
+| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                |
+| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                         |
+| 503    | `viewer_unavailable`    | Cuentas no responde                                                                             |
+| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                            |
+
+**`memories` (opcional, v0.16.0).** Lista de preferencias del usuario que el cliente guarda en su navegador y manda con cada pregunta. Validación estricta, sin recorte silencioso: tiene que ser un array de strings, como mucho 12, cada una de 1 a 280 caracteres (después de limpiar caracteres invisibles y de control), 2000 caracteres entre todas. Ausente, `null` o `[]` equivale a no mandar nada; cualquier otra forma o exceso es `400 bad_request` antes de buscar o llamar al modelo. Los topes valen también para `owner` (son el formato del campo, no una política de uso); `CHAT_MAX_BODY_BYTES` sigue aplicando al cuerpo completo.
+
+- Van al modelo en un bloque propio `<memorias>` (una línea `- texto` por memoria, escapado con `escapeData`), entre `<entorno>` y `<contexto>`. Son dato del usuario: la regla 9 del prompt dice que solo adaptan tono y formato, no son fuentes citables y no cambian las reglas.
+- **No se cachean**: con memorias la respuesta ni se lee ni se guarda en la caché (la clave no las incluye a propósito).
+- **No se loguean**: el log de la request lleva solo `memories: <cantidad>`; ni el log ni `usage_events` tienen el texto. Probado en `server/tests/memories.test.ts`.
+- No cuentan para `CHAT_CONTEXT_MAX_CHARS` (eso recorta fuentes): se suman aparte, como mucho 2000 caracteres (unos 700 tokens).
 
 Eventos SSE (`Content-Type: text/event-stream`, `X-Accel-Buffering: no`, `X-Request-Id`):
 

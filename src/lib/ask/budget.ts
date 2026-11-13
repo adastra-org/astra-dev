@@ -25,6 +25,8 @@ export interface ContextUsage {
   level: BudgetLevel
   /** Tokens que el borrador ocupa en la estimación. */
   draft: number
+  /** Tokens estimados de las memorias activas ahora (ya incluidos en `next`). */
+  memories: number
   /** El último uso lo estimó el server, no lo informó el proveedor. */
   estimated: boolean
 }
@@ -47,13 +49,16 @@ export function contextUsage(
   turns: readonly Turn[],
   limit: number | null,
   draft: string,
+  /** Tokens estimados de las memorias activas ahora; 0 si no hay. */
+  memories = 0,
 ): ContextUsage | null {
   if (limit === null || limit <= 0) return null
   const t = lastUsedTurn(turns)
   if (!t?.usage) return null
   const used = t.usage.inputTokens + t.usage.outputTokens
   const draftTokens = draft ? estimateTokens(draft.length) : 0
-  const next = used + draftTokens
+  // Lo usado ya trae las memorias de aquel envío: se suma solo la diferencia con las de ahora.
+  const next = Math.max(0, used + draftTokens + memories - t.memoryTokens)
   const ratio = next / limit
   return {
     next,
@@ -62,6 +67,7 @@ export function contextUsage(
     ratio,
     level: ratio >= FULL_RATIO ? 'full' : ratio >= WARN_RATIO ? 'warn' : 'ok',
     draft: draftTokens,
+    memories,
     estimated: t.usageEstimated,
   }
 }
