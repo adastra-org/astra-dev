@@ -111,6 +111,65 @@ describe('ToolTagScanner', () => {
     expect(call?.name).toBe('ejecutar')
   })
 
+  describe('CommonMark fence closing (QA finding on #45)', () => {
+    const T = '```'
+    const sizes = (text: string) => [
+      ...Array.from({ length: 12 }, (_, i) => i + 1),
+      text.length,
+    ]
+    const quoted = (text: string) => {
+      for (const size of sizes(text)) {
+        const { shown, call } = scan(text, size)
+        expect(call).toBeNull()
+        expect(shown).toBe(text)
+      }
+    }
+    const executes = (text: string, before: string) => {
+      for (const size of sizes(text)) {
+        const { shown, call } = scan(text, size)
+        expect(call?.name).toBe('ejecutar')
+        expect(shown).toBe(before)
+      }
+    }
+
+    test('a 3-backtick line inside a 4-backtick fence does not close it', () => {
+      quoted(`\`\`\`\`md\n${T}\nx\n${T}\n${CALL}\n\`\`\`\`\nfin`)
+      quoted(`\`\`\`\`\n${T}\n${CALL}\n`)
+    })
+
+    test('a 4-backtick line closes a 3-backtick fence (at least as long)', () => {
+      const pre = `${T}\nx\n\`\`\`\`\n`
+      executes(`${pre}${CALL}`, pre)
+    })
+
+    test('~~~ fences: shorter or different-character runs do not close', () => {
+      quoted(`~~~~\n~~~\n${CALL}\n~~~~\nfin`)
+      quoted(`~~~\n${T}\n${CALL}\n`)
+      quoted(`${T}\n~~~\n${CALL}\n`)
+      const pre = '~~~\nx\n~~~~\n'
+      executes(`${pre}${CALL}`, pre)
+    })
+
+    test('1-3 spaces of indent still open and close', () => {
+      quoted(`  ${T}\n${CALL}\n`)
+      const pre = `   ${T}\nx\n ${T}\n`
+      executes(`${pre}${CALL}`, pre)
+    })
+
+    test('a closer with text after it does not close', () => {
+      quoted(`${T}\n${T} lua\n${CALL}\n`)
+    })
+
+    test('an unclosed fence quotes everything to the end', () => {
+      quoted(`Mirá:\n${T}lua\nprint(1)\n${CALL}\ny más texto`)
+    })
+
+    test('a backtick fence whose info string has a backtick is not a fence', () => {
+      const pre = `${T}x\`y\n`
+      executes(`${pre}${CALL}`, pre)
+    })
+  })
+
   test('a tag in the middle of a line or in inline code is text', () => {
     for (const text of [
       `Voy a probar ${CALL}`,
