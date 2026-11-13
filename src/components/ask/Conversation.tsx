@@ -248,8 +248,10 @@ function UserMessage({ turn, locked }: { turn: Turn; locked: boolean }) {
       </form>
     )
 
+  // Las acciones ocupan siempre su lugar (opacity, no display): sin salto de layout. Se muestran con
+  // hover o foco dentro del mensaje; en táctil (`hover: none`) están siempre visibles.
   return (
-    <>
+    <div className="group/msg flex flex-col gap-2">
       <p className="bg-surface-overlay text-body text-ink max-w-[85%] self-end rounded-lg px-4 py-2 break-words">
         {turn.question}
       </p>
@@ -257,7 +259,7 @@ function UserMessage({ turn, locked }: { turn: Turn; locked: boolean }) {
         <div
           role="group"
           aria-label={tr('ask.turnActions')}
-          className="flex justify-end gap-1 -mt-1"
+          className="flex justify-end gap-1 transition-opacity motion-reduce:transition-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within/msg:opacity-100 [@media(hover:hover)]:group-hover/msg:opacity-100"
         >
           <button
             type="button"
@@ -282,7 +284,7 @@ function UserMessage({ turn, locked }: { turn: Turn; locked: boolean }) {
           </button>
         </div>
       )}
-    </>
+    </div>
   )
 }
 

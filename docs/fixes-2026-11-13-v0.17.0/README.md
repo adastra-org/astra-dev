@@ -15,9 +15,9 @@
 
 ## UI
 
-- [ ] El razonamiento del modelo se muestra en un cuadro negro; rediseñarlo (más estético, colapsable, coherente con `DESIGN.md`).
-- [ ] En `/ask` desaparece "Hablar con Ether" arriba a la derecha (la página ya es el chat).
-- [ ] Los botones `reenviar` y `editar` aparecen al pasar el cursor sobre el mensaje (y con foco de teclado; en táctil, visibles).
+- [x] El razonamiento del modelo se muestra en un cuadro negro; rediseñarlo (más estético, colapsable, coherente con `DESIGN.md`). v0.17.2: `<details>` plegado con chevron, filete a la izquierda, sin fondo; verificado en Edge, oscuro/claro, 1280 y 375 px.
+- [x] En `/ask` desaparece "Hablar con Ether" arriba a la derecha (la página ya es el chat). v0.17.2: `TopBar` lo oculta en `/ask`; verificado en Edge.
+- [x] Los botones `reenviar` y `editar` aparecen al pasar el cursor sobre el mensaje (y con foco de teclado; en táctil, visibles). v0.17.2: opacity con `hover`/`focus-within`, siempre visibles con `(hover: none)`; sin layout shift (altura y posición idénticas); verificado en Edge.
 
 ## UX (largo plazo, ROADMAP)
 
