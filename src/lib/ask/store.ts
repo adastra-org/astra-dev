@@ -5,7 +5,12 @@
 import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
-import { memoryStore, textsTokens } from './memories'
+import { memoryStore, textsTokens, type MemoryRef } from './memories'
+import {
+  isMemoryTool,
+  type MemoryDecision,
+  type MemoryProposal,
+} from './memory-tools'
 import { prefsStore, type StyleBody } from './prefs'
 import { toWire, type ToolResult } from './tool-result'
 import { TOOL_NAMES, runTool } from './tools'
@@ -36,6 +41,8 @@ export interface ToolRun {
   text: string
   status: 'running' | 'done' | 'stopped'
   result: ToolResult | null
+  /** Memory tools: what the model wants to write, waiting for the user's decision. */
+  proposal?: MemoryProposal | null
 }
 
 export type TurnStatus = 'waiting' | 'streaming' | 'done' | 'stopped' | 'error'
@@ -154,6 +161,7 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
         text: turn.text.slice(prevAt),
         status: 'running',
         result: null,
+        proposal: null,
       }
       return { ...turn, tools: [...turn.tools, run] }
     }
@@ -262,6 +270,8 @@ export interface AskStoreOptions {
   now?: () => number
   /** Memorias activas a enviar. Por defecto las del navegador (`memoryStore`). */
   memories?: () => string[]
+  /** Las mismas con su `id`, para que las herramientas de memoria apunten a una. Por defecto las del navegador. */
+  memoryRefs?: () => MemoryRef[]
   /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
   style?: () => StyleBody | undefined
   /** Herramientas que se ofrecen al modelo. Por defecto las del registro del cliente. */
@@ -275,6 +285,8 @@ interface RunBase {
   history: HistoryTurn[]
   sources: string[]
   memories: string[]
+  /** Foto de las memorias enviadas: el número que ve el modelo es la posición en esta lista. */
+  refs: MemoryRef[]
   style: StyleBody | undefined
 }
 
@@ -298,6 +310,16 @@ export class AskStore {
   }
 
   getState = (): AskState => this.#state
+
+  /** Lo que viaja en el request y la foto con ids que usan las herramientas de memoria. */
+  #memorySnapshot(): { memories: string[]; refs: MemoryRef[] } {
+    if (this.#opts.memories) {
+      const memories = this.#opts.memories()
+      return { memories, refs: this.#opts.memoryRefs?.() ?? [] }
+    }
+    const refs = (this.#opts.memoryRefs ?? (() => memoryStore.activeRefs()))()
+    return { memories: refs.map((m) => m.text), refs }
+  }
 
   subscribe = (cb: () => void): (() => void) => {
     this.#listeners.add(cb)
@@ -367,7 +389,7 @@ export class AskStore {
     if (!q || this.busy) return
     const history = historyFor(this.#state.turns)
     const sources = sourcesFor(this.#state.turns)
-    const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    const { memories, refs } = this.#memorySnapshot()
     const style = (this.#opts.style ?? (() => prefsStore.style()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
@@ -388,7 +410,7 @@ export class AskStore {
     this.#abort = ctl
     await this.#drive(
       id,
-      { question: q, history, sources, memories, style },
+      { question: q, history, sources, memories, refs, style },
       ctl,
     )
   }
@@ -429,7 +451,17 @@ export class AskStore {
         })
         if (ctl.signal.aborted || stop !== 'tool_call' || call === null) return
         const c: Extract<AskEvent, { type: 'tool_call' }> = call
-        const result = await run(c.name, c.body, ctl.signal)
+        const memory = isMemoryTool(c.name)
+          ? {
+              refs: base.refs,
+              priorWrites: turn.tools.filter(
+                (t) => isMemoryTool(t.name) && t.round !== c.round,
+              ).length,
+              confirm: (p: MemoryProposal) =>
+                this.#propose(id, c.round, p, ctl.signal),
+            }
+          : undefined
+        const result = await run(c.name, c.body, ctl.signal, undefined, memory)
         if (ctl.signal.aborted) return
         this.#update(id, (t) => finishTool(t, c.round, result))
       }
@@ -467,7 +499,7 @@ export class AskStore {
     const turn = this.#state.turns[idx]
     if (!turn?.confirm || this.busy) return
     const prior = this.#state.turns.slice(0, idx)
-    const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    const { memories, refs } = this.#memorySnapshot()
     const style = (this.#opts.style ?? (() => prefsStore.style()))()
     this.#update(id, (t) => ({
       ...t,
@@ -484,10 +516,49 @@ export class AskStore {
         history: historyFor(prior),
         sources: sourcesFor(prior),
         memories,
+        refs,
         style,
       },
       ctl,
     )
+  }
+
+  /** Resolvers of the memory proposals waiting for the user, by `turn:round`. */
+  readonly #proposals = new Map<string, (d: MemoryDecision) => void>()
+
+  /** The model wants to write a memory: show it on the card and wait for the user (or for Stop). */
+  #propose(
+    id: number,
+    round: number,
+    proposal: MemoryProposal,
+    signal: AbortSignal,
+  ): Promise<MemoryDecision> {
+    return new Promise((resolve) => {
+      if (signal.aborted) return resolve({ ok: false })
+      const key = `${id}:${round}`
+      const setProposal = (p: MemoryProposal | null) =>
+        this.#update(id, (t) => ({
+          ...t,
+          tools: t.tools.map((r) =>
+            r.round === round ? { ...r, proposal: p } : r,
+          ),
+        }))
+      const finish = (d: MemoryDecision) => {
+        signal.removeEventListener('abort', onAbort)
+        this.#proposals.delete(key)
+        setProposal(null)
+        resolve(d)
+      }
+      const onAbort = () => finish({ ok: false })
+      signal.addEventListener('abort', onAbort, { once: true })
+      this.#proposals.set(key, finish)
+      setProposal(proposal)
+    })
+  }
+
+  /** The user's answer to a memory proposal (Guardar / Descartar). Ignored if nothing is waiting. */
+  decideMemory(id: number, round: number, decision: MemoryDecision): void {
+    this.#proposals.get(`${id}:${round}`)?.(decision)
   }
 
   /** Corta la respuesta en curso y conserva lo recibido. */

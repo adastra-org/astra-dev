@@ -74,6 +74,17 @@ const emptyResult = (tool: string): ToolResult => ({
   truncated: false,
 })
 
+/** A tool that finished fine with a short fixed-format note (no code ran). */
+export function succeeded(tool: string, note: string): ToolResult {
+  return {
+    ...emptyResult(tool),
+    ok: true,
+    status: 'ok',
+    stdout: clip(note, WIRE_CAPS.stdout),
+    stdoutChars: note.length,
+  }
+}
+
 /** The tool could not even start (unknown name, body too long, runtime missing). */
 export function rejected(tool: string, message: string): ToolResult {
   return {

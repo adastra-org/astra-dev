@@ -24,6 +24,8 @@ import { ASK_MAX_QUESTION, type AskSource } from '@/lib/ask/types'
 import type { Permission } from '@/lib/palette/types'
 import { useLang } from '@/lib/use-lang'
 import { Activity } from './Activity'
+import { isMemoryTool } from '@/lib/ask/memory-tools'
+import { MemoryStep } from './MemoryStep'
 import { ToolStep } from './ToolStep'
 import { AnswerBody } from './AnswerBody'
 import { EtherOrb } from './EtherOrb'
@@ -209,7 +211,13 @@ function TurnBody({
           runnable={settled}
         />,
       )
-    parts.push(<ToolStep key={`c${run.round}`} run={run} />)
+    parts.push(
+      isMemoryTool(run.name) ? (
+        <MemoryStep key={`c${run.round}`} turnId={turn.id} run={run} />
+      ) : (
+        <ToolStep key={`c${run.round}`} run={run} />
+      ),
+    )
     from = run.at
   }
   const rest = turn.text.slice(from)

@@ -2,6 +2,7 @@ import { Pencil, Plus, Trash2, TriangleAlert, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
   MEMORIES_KEY,
+  MEMORY_AUTO_KEY,
   MEMORIES_MAX_ITEMS,
   MEMORIES_MAX_TOTAL,
   MEMORY_MAX_CHARS,
@@ -22,7 +23,7 @@ const BTN =
  */
 export function MemoriesPanel() {
   const { tr } = useLang()
-  const { items, persisted, removed } = useMemories()
+  const { items, persisted, removed, auto } = useMemories()
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
@@ -34,7 +35,8 @@ export function MemoriesPanel() {
   // Otra pestaña cambió las memorias.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === null || e.key === MEMORIES_KEY) memoryStore.reload()
+      if (e.key === null || e.key === MEMORIES_KEY || e.key === MEMORY_AUTO_KEY)
+        memoryStore.reload()
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -190,6 +192,15 @@ export function MemoriesPanel() {
                       className={`text-body-sm min-w-0 flex-1 py-2.5 break-words md:py-1.5 ${m.enabled ? 'text-ink' : 'text-ink-subtle'}`}
                     >
                       {m.text}
+                      {m.source === 'model' && (
+                        <span
+                          title={tr('ask.memories.byEtherHint')}
+                          aria-label={tr('ask.memories.byEtherHint')}
+                          className="text-caption text-ink-subtle border-border rounded-pill ml-2 inline-block border px-1.5 align-middle"
+                        >
+                          {tr('ask.memories.byEther')}
+                        </span>
+                      )}
                     </p>
                     <button
                       type="button"
@@ -266,6 +277,38 @@ export function MemoriesPanel() {
           </p>
         )}
       </form>
+
+      <div className="flex items-start gap-1">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={auto}
+          aria-labelledby="ask-memories-auto"
+          aria-describedby="ask-memories-auto-hint"
+          onClick={() => memoryStore.setAuto(!auto)}
+          className="inline-flex size-11 shrink-0 items-center justify-center md:size-8"
+        >
+          <span
+            aria-hidden="true"
+            className={`${auto ? 'bg-accent-fill' : 'bg-surface-sunken'} border-border relative block h-5 w-9 rounded-pill border`}
+          >
+            <span
+              className={`${auto ? 'bg-on-accent translate-x-4' : 'bg-ink-subtle translate-x-0.5'} absolute top-0.5 block size-3.5 rounded-pill`}
+            />
+          </span>
+        </button>
+        <div className="min-w-0 flex-1 py-2.5 md:py-1.5">
+          <p id="ask-memories-auto" className="text-body-sm text-ink">
+            {tr('ask.memories.auto')}
+          </p>
+          <p
+            id="ask-memories-auto-hint"
+            className="text-caption text-ink-subtle"
+          >
+            {tr('ask.memories.autoHint')}
+          </p>
+        </div>
+      </div>
 
       <div role="status" className="flex flex-col gap-1">
         {error && (

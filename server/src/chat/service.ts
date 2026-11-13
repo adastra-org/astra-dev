@@ -14,7 +14,13 @@ import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { chatSettingsFor, type Policy } from '../policy.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
 import { renderStyle, styleLabel, type ChatStyle } from './style.ts'
-import { ToolTagScanner, renderSteps, toolsPrompt, type Step } from './tools.ts'
+import {
+  ToolTagScanner,
+  hasMemoryTools,
+  renderSteps,
+  toolsPrompt,
+  type Step,
+} from './tools.ts'
 import {
   REFUSAL_ES,
   buildPrompt,
@@ -412,7 +418,9 @@ export class ChatService {
           ]
         : hits,
       ...(topic.length ? { topic } : {}),
-      ...(input.memories?.length ? { memories: input.memories } : {}),
+      ...(input.memories?.length
+        ? { memories: input.memories, numberMemories: hasMemoryTools(tools) }
+        : {}),
       ...(tools.length ? { tools: toolsPrompt(tools, roundsLeft) } : {}),
       ...(toolSteps.length ? { steps: renderSteps(toolSteps) } : {}),
       ...(styleBody ? { style: styleBody } : {}),

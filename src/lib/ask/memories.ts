@@ -5,6 +5,8 @@
 import { estimateTokens } from './budget'
 
 export const MEMORIES_KEY = 'astra.ask.memories.v1'
+/** "Permitir que Ether recuerde sin preguntar": '1' = sí; ausente = no (por defecto). */
+export const MEMORY_AUTO_KEY = 'astra.ask.memory-auto.v1'
 const VERSION = 1
 
 /** Espejo de `server/src/chat/memories.ts`: el server rechaza (400) lo que pase de acá. */
@@ -12,9 +14,13 @@ export const MEMORIES_MAX_ITEMS = 12
 export const MEMORY_MAX_CHARS = 280
 export const MEMORIES_MAX_TOTAL = 2000
 
+/** Quién escribió el texto. Datos viejos sin `source` = 'user'. */
+export type MemorySource = 'user' | 'model'
+
 export interface Memory {
   id: string
   text: string
+  source: MemorySource
   enabled: boolean
   createdAt: number
   updatedAt: number
@@ -66,6 +72,7 @@ export function parseStored(raw: string | null): Memory[] {
     out.push({
       id,
       text: clean,
+      source: it.source === 'model' ? 'model' : 'user',
       enabled: enabled !== false,
       createdAt: typeof createdAt === 'number' ? createdAt : 0,
       updatedAt: typeof updatedAt === 'number' ? updatedAt : 0,
@@ -84,6 +91,12 @@ export const activeTexts = (items: readonly Memory[]): string[] =>
 /** Caracteres de las activas. Lo guardado puede pasar el tope total: se recorta al enviar. */
 export const activeChars = (items: readonly Memory[]): number =>
   items.reduce((n, m) => (m.enabled ? n + m.text.length : n), 0)
+
+/** Una memoria activa tal como se envió: el modelo la ve numerada por su posición en esta lista. */
+export interface MemoryRef {
+  id: string
+  text: string
+}
 
 /** Tokens estimados de unos textos (misma regla que el server: un token cada tres caracteres). */
 export const textsTokens = (texts: readonly string[]): number => {
@@ -113,6 +126,8 @@ export interface MemoriesState {
   persisted: boolean
   /** Último borrado, para deshacer. */
   removed: { memory: Memory; index: number } | null
+  /** El usuario dejó que Ether guarde sin preguntar (apagado por defecto). */
+  auto: boolean
 }
 
 export interface MemoryStoreOptions {
@@ -131,7 +146,12 @@ function defaultStorage(): Storage2 | null {
 
 /** Store externo (`useSyncExternalStore`): las memorias de este navegador. */
 export class MemoryStore {
-  #state: MemoriesState = { items: [], persisted: true, removed: null }
+  #state: MemoriesState = {
+    items: [],
+    persisted: true,
+    removed: null,
+    auto: false,
+  }
   readonly #listeners = new Set<() => void>()
   readonly #storage: () => Storage2 | null
   readonly #now: () => number
@@ -165,17 +185,21 @@ export class MemoryStore {
   #read() {
     this.#loaded = true
     let raw: string | null = null
+    let auto = false
     let readable = true
     try {
       const s = this.#storage()
       if (!s) readable = false
-      else raw = s.getItem(MEMORIES_KEY)
+      else {
+        raw = s.getItem(MEMORIES_KEY)
+        auto = s.getItem(MEMORY_AUTO_KEY) === '1'
+      }
     } catch {
       readable = false
     }
     // Sin storage se conserva lo que hay en memoria de la sesión; solo se avisa que no se guarda.
     this.#state = readable
-      ? { items: parseStored(raw), persisted: true, removed: null }
+      ? { items: parseStored(raw), persisted: true, removed: null, auto }
       : { ...this.#state, persisted: false }
   }
 
@@ -183,6 +207,20 @@ export class MemoryStore {
   reload(): void {
     this.#read()
     this.#emit()
+  }
+
+  /** Activa o apaga "recordar sin preguntar". Se guarda aparte; si no se puede, vale en esta sesión. */
+  setAuto(auto: boolean): void {
+    let persisted = this.getState().persisted
+    try {
+      const st = this.#storage()
+      if (!st) persisted = false
+      else if (auto) st.setItem(MEMORY_AUTO_KEY, '1')
+      else st.setItem(MEMORY_AUTO_KEY, '0')
+    } catch {
+      persisted = false
+    }
+    this.#set({ auto, persisted })
   }
 
   #commit(items: Memory[], removed: MemoriesState['removed'] = null) {
@@ -211,35 +249,54 @@ export class MemoryStore {
     return null
   }
 
-  add(raw: string): MemoryResult {
+  /** Lo que `add` diría, sin escribir nada: así una propuesta que no entra falla antes de preguntar. */
+  canAdd(raw: string): MemoryResult {
     const items = this.getState().items
-    const text = normalizeText(raw)
     if (items.length >= MEMORIES_MAX_ITEMS)
       return { ok: false, reason: 'max_items' }
-    const bad = this.#check(text, items, true)
-    if (bad) return { ok: false, reason: bad }
+    const bad = this.#check(normalizeText(raw), items, true)
+    return bad ? { ok: false, reason: bad } : { ok: true }
+  }
+
+  /** Lo que `edit` diría, sin escribir nada. */
+  canEdit(id: string, raw: string): MemoryResult {
+    const items = this.getState().items
+    const cur = items.find((m) => m.id === id)
+    if (!cur) return { ok: false, reason: 'not_found' }
+    const bad = this.#check(
+      normalizeText(raw),
+      items.filter((m) => m.id !== id),
+      cur.enabled,
+    )
+    return bad ? { ok: false, reason: bad } : { ok: true }
+  }
+
+  /** `source` = quién escribió el texto: el panel y el usuario son 'user'; las herramientas, 'model'. */
+  add(raw: string, source: MemorySource = 'user'): MemoryResult {
+    const can = this.canAdd(raw)
+    if (!can.ok) return can
     const at = this.#now()
     this.#commit([
-      ...items,
-      { id: newId(), text, enabled: true, createdAt: at, updatedAt: at },
+      ...this.getState().items,
+      {
+        id: newId(),
+        text: normalizeText(raw),
+        source,
+        enabled: true,
+        createdAt: at,
+        updatedAt: at,
+      },
     ])
     return { ok: true }
   }
 
-  edit(id: string, raw: string): MemoryResult {
-    const items = this.getState().items
-    const cur = items.find((m) => m.id === id)
-    if (!cur) return { ok: false, reason: 'not_found' }
+  edit(id: string, raw: string, source: MemorySource = 'user'): MemoryResult {
+    const can = this.canEdit(id, raw)
+    if (!can.ok) return can
     const text = normalizeText(raw)
-    const bad = this.#check(
-      text,
-      items.filter((m) => m.id !== id),
-      cur.enabled,
-    )
-    if (bad) return { ok: false, reason: bad }
     this.#commit(
-      items.map((m) =>
-        m.id === id ? { ...m, text, updatedAt: this.#now() } : m,
+      this.getState().items.map((m) =>
+        m.id === id ? { ...m, text, source, updatedAt: this.#now() } : m,
       ),
     )
     return { ok: true }
@@ -299,15 +356,20 @@ export class MemoryStore {
   }
 
   /** Lo que se manda en el request: las activas, y nunca más de lo que el server acepta. */
-  active(): string[] {
-    const out: string[] = []
+  activeRefs(): MemoryRef[] {
+    const out: MemoryRef[] = []
     let total = 0
-    for (const text of activeTexts(this.getState().items)) {
-      if (total + text.length > MEMORIES_MAX_TOTAL) break
-      total += text.length
-      out.push(text)
+    for (const m of this.getState().items) {
+      if (!m.enabled) continue
+      if (total + m.text.length > MEMORIES_MAX_TOTAL) break
+      total += m.text.length
+      out.push({ id: m.id, text: m.text })
     }
     return out
+  }
+
+  active(): string[] {
+    return this.activeRefs().map((m) => m.text)
   }
 }
 

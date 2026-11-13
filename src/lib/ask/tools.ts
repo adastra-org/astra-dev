@@ -1,8 +1,11 @@
 // Tools the chat can run in the browser (phase 2). The server only decides WHEN (the model's tag);
 // everything runs here, in the M4 sandbox, and the page treats the model's text as untrusted code.
 //
-// Adding a tool (#41 `guardar_memoria`) is one entry in `CLIENT_TOOLS` plus its entry in
-// `server/src/chat/tools.ts` (`TOOLS`). The store's loop, the schema and the UI do not change.
+// Adding a tool is one entry in `CLIENT_TOOLS` plus its entry in `server/src/chat/tools.ts`
+// (`TOOLS`). The store's loop and the schema do not change. The memory tools (#41) are such entries,
+// defined in `memory-tools.ts`.
+import { createMemoryTools, type MemoryToolContext } from './memory-tools'
+import type { MemoryStore } from './memories'
 import {
   fromLint,
   fromRun,
@@ -14,6 +17,8 @@ import {
 export interface ToolContext {
   /** Aborts the run (the user pressed Stop, or the page is going away). */
   signal: AbortSignal
+  /** Only for the memory tools: what the store gives them for this call. */
+  memory?: MemoryToolContext
 }
 
 export interface ClientTool {
@@ -45,8 +50,12 @@ const liveDeps: SandboxDeps = {
 
 const now = () => performance.now()
 
-export function createTools(deps: SandboxDeps = liveDeps) {
+export function createTools(
+  deps: SandboxDeps = liveDeps,
+  memories?: MemoryStore,
+) {
   const tools: Record<string, ClientTool> = {
+    ...createMemoryTools(memories),
     ejecutar: {
       name: 'ejecutar',
       bodyMax: 4000,
@@ -100,13 +109,14 @@ export async function runTool(
   body: string,
   signal: AbortSignal,
   registry: Record<string, ClientTool> = CLIENT_TOOLS,
+  memory?: MemoryToolContext,
 ): Promise<ToolResult> {
   const tool = Object.hasOwn(registry, name) ? registry[name] : undefined
   if (!tool) return rejected(name.slice(0, 32), 'unknown_tool')
   if (!body.trim()) return rejected(name, 'empty_body')
   if (body.length > tool.bodyMax) return rejected(name, 'body_too_long')
   try {
-    return await tool.run(body, { signal })
+    return await tool.run(body, memory ? { signal, memory } : { signal })
   } catch {
     return rejected(name, 'tool_failed')
   }
