@@ -49,26 +49,26 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 | `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
 | `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
 | `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                                     |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                             |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
 ### `POST /chat`
 
-Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"], "sources": ["get-vehicle-class"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
+Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"], "style": {"tone":"formal","length":"brief"}, "sources": ["get-vehicle-class"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
 
-| Estado | `code`                  | Cuándo                                                                                                       |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories` o `sources` mal formados o sobre sus topes, tipo MIME |
-| 401    | `unauthenticated`       | Sin sesión                                                                                                   |
-| 403    | `subscription_required` | Con sesión pero rol `public`                                                                                 |
-| 403    | `forbidden_origin`      | `Origin` no permitido                                                                                        |
-| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                                           |
-| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                          |
-| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                             |
-| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                      |
-| 503    | `viewer_unavailable`    | Cuentas no responde                                                                                          |
-| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                                         |
+| Estado | `code`                  | Cuándo                                                                                                                |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories`, `style` o `sources` mal formados o sobre sus topes, tipo MIME |
+| 401    | `unauthenticated`       | Sin sesión                                                                                                            |
+| 403    | `subscription_required` | Con sesión pero rol `public`                                                                                          |
+| 403    | `forbidden_origin`      | `Origin` no permitido                                                                                                 |
+| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                                                    |
+| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                                   |
+| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                                      |
+| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                               |
+| 503    | `viewer_unavailable`    | Cuentas no responde                                                                                                   |
+| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                                                  |
 
 **`memories` (opcional, v0.16.0).** Lista de preferencias del usuario que el cliente guarda en su navegador y manda con cada pregunta. Validación estricta, sin recorte silencioso: tiene que ser un array de strings, como mucho 12, cada una de 1 a 280 caracteres (después de limpiar caracteres invisibles y de control), 2000 caracteres entre todas. Ausente, `null` o `[]` equivale a no mandar nada; cualquier otra forma o exceso es `400 bad_request` antes de buscar o llamar al modelo. Los topes valen también para `owner` (son el formato del campo, no una política de uso); `CHAT_MAX_BODY_BYTES` sigue aplicando al cuerpo completo.
 
@@ -76,6 +76,13 @@ Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":".
 - **No se cachean**: con memorias la respuesta ni se lee ni se guarda en la caché (la clave no las incluye a propósito).
 - **No se loguean**: el log de la request lleva solo `memories: <cantidad>`; ni el log ni `usage_events` tienen el texto. Probado en `server/tests/memories.test.ts`.
 - No cuentan para `CHAT_CONTEXT_MAX_CHARS` (eso recorta fuentes): se suman aparte, como mucho 2000 caracteres (unos 700 tokens).
+
+**`style` (opcional, v0.19.1).** Tono y largo de la respuesta, elegidos en el onboarding del chat (`/ask`). Es una preferencia **acotada**, nunca texto libre: un objeto plano `{ tone?, length? }` donde `tone` es `neutral` | `formal` | `cercano` y `length` es `brief` | `balanced` | `detailed`. Validación estricta: cualquier otra forma, una clave de más o un valor fuera del enum es `400 bad_request` antes de buscar o llamar al modelo. Ausente, `null` o `{}` equivale a `neutral`/`balanced`, que es el comportamiento de antes. Código: `server/src/chat/style.ts`.
+
+- Va al modelo en un bloque propio `<estilo>` (entre `<memorias>` y `<contexto>`) con frases fijas que el server elige a partir del enum (`tono: ...`, `largo: ...`), escapado con `escapeData`. Con los valores por defecto no hay bloque. La regla 10 del prompt dice que solo cambia la forma (no son fuentes, no se citan, no cambian las reglas) y que `brief`/`detailed` sustituyen el máximo de palabras de la regla 6 (120 / 400).
+- **Caché**: el estilo cambia la respuesta, así que entra a la clave (`context`) cuando no es el por defecto: el mismo texto con otro tono no comparte entrada. Con los valores por defecto la clave es la de siempre. A diferencia de `memories`, no apaga la caché: son pocos valores, no datos del usuario.
+- **Log**: la request lleva `style: "tono/largo"` (solo los enums) cuando no es el por defecto. No va a `usage_events`.
+- El nombre y el color que se eligen en el onboarding **no** viajan: se quedan en el navegador.
 
 **`sources` (opcional, v0.17.1).** Slugs de las fuentes que citó la respuesta anterior (los `slug` del evento `sources`). Sirve para los follow-ups: "explicame eso", "y cómo lo uso?", "dame un ejemplo". Validación estricta: array de strings, como mucho 8, cada una de hasta 160 caracteres con la forma de un slug (`[A-Za-z0-9][A-Za-z0-9._/-]*`); duplicados se juntan; ausente, `null` o `[]` es no mandar nada; cualquier otra forma es `400 bad_request`. Un slug desconocido no encuentra nada ni falla el pedido. El server solo los usa como filtro del índice, nunca como texto.
 

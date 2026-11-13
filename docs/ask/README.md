@@ -19,7 +19,7 @@ Quién puede usarlo lo decide el server (`subscriber` o `staff`). Para quien no,
 
 ```
 askStore.ask(pregunta)
-  └─ streamChat ── POST /api/chat {question, history, memories?} ─► eventos SSE
+  └─ streamChat ── POST /api/chat {question, history, memories?, style?} ─► eventos SSE
        meta → sources → delta* → done | error
   └─ applyEvent (puro) acumula en el Turn: texto, fuentes, citadas, rechazo, caché
   └─ AskPanel ── useSyncExternalStore ── pinta cada Turn (AnswerBody + Fuentes + avisos)
@@ -131,3 +131,12 @@ Misma conversación que el panel (`askStore`): transcript, composer y las accion
 Editar una pregunta corta la conversación en ese punto y la reenvía; Reenviar repite la pregunta. Sin endpoint nuevo: el historial que se manda es lo que queda antes del turno.
 
 Lógica pura en `lib/ask/budget.ts` y `lib/ask/status.ts`; pruebas en `budget.test.ts`, `workspace.test.ts` y `components/ask/ask-page.test.tsx`.
+
+## Onboarding con Ether (v0.19.1)
+
+La primera vez que se abre `/ask` aparece un diálogo de tres pasos (hola y nombre; tono y largo; color). Se puede saltar (botón, Esc o clic fuera: queda como visto con los valores por defecto) y rehacer desde **Personalizar a Ether** en el rail. Todo vive **solo en este navegador** (`localStorage`, clave `astra.ask.prefs.v1`); si no se puede guardar, funciona en memoria y el diálogo avisa.
+
+- Al server viajan únicamente `tone` y `length`, como enums en `style` (ver [docs/server](../server/README.md)). El nombre (texto libre, hasta 40 caracteres) y el color no se envían.
+- El color (`violet` de marca, `orchid`, `pink`, `mono`) se aplica con `data-chat-accent` en la página `/ask` y en el panel; el resto del sitio no cambia. Los presets están en `src/styles/ask.css` y su contraste (4.5:1 en Void y Dawn) lo mide `accent.test.ts`.
+- Lógica en `src/lib/ask/prefs.ts` (enums, lectura defensiva, `PrefsStore`) y `onboarding.ts` (pasos y avance, portado de `eternum/lux`); UI en `OnboardingDialog.tsx` y `PersonalizePanel.tsx`.
+- Voz con Cartesia: fuera de alcance (issue #42).

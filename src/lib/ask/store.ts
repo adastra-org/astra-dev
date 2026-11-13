@@ -6,6 +6,7 @@ import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
+import { prefsStore, type StyleBody } from './prefs'
 import {
   AskError,
   type AskEvent,
@@ -172,6 +173,8 @@ export interface AskStoreOptions {
   now?: () => number
   /** Memorias activas a enviar. Por defecto las del navegador (`memoryStore`). */
   memories?: () => string[]
+  /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
+  style?: () => StyleBody | undefined
 }
 
 export class AskStore {
@@ -264,6 +267,7 @@ export class AskStore {
     const history = historyFor(this.#state.turns)
     const sources = sourcesFor(this.#state.turns)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    const style = (this.#opts.style ?? (() => prefsStore.style()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
     const startedAt = this.#now()
@@ -286,6 +290,7 @@ export class AskStore {
         question: q,
         history,
         memories,
+        ...(style ? { style } : {}),
         sources,
         signal: ctl.signal,
         onEvent: (ev) => {

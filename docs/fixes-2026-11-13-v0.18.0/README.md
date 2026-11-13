@@ -19,4 +19,4 @@ Reportado por Faku con una conversación real de `/ask` en dev local. Rama `fix/
 
 - [ ] Ejecutar en el Sandbox el código que da la IA: [#40](https://github.com/adastra-org/astra-dev/issues/40)
 - [ ] Memorias guardadas por el modelo mediante herramientas, además de las manuales: [#41](https://github.com/adastra-org/astra-dev/issues/41)
-- [ ] Onboarding con Ether (colores, tono, voz con Cartesia): [#42](https://github.com/adastra-org/astra-dev/issues/42)
+- [~] Onboarding con Ether (colores, tono, voz con Cartesia): [#42](https://github.com/adastra-org/astra-dev/issues/42). Colores, tono, largo y nombre hechos en v0.19.1 (verificado en navegador, 45 chequeos en Edge, 1280 y 375 px, oscuro y claro, localStorage bloqueado). Falta la voz con Cartesia (requiere renovar la suscripción) y el dato de si migrar las preferencias a la cuenta.
