@@ -34,6 +34,12 @@ export interface Config {
     apiKey: string
     timeoutMs: number
   }
+  /** Optional follow-up classifier (Liquid d1 on llama.cpp). Empty `url` = off. */
+  decision: {
+    url: string
+    timeoutMs: number
+    followUpThreshold: number
+  }
   chat: {
     maxQuestionChars: number
     maxHistoryTurns: number
@@ -146,6 +152,24 @@ export function loadConfig(env: Env = process.env): Config {
       const host = new URL(llmBaseUrl).hostname
       if (!['localhost', '127.0.0.1', '[::1]'].includes(host))
         problems.push('LLM_PROVIDER=local needs a loopback LLM_BASE_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
+  // The decision server sees the question text, so like the local LLM it must be on this machine.
+  const decisionRaw = env.DECISION_URL?.trim() ?? ''
+  const decisionUrl = decisionRaw
+    ? url('DECISION_URL', decisionRaw).replace(/\/+$/, '')
+    : ''
+  if (decisionUrl) {
+    try {
+      if (
+        !['localhost', '127.0.0.1', '[::1]'].includes(
+          new URL(decisionUrl).hostname,
+        )
+      )
+        problems.push('DECISION_URL needs a loopback URL')
     } catch {
       // already reported by url()
     }
@@ -266,6 +290,11 @@ export function loadConfig(env: Env = process.env): Config {
       ),
       apiKey: provider === 'local' ? '' : apiKey,
       timeoutMs: int('LLM_TIMEOUT_MS', 60000, 1000, 300000),
+    },
+    decision: {
+      url: decisionUrl,
+      timeoutMs: int('DECISION_TIMEOUT_MS', 1500, 100, 10000),
+      followUpThreshold: num('DECISION_FOLLOWUP_THRESHOLD', 0.25, 0.01, 0.99),
     },
     chat: {
       maxQuestionChars: int('CHAT_MAX_QUESTION_CHARS', 800, 50, 4000),

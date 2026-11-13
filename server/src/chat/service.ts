@@ -5,6 +5,7 @@ import { chunkPath, type ChunkKind } from '../docs/chunk.ts'
 import { AppError } from '../errors.ts'
 import type { Role } from '../config.ts'
 import type { Retriever, SearchMode } from '../index/search.ts'
+import type { FollowUpDecider } from '../decision/followup.ts'
 import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
@@ -64,6 +65,8 @@ export interface ChatRun {
   sources: Source[]
   /** True when `events` replays a cached answer (no model call). */
   cacheHit?: boolean
+  /** What the decision step said: true = used history, false = standalone, null = not asked or no answer. */
+  usedHistory?: boolean | null
   events(signal?: AbortSignal): AsyncGenerator<ChatEvent>
 }
 
@@ -74,6 +77,8 @@ export interface ChatDeps {
   settings: ChatSettings
   /** Optional answer cache. Absent or disabled = every question goes to the model. */
   cache?: AnswerCache
+  /** Optional: decides whether the previous turn goes into the retrieval query. */
+  decider?: FollowUpDecider
 }
 
 export interface ChatInput {
@@ -106,8 +111,24 @@ export class ChatService {
     )
 
     // The query is the question plus the last user turn, so follow-ups ("and how do I draw it?") retrieve well.
+    // With a decider, a question that stands on its own is searched alone: the previous topic would
+    // otherwise pull unrelated sources in. No decider or no answer = the old behaviour.
     const lastUser = [...history].reverse().find((t) => t.role === 'user')
-    const query = lastUser ? `${lastUser.content}\n${question}` : question
+    let usedHistory: boolean | null = null
+    if (lastUser && this.#d.decider) {
+      const lastAssistant = [...history]
+        .reverse()
+        .find((t) => t.role === 'assistant')
+      usedHistory = await this.#d.decider.dependsOnHistory({
+        lastUser: lastUser.content,
+        lastAssistant: lastAssistant?.content ?? null,
+        question,
+      })
+    }
+    const query =
+      lastUser && usedHistory !== false
+        ? `${lastUser.content}\n${question}`
+        : question
     // Docs and natives are ranked apart: ~7,000 natives would otherwise crowd the docs out. A
     // native named in the question (by name or hash) always comes first.
     const found = await this.#d.retriever.searchMany(
@@ -138,7 +159,12 @@ export class ChatService {
       score: Math.round(h.score * 1000) / 1000,
     }))
 
-    const base = { mode: found.mode, degraded: found.degraded, sources }
+    const base = {
+      mode: found.mode,
+      degraded: found.degraded,
+      sources,
+      usedHistory,
+    }
 
     // Nothing retrieved: refuse without calling the model (and without spending budget).
     if (!built.used.length) {

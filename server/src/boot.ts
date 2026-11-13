@@ -8,6 +8,7 @@ import type { AppDeps, BuildInfo } from './context.ts'
 import { loadIndex } from './index/store.ts'
 import { Retriever } from './index/search.ts'
 import { RateLimiter, TokenBudget } from './limits.ts'
+import { D1FollowUpDecider } from './decision/followup.ts'
 import { DeepSeekProvider } from './llm/deepseek.ts'
 import { FakeLlmProvider } from './llm/fake.ts'
 import type { LlmProvider } from './llm/provider.ts'
@@ -155,6 +156,13 @@ export async function buildDeps(
           config.limits.dailyTokensGlobal,
         ),
         settings: config.chat,
+        decider: config.decision.url
+          ? new D1FollowUpDecider({
+              url: config.decision.url,
+              timeoutMs: config.decision.timeoutMs,
+              threshold: config.decision.followUpThreshold,
+            })
+          : undefined,
         cache: new AnswerCache({
           maxEntries: config.chat.cacheMaxEntries,
           ttlMs: config.chat.cacheTtlSeconds * 1000,

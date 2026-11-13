@@ -80,6 +80,30 @@ export function CodeBlock({
     }
   }
 
+  // Sin `finally`: el compilador de React no lo soporta. Cada intento devuelve su resultado y el
+  // llamador limpia el estado después, solo si el componente sigue montado.
+  const attemptRun = async (): Promise<RunResult | null> => {
+    try {
+      const { runLua } = await import('@/lib/sandbox/run')
+      if (!alive.current) return null
+      const handle = runLua(text, (_line, all) => {
+        if (alive.current) setLines([...all])
+      })
+      cancelRun.current = handle.cancel
+      const r = await handle.result
+      cancelRun.current = null
+      return r
+    } catch (e) {
+      return {
+        status: 'crash',
+        message: e instanceof Error ? e.message : tr('code.crash.load'),
+        ...(e instanceof Error ? {} : { reason: 'load' as const }),
+        ms: 0,
+        lines: [],
+      }
+    }
+  }
+
   const run = async () => {
     if (running) return
     setRunning(true)
@@ -87,44 +111,40 @@ export function CodeBlock({
     setResult(null)
     setDiagnostics(null)
     setToolError(null)
-    try {
-      const { runLua } = await import('@/lib/sandbox/run')
-      if (!alive.current) return
-      const handle = runLua(text, (_line, all) => {
-        if (alive.current) setLines([...all])
-      })
-      cancelRun.current = handle.cancel
-      const r = await handle.result
-      cancelRun.current = null
-      if (alive.current) setResult(r)
-    } catch (e) {
-      if (alive.current)
-        setResult({
-          status: 'crash',
-          message: e instanceof Error ? e.message : tr('code.crash.load'),
-          ...(e instanceof Error ? {} : { reason: 'load' as const }),
-          ms: 0,
-          lines: [],
-        })
-    } finally {
-      if (alive.current) setRunning(false)
-    }
+    const r = await attemptRun()
+    if (!alive.current) return
+    if (r) setResult(r)
+    setRunning(false)
   }
 
   const stop = () => cancelRun.current?.()
+
+  const attemptLint = async () => {
+    try {
+      const { lint } = await import('@/lib/sandbox/tools')
+      return await lint(text)
+    } catch {
+      return { ok: false as const, message: tr('code.crash.load') }
+    }
+  }
 
   const review = async () => {
     if (toolBusy) return
     setToolBusy('lint')
     setToolError(null)
+    const r = await attemptLint()
+    if (!alive.current) return
+    if (r.ok) setDiagnostics(r.value)
+    else setToolError(r.message)
+    setToolBusy(null)
+  }
+
+  const attemptFormat = async () => {
     try {
-      const { lint } = await import('@/lib/sandbox/tools')
-      const r = await lint(text)
-      if (!alive.current) return
-      if (r.ok) setDiagnostics(r.value)
-      else setToolError(r.message)
-    } finally {
-      if (alive.current) setToolBusy(null)
+      const { format: formatLua } = await import('@/lib/sandbox/tools')
+      return await formatLua(text)
+    } catch {
+      return { ok: false as const, message: tr('code.crash.load') }
     }
   }
 
@@ -132,23 +152,17 @@ export function CodeBlock({
     if (toolBusy || running) return
     setToolBusy('format')
     setToolError(null)
-    try {
-      const { format: formatLua } = await import('@/lib/sandbox/tools')
-      const r = await formatLua(text)
-      if (!alive.current) return
-      if (!r.ok) {
-        setToolError(r.message)
-        return
-      }
-      if (r.value.formatted) {
-        setEdited(r.value.code)
-        setDiagnostics(null)
-      } else {
-        setDiagnostics([r.value.diagnostic])
-      }
-    } finally {
-      if (alive.current) setToolBusy(null)
+    const r = await attemptFormat()
+    if (!alive.current) return
+    if (!r.ok) {
+      setToolError(r.message)
+    } else if (r.value.formatted) {
+      setEdited(r.value.code)
+      setDiagnostics(null)
+    } else {
+      setDiagnostics([r.value.diagnostic])
     }
+    setToolBusy(null)
   }
 
   const output =
@@ -381,8 +395,11 @@ function Diagnostics({ list }: { list: Diagnostic[] }) {
         </p>
       ) : (
         <ul className="text-body-sm flex flex-col gap-2">
-          {list.map((d, i) => (
-            <li key={i} className="flex items-start gap-2">
+          {list.map((d) => (
+            <li
+              key={`${d.line}:${d.column}:${d.code ?? d.message}`}
+              className="flex items-start gap-2"
+            >
               <TriangleAlert
                 className={`mt-0.5 size-4 shrink-0 ${
                   d.severity === 'error' ? 'text-warning' : 'text-ink-subtle'
