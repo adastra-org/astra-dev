@@ -1,5 +1,5 @@
 // The owner dashboard: aggregates over the usage records, and who may read them.
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setSystemTime, test } from 'bun:test'
 import { UsageStore, type UsageRecord } from '../src/usage/store.ts'
 import { ANONYMOUS, type ViewerPort } from '../src/viewer.ts'
 import { harness } from './helpers.ts'
@@ -198,12 +198,18 @@ describe('aiUsage over GraphQL: owner only', () => {
   })
 
   test('owner: gets the aggregates', async () => {
-    const store = seeded()
-    const h = await harness({ role: 'owner', usage: store })
-    const r = await (await h.call('/graphql', { json: query })).json()
-    expect(r.errors).toBeUndefined()
-    expect(r.data.aiUsage.days).toBe(7)
-    expect(r.data.aiUsage.totals.requests).toBe(6)
+    // The resolver reads the real clock; pin it to the seed's NOW or the 7-day window drifts past the records.
+    setSystemTime(new Date(NOW))
+    try {
+      const store = seeded()
+      const h = await harness({ role: 'owner', usage: store })
+      const r = await (await h.call('/graphql', { json: query })).json()
+      expect(r.errors).toBeUndefined()
+      expect(r.data.aiUsage.days).toBe(7)
+      expect(r.data.aiUsage.totals.requests).toBe(6)
+    } finally {
+      setSystemTime()
+    }
   })
 
   test('owner without a usage store: usage_unavailable', async () => {
