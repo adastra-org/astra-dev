@@ -9,6 +9,19 @@ Notable changes per release, newest first. Format: [Keep a Changelog](https://ke
 - `/ask`: `@` in the composer attaches a saved conversation, a native or an issue as context for the next question (#33). Conversations are the ones saved in this browser (`localStorage`) and travel as a bounded summary; natives and issues are resolved by the server (issues for staff only).
 - `POST /chat` accepts `mentions` (max 5, strict validation, never cached, count-only logging); GraphQL `project.issues(query, limit)` for the picker.
 
+## [0.19.12] - 2026-11-19
+
+### Fixed
+
+- `CodeBlock`: the sandbox `import()` calls moved out of the component so the React Compiler can optimize it (`react-hooks-js/todo`, #24). Loading stays lazy.
+
+## [0.19.11] - 2026-11-19
+
+### Fixed
+
+- Onboarding dialog: the tour body mounts on open, so step and draft start fresh without a reset effect (#52).
+- `useRemote`: `loading` and `error` are derived in render instead of a synchronous `setState` in the effect (#29).
+
 ## [0.19.10] - 2026-11-19
 
 ### Added

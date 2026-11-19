@@ -16,23 +16,24 @@ export function useRemote<T>(
   load: (signal: AbortSignal) => Promise<T>,
   key: string | number,
 ): Remote<T> {
+  // `settled` es la consulta (key + nonce) a la que responde `error`; si no es la actual, hay una
+  // carga en curso. Así `loading` se deriva en el render y el efecto no hace setState síncrono.
   const [state, setState] = useState<{
     data: T | null
     error: unknown
-    loading: boolean
-  }>({ data: null, error: null, loading: true })
+    settled: { key: string | number; nonce: number } | null
+  }>({ data: null, error: null, settled: null })
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
     const ac = new AbortController()
-    setState((s) => ({ ...s, error: null, loading: true }))
+    const settled = { key, nonce }
     load(ac.signal).then(
       (data) => {
-        if (!ac.signal.aborted) setState({ data, error: null, loading: false })
+        if (!ac.signal.aborted) setState({ data, error: null, settled })
       },
       (error: unknown) => {
-        if (!ac.signal.aborted)
-          setState((s) => ({ ...s, error, loading: false }))
+        if (!ac.signal.aborted) setState((s) => ({ ...s, error, settled }))
       },
     )
     return () => ac.abort()
@@ -40,5 +41,11 @@ export function useRemote<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, nonce])
 
-  return { ...state, reload: () => setNonce((n) => n + 1) }
+  const loading = state.settled?.key !== key || state.settled.nonce !== nonce
+  return {
+    data: state.data,
+    error: loading ? null : state.error,
+    loading,
+    reload: () => setNonce((n) => n + 1),
+  }
 }
