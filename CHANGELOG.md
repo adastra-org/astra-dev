@@ -2,6 +2,17 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.19.2] - 2026-11-13
+
+### Added
+
+- Onboarding with Ether: chat tone, length and color (#44).
+- Single collapsible group for steps and reasoning (#43).
+
+### Fixed
+
+- Theme in follow-ups, drawing glossary and real speed (#46).
+
 ## [0.17.3] - 2026-11-13
 
 ### Added
