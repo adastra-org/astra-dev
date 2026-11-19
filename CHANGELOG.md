@@ -2,6 +2,19 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.6.1] - 2026-11-12
+
+### Added
+
+- Natives importer (GTA + CFX) and fivem-docs importer (#10).
+- Natives in the server index, exact name/hash lookup (#11).
+- Offline embeddings, binary vectors and vector reuse (#12).
+- Vehicle docs: flags, armored glass, collision materials and shaders (#8).
+
+### Changed
+
+- Server overlaps independent awaits (#13).
+
 ## [0.4.0] - 2026-11-10
 
 ### Added
