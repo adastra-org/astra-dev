@@ -1,6 +1,9 @@
 // Shared test fixtures: a tiny docs set, a deterministic fake embedder and a fully wired app.
 import { EmbedderClient } from '@wefaber/embed'
 import { createApp } from '../src/app.ts'
+import { AnswerCache } from '../src/chat/cache.ts'
+import type { FollowUpDecider } from '../src/decision/followup.ts'
+import type { ContextGate } from '../src/decision/gate.ts'
 import { ChatService } from '../src/chat/service.ts'
 import { loadConfig, type Config, type Role } from '../src/config.ts'
 import type { AppDeps } from '../src/context.ts'
@@ -13,6 +16,7 @@ import { RateLimiter, TokenBudget } from '../src/limits.ts'
 import { FakeLlmProvider } from '../src/llm/fake.ts'
 import type { LlmProvider } from '../src/llm/provider.ts'
 import { createLogger, silentLogger, type Logger } from '../src/log.ts'
+import { UsageStore, type UsageSink } from '../src/usage/store.ts'
 import { DevStubViewerPort, type ViewerPort } from '../src/viewer.ts'
 
 export const doc = (
@@ -80,7 +84,7 @@ const CONCEPTS: string[][] = [
   ['slug', 'url', 'identificador', 'glosario'],
   ['lua', 'nativas', 'nativa', 'native'],
 ]
-const DIMS = CONCEPTS.length + 1
+export const DIMS = CONCEPTS.length + 1
 
 export function fakeVector(text: string): number[] {
   const v = new Array<number>(DIMS).fill(0)
@@ -148,6 +152,10 @@ export async function harness(
     index?: DocsIndex | null
     logger?: Logger
     embedder?: EmbedderClient | null
+    cache?: AnswerCache
+    decider?: FollowUpDecider
+    gate?: ContextGate
+    usage?: UsageSink
   } = {},
 ): Promise<Harness> {
   const config = testConfig(opts.env)
@@ -174,8 +182,19 @@ export async function harness(
             config.limits.dailyTokensGlobal,
           ),
           settings: config.chat,
+          contextWindow: config.llm.contextWindow,
+          decider: opts.decider,
+          gate: opts.gate,
+          cache:
+            opts.cache ??
+            new AnswerCache({
+              maxEntries: config.chat.cacheMaxEntries,
+              ttlMs: config.chat.cacheTtlSeconds * 1000,
+            }),
         })
       : null,
+    usage: opts.usage ?? null,
+    usageReader: opts.usage instanceof UsageStore ? opts.usage : null,
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),
@@ -208,8 +227,14 @@ export async function harness(
   }
 }
 
-/** Parses an SSE body into `[event, data]` pairs. */
-export function parseSse(body: string): { event: string; data: any }[] {
+/**
+ * Parses an SSE body into `[event, data]` pairs. `step` events (what the pipeline did) are left out
+ * unless asked for, so tests about the answer keep their exact event sequences.
+ */
+export function parseSse(
+  body: string,
+  opts: { steps?: boolean } = {},
+): { event: string; data: any }[] {
   return body
     .split('\n\n')
     .filter(Boolean)
@@ -221,4 +246,5 @@ export function parseSse(body: string): { event: string; data: any }[] {
       )
       return { event, data }
     })
+    .filter((e) => opts.steps || e.event !== 'step')
 }

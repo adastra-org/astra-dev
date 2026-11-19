@@ -45,8 +45,8 @@ install -d /home/hermes/deploy
 ```
 
 El script de deploy lo instala el propio workflow en `/home/hermes/deploy/astra-dev.sh`. `astra-dev.env` queda vacío
-mientras no se active el server de Ask Ether; sus variables y los pasos extra (unidad systemd, vhost con `/api/`) están
-en [../server/README.md](../server/README.md#deploy-diseño-nada-aplicado).
+mientras no se active el server; sus variables (Ask Ether y Proyecto) y los pasos extra (unidad systemd, vhost con `/api/`)
+están en [../server/README.md](../server/README.md#deploy-diseño-nada-aplicado) y [../project/README.md](../project/README.md).
 
 El usuario del runner (`hermes`) ya necesita `sudo` sin password para `/usr/sbin/nginx -t` y
 `/usr/bin/systemctl reload nginx`: `adastra-site` usa los mismos comandos. Verificar con

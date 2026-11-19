@@ -233,6 +233,30 @@ describe('dev stub is ignored in production', () => {
     expect(createViewerPort(dev)).toBeInstanceOf(DevStubViewerPort)
   })
 
+  test('local provider: loopback only, no key needed, even in production', () => {
+    const c = loadConfig({
+      NODE_ENV: 'production',
+      LLM_PROVIDER: 'local',
+      LLM_MODEL: 'lfm2',
+    })
+    expect(c.llm).toMatchObject({
+      provider: 'local',
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      model: 'lfm2',
+      apiKey: '',
+    })
+    expect(() =>
+      loadConfig({
+        LLM_PROVIDER: 'local',
+        LLM_BASE_URL: 'https://llm.example/v1',
+      }),
+    ).toThrow('loopback')
+    // A DeepSeek key in the env is never sent to a local server.
+    expect(
+      loadConfig({ LLM_PROVIDER: 'local', DEEPSEEK_API_KEY: 'k' }).llm.apiKey,
+    ).toBe('')
+  })
+
   test('production refuses to boot without the API key or with the fake provider', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(ConfigError)
     expect(() =>

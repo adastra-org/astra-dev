@@ -2,7 +2,7 @@
 // never from the repo or the browser.
 import { ConfigError } from './errors.ts'
 
-export type Role = 'public' | 'subscriber' | 'staff'
+export type Role = 'public' | 'subscriber' | 'staff' | 'owner'
 
 export interface Config {
   production: boolean
@@ -17,13 +17,38 @@ export interface Config {
   accounts: { baseUrl: string; viewerPath: string; timeoutMs: number }
   /** Dev stub role. `null` means: use the accounts service. Always null in production. */
   devViewer: Role | null
-  embedder: { url: string; model: string; timeoutMs: number; dims: number }
+  /** Accounts ids allowed to be `owner` (they must also be `staff` in accounts). Empty = no owners. */
+  ownerIds: string[]
+  embedder: {
+    url: string
+    model: string
+    timeoutMs: number
+    dims: number
+    /** Bearer token for a hosted embedder (Cloudflare Workers AI). Secret; empty = no auth header. */
+    token: string
+    /** Models whose vectors may be reused from a prebuilt index. Always includes `model`. */
+    acceptModels: string[]
+  }
   llm: {
-    provider: 'deepseek' | 'fake'
+    provider: 'deepseek' | 'local' | 'fake'
     baseUrl: string
     model: string
     apiKey: string
     timeoutMs: number
+    /** Tokens the model can hold (prompt + answer). Shown to the visitor as the context budget. */
+    contextWindow: number
+    /** Optional local fallback when the primary fails before answering. */
+    fallback: { baseUrl: string; model: string } | null
+  }
+  /** Optional follow-up classifier (Liquid d1 on llama.cpp). Empty `url` = off. */
+  decision: {
+    url: string
+    timeoutMs: number
+    followUpThreshold: number
+    /** Context gate: fragments at or above `gateThreshold` enter the prompt; see decision/gate.ts. */
+    gateThreshold: number
+    gateFloor: number
+    gateMaxFragmentChars: number
   }
   chat: {
     maxQuestionChars: number
@@ -31,10 +56,37 @@ export interface Config {
     maxHistoryTurnChars: number
     maxOutputTokens: number
     maxOutputChars: number
+    /** Reasoning shown to staff while the model works. 0 = never forwarded. */
+    maxThinkingChars: number
     topK: number
+    /** Natives added to the chat context on top of `topK` docs (0 = docs only). */
+    nativesTopK: number
     contextMaxChars: number
     minSemanticScore: number
     maxBodyBytes: number
+    /** Answer cache: seconds an answer is reused (0 = cache off) and how many are kept. */
+    cacheTtlSeconds: number
+    cacheMaxEntries: number
+  }
+  /** "Proyecto" (M5): GitHub data, plan and checklist. Staff only. */
+  project: {
+    /** Read-only token. Secret. Empty = the module is off and `project` answers `project_unavailable`. */
+    githubToken: string
+    githubApiUrl: string
+    /** `owner/name`. */
+    repo: string
+    /** Branch read for commits, the plan and the complexity series. */
+    ref: string
+    planPath: string
+    complexityPath: string
+    cacheTtlMs: number
+    viewerPerMin: number
+    myChecklist: {
+      baseUrl: string
+      /** `mck_…` in read mode. Secret. Empty = the external checklist is off. */
+      token: string
+      listName: string
+    }
   }
   limits: {
     chatViewerPerMin: number
@@ -42,6 +94,17 @@ export interface Config {
     searchIpPerMin: number
     dailyTokensViewer: number
     dailyTokensGlobal: number
+    /** Owner only: rounds (tool calls, subagents) in one message before the server asks to continue. */
+    ownerMaxRounds: number
+  }
+  /** Per-request usage records (SQLite). See docs/chat/README.md. */
+  usage: {
+    /** Empty = no records. Keep it OUTSIDE the slot dirs so blue and green share it. */
+    dbPath: string
+    retentionDays: number
+    /** USD per million tokens, to estimate the cost of hosted models. */
+    priceInPerMTok: number
+    priceOutPerMTok: number
   }
 }
 
@@ -91,13 +154,89 @@ export function loadConfig(env: Env = process.env): Config {
   const slot = str('ASTRA_SLOT', 'dev')
 
   const provider = str('LLM_PROVIDER', 'deepseek')
-  if (provider !== 'deepseek' && provider !== 'fake')
-    problems.push('LLM_PROVIDER must be "deepseek" or "fake"')
+  if (provider !== 'deepseek' && provider !== 'local' && provider !== 'fake')
+    problems.push('LLM_PROVIDER must be "deepseek", "local" or "fake"')
   if (production && provider === 'fake')
     problems.push('LLM_PROVIDER=fake is not allowed in production')
   const apiKey = env.DEEPSEEK_API_KEY?.trim() ?? ''
   if (production && provider === 'deepseek' && !apiKey)
     problems.push('DEEPSEEK_API_KEY is required in production')
+
+  // `local` talks to a model server on this machine (llama.cpp, Ollama, LM Studio): the URL must be
+  // loopback so the question never leaves the host, and no key is needed.
+  const llmBaseUrl = url(
+    'LLM_BASE_URL',
+    provider === 'local'
+      ? 'http://127.0.0.1:8080/v1'
+      : 'https://api.deepseek.com',
+  ).replace(/\/+$/, '')
+  if (provider === 'local') {
+    try {
+      const host = new URL(llmBaseUrl).hostname
+      if (!['localhost', '127.0.0.1', '[::1]'].includes(host))
+        problems.push('LLM_PROVIDER=local needs a loopback LLM_BASE_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
+  // Optional local fallback for a hosted primary: same loopback rule, same text leaves nowhere new.
+  const fallbackName = str('LLM_FALLBACK_PROVIDER', '')
+  if (fallbackName && fallbackName !== 'local')
+    problems.push('LLM_FALLBACK_PROVIDER must be "local" or empty')
+  if (fallbackName === 'local' && provider !== 'deepseek')
+    problems.push(
+      'LLM_FALLBACK_PROVIDER only applies when LLM_PROVIDER=deepseek',
+    )
+  const fallbackBase = url(
+    'LLM_FALLBACK_BASE_URL',
+    'http://127.0.0.1:8080/v1',
+  ).replace(/\/+$/, '')
+  if (fallbackName === 'local') {
+    try {
+      if (
+        !['localhost', '127.0.0.1', '[::1]'].includes(
+          new URL(fallbackBase).hostname,
+        )
+      )
+        problems.push('LLM_FALLBACK_BASE_URL needs a loopback URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
+  // The decision server sees the question text, so like the local LLM it must be on this machine.
+  const decisionRaw = env.DECISION_URL?.trim() ?? ''
+  const decisionUrl = decisionRaw
+    ? url('DECISION_URL', decisionRaw).replace(/\/+$/, '')
+    : ''
+  if (decisionUrl) {
+    try {
+      if (
+        !['localhost', '127.0.0.1', '[::1]'].includes(
+          new URL(decisionUrl).hostname,
+        )
+      )
+        problems.push('DECISION_URL needs a loopback URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
+  const embedderUrl = url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings')
+  const embedderModel = str('EMBEDDER_MODEL', 'embeddinggemma-2')
+  const embedderToken = env.EMBEDDER_TOKEN?.trim() ?? ''
+  if (embedderToken) {
+    // A token never travels in clear over the network.
+    try {
+      const u = new URL(embedderUrl)
+      const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+      if (u.protocol !== 'https:' && !loopback)
+        problems.push('EMBEDDER_TOKEN needs an https EMBEDDER_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
 
   const requestedStub = env.ASTRA_DEV_VIEWER?.trim()
   let devViewer: Role | null = null
@@ -106,10 +245,54 @@ export function loadConfig(env: Env = process.env): Config {
     if (
       requestedStub === 'public' ||
       requestedStub === 'subscriber' ||
-      requestedStub === 'staff'
+      requestedStub === 'staff' ||
+      requestedStub === 'owner'
     )
       devViewer = requestedStub
-    else problems.push('ASTRA_DEV_VIEWER must be public, subscriber or staff')
+    else
+      problems.push(
+        'ASTRA_DEV_VIEWER must be public, subscriber, staff or owner',
+      )
+  }
+
+  // Ids of accounts that may be owner. A malformed entry fails the boot instead of being skipped.
+  const ownerIds = (env.OWNER_IDS ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+  for (const id of ownerIds)
+    if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(id))
+      problems.push('OWNER_IDS has an entry that is not a valid account id')
+
+  const repo = str('PROJECT_REPO', 'adastra-org/astra-dev')
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo))
+    problems.push('PROJECT_REPO must look like owner/name')
+  const ref = str('PROJECT_REF', 'dev')
+  if (!/^[A-Za-z0-9_./-]{1,100}$/.test(ref) || ref.includes('..'))
+    problems.push('PROJECT_REF is not a valid branch name')
+  const repoPath = (key: string, fallback: string) => {
+    const v = str(key, fallback)
+    if (v.startsWith('/') || v.split('/').includes('..'))
+      problems.push(`${key} must be a relative path inside the repo`)
+    return v
+  }
+  const githubToken = env.ASTRA_GITHUB_TOKEN?.trim() ?? ''
+  if (/\s/.test(githubToken))
+    problems.push('ASTRA_GITHUB_TOKEN must not contain whitespace')
+  const checklistToken = env.MYCHECKLIST_TOKEN?.trim() ?? ''
+  const checklistUrl = url('MYCHECKLIST_URL', 'https://checklist.wefaber.net')
+  if (checklistToken) {
+    if (!checklistToken.startsWith('mck_'))
+      problems.push('MYCHECKLIST_TOKEN must start with mck_')
+    // A token never travels in clear over the network.
+    try {
+      const u = new URL(checklistUrl)
+      const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+      if (u.protocol !== 'https:' && !loopback)
+        problems.push('MYCHECKLIST_TOKEN needs an https MYCHECKLIST_URL')
+    } catch {
+      // already reported by url()
+    }
   }
 
   const config: Config = {
@@ -138,39 +321,113 @@ export function loadConfig(env: Env = process.env): Config {
       timeoutMs: int('ACCOUNTS_TIMEOUT_MS', 3000, 100, 30000),
     },
     devViewer,
+    ownerIds,
     embedder: {
-      url: url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings'),
-      model: str('EMBEDDER_MODEL', 'embeddinggemma-2'),
+      url: embedderUrl,
+      model: embedderModel,
       timeoutMs: int('EMBEDDER_TIMEOUT_MS', 2500, 100, 60000),
       dims: int('EMBEDDER_DIMS', 256, 32, 768),
+      token: embedderToken,
+      acceptModels: [
+        ...new Set([
+          embedderModel,
+          ...str('EMBEDDER_ACCEPT_MODELS', '')
+            .split(',')
+            .map((m) => m.trim())
+            .filter(Boolean),
+        ]),
+      ],
     },
     llm: {
-      provider: provider === 'fake' ? 'fake' : 'deepseek',
-      baseUrl: url('LLM_BASE_URL', 'https://api.deepseek.com').replace(
-        /\/+$/,
-        '',
+      provider:
+        provider === 'fake'
+          ? 'fake'
+          : provider === 'local'
+            ? 'local'
+            : 'deepseek',
+      baseUrl: llmBaseUrl,
+      model: str(
+        'LLM_MODEL',
+        provider === 'local' ? 'local' : 'deepseek-flash',
       ),
-      model: str('LLM_MODEL', 'deepseek-flash'),
-      apiKey,
+      apiKey: provider === 'local' ? '' : apiKey,
       timeoutMs: int('LLM_TIMEOUT_MS', 60000, 1000, 300000),
+      contextWindow: int(
+        'LLM_CONTEXT_WINDOW',
+        provider === 'local' ? 8192 : 65536,
+        1024,
+        2_000_000,
+      ),
+      fallback:
+        fallbackName === 'local'
+          ? {
+              baseUrl: fallbackBase,
+              model: str('LLM_FALLBACK_MODEL', 'local'),
+            }
+          : null,
+    },
+    decision: {
+      url: decisionUrl,
+      timeoutMs: int('DECISION_TIMEOUT_MS', 1500, 100, 10000),
+      followUpThreshold: num('DECISION_FOLLOWUP_THRESHOLD', 0.25, 0.01, 0.99),
+      gateThreshold: num('DECISION_GATE_THRESHOLD', 0.5, 0.01, 0.99),
+      gateFloor: num('DECISION_GATE_FLOOR', 0.3, 0, 0.99),
+      gateMaxFragmentChars: int(
+        'DECISION_GATE_FRAGMENT_CHARS',
+        1500,
+        200,
+        6000,
+      ),
     },
     chat: {
       maxQuestionChars: int('CHAT_MAX_QUESTION_CHARS', 800, 50, 4000),
       maxHistoryTurns: int('CHAT_MAX_HISTORY_TURNS', 6, 0, 20),
       maxHistoryTurnChars: int('CHAT_MAX_HISTORY_TURN_CHARS', 800, 50, 4000),
-      maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 700, 50, 4000),
-      maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 4000, 200, 20000),
+      maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 4096, 4096, 16_000),
+      maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 16_000, 200, 64_000),
+      maxThinkingChars: int('CHAT_MAX_THINKING_CHARS', 12_000, 0, 100_000),
       topK: int('CHAT_TOP_K', 5, 1, 12),
+      nativesTopK: int('CHAT_NATIVES_TOP_K', 3, 0, 8),
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
       minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.25, 0, 1),
       maxBodyBytes: int('CHAT_MAX_BODY_BYTES', 16384, 1024, 262144),
+      cacheTtlSeconds: int('CHAT_CACHE_TTL_SECONDS', 3600, 0, 604800),
+      cacheMaxEntries: int('CHAT_CACHE_MAX_ENTRIES', 500, 0, 5000),
+    },
+    project: {
+      githubToken,
+      githubApiUrl: url('GITHUB_API_URL', 'https://api.github.com').replace(
+        /\/+$/,
+        '',
+      ),
+      repo,
+      ref,
+      planPath: repoPath('PROJECT_PLAN_PATH', 'docs/plan/README.md'),
+      complexityPath: repoPath(
+        'PROJECT_COMPLEXITY_PATH',
+        'docs/project/complexity.json',
+      ),
+      cacheTtlMs: int('PROJECT_CACHE_TTL_SECONDS', 300, 10, 3600) * 1000,
+      viewerPerMin: int('RATE_PROJECT_VIEWER_PER_MIN', 30, 1, 10000),
+      myChecklist: {
+        baseUrl: checklistUrl.replace(/\/+$/, ''),
+        token: checklistToken,
+        listName: str('MYCHECKLIST_LIST', 'Ad Astra'),
+      },
     },
     limits: {
       chatViewerPerMin: int('RATE_CHAT_VIEWER_PER_MIN', 6, 1, 10000),
       chatIpPerMin: int('RATE_CHAT_IP_PER_MIN', 20, 1, 10000),
       searchIpPerMin: int('RATE_SEARCH_IP_PER_MIN', 60, 1, 10000),
-      dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 40_000, 1000),
+      dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 120_000, 1000),
       dailyTokensGlobal: int('DAILY_TOKENS_GLOBAL', 1_000_000, 1000),
+      ownerMaxRounds: int('OWNER_MAX_ROUNDS', 8, 1, 100),
+    },
+    usage: {
+      dbPath: str('USAGE_DB_PATH', ''),
+      retentionDays: int('USAGE_RETENTION_DAYS', 180, 1, 3650),
+      priceInPerMTok: num('USAGE_PRICE_IN_PER_MTOK', 0.14, 0, 1000),
+      priceOutPerMTok: num('USAGE_PRICE_OUT_PER_MTOK', 0.28, 0, 1000),
     },
   }
 
@@ -185,7 +442,17 @@ export const describeConfig = (c: Config) => ({
   host: c.host,
   port: c.port,
   llm: { provider: c.llm.provider, model: c.llm.model, hasKey: !!c.llm.apiKey },
-  embedder: c.embedder.url,
+  embedder: {
+    url: c.embedder.url,
+    model: c.embedder.model,
+    hasToken: !!c.embedder.token,
+  },
   accounts: c.accounts.baseUrl,
+  project: {
+    repo: c.project.repo,
+    ref: c.project.ref,
+    hasGithubToken: !!c.project.githubToken,
+    hasMyChecklistToken: !!c.project.myChecklist.token,
+  },
   devViewer: c.devViewer,
 })

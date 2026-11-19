@@ -14,6 +14,12 @@ describe('crumbsFor', () => {
     expect(labels('/docs')).toEqual(['Inicio', 'Documentación'])
     expect(labels('/tools')).toEqual(['Inicio', 'Herramientas'])
     expect(labels('/roadmap/')).toEqual(['Inicio', 'Roadmap'])
+    expect(labels('/dashboard')).toEqual(['Inicio', 'Uso de IA'])
+    expect(labels('/dashboard/')).toEqual(['Inicio', 'Uso de IA'])
+    expect(labels('/dashboard/otra')).toEqual([
+      'Inicio',
+      'Página no encontrada',
+    ])
   })
 
   test('documento: usa el título, con la ruta propia en la última miga', () => {

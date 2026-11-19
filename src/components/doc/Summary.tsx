@@ -1,8 +1,10 @@
 import { Info } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useLang } from '@/lib/use-lang'
 
 /** Resumen "qué es / cuándo usarlo", siempre arriba de una página de docs. */
 export function Summary({ children }: { children: ReactNode }) {
+  const { tr } = useLang()
   return (
     <section
       aria-labelledby="resumen"
@@ -13,7 +15,7 @@ export function Summary({ children }: { children: ReactNode }) {
         className="text-label text-ink mb-2 flex items-center gap-2"
       >
         <Info className="text-accent size-4" aria-hidden="true" />
-        Resumen
+        {tr('summary.title')}
       </h2>
       <div className="text-body text-ink-muted [text-wrap:pretty]">
         {children}

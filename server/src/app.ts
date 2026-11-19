@@ -2,12 +2,18 @@
 // routes here are `/health`, `/ready`, `/graphql` and `/chat`.
 import { createHash } from 'node:crypto'
 import { Elysia } from 'elysia'
+import { parseLang } from './chat/environment.ts'
 import { citedLog } from './chat/log.ts'
+import { parseSources } from './chat/carry.ts'
+import { parseMemories } from './chat/memories.ts'
+import { isDefaultStyle, parseStyle, styleLabel } from './chat/style.ts'
 import { sseResponse } from './chat/sse.ts'
 import type { AppDeps } from './context.ts'
 import { AppError, toAppError } from './errors.ts'
 import { createGraphqlHandler } from './graphql.ts'
-import { requireChatAccess } from './viewer.ts'
+import { policyFor } from './policy.ts'
+import { UsageCollector } from './usage/collector.ts'
+import { atLeast, requireChatAccess } from './viewer.ts'
 
 type ServerLike = { requestIP(req: Request): { address: string } | null } | null
 
@@ -76,13 +82,24 @@ async function readChatBody(request: Request, maxBytes: number) {
   }
   if (body === null || typeof body !== 'object' || Array.isArray(body))
     throw new AppError('bad_request', 'Body must be a JSON object.')
-  const { question, history } = body as {
+  const { question, history, lang, memories, sources, style } = body as {
     question?: unknown
     history?: unknown
+    lang?: unknown
+    memories?: unknown
+    sources?: unknown
+    style?: unknown
   }
   if (typeof question !== 'string')
     throw new AppError('bad_request', '`question` must be a string.')
-  return { question, history }
+  return {
+    question,
+    history,
+    lang: parseLang(lang),
+    memories: parseMemories(memories),
+    style: parseStyle(style),
+    sources: parseSources(sources),
+  }
 }
 
 export function createApp(deps: AppDeps) {
@@ -123,35 +140,64 @@ export function createApp(deps: AppDeps) {
         route: 'chat',
         ip: ipHash(ip),
       }
+      const usage = deps.usage
+        ? new UsageCollector(deps.usage, config, requestId, 'chat', started)
+        : null
       try {
         checkOrigin(request, config.allowedOrigins)
         const viewer = await deps.viewers.resolve(request)
         log.viewer = viewer.id
         log.role = viewer.role
+        if (usage)
+          usage.who = {
+            id: viewer.id,
+            handle: viewer.handle,
+            role: viewer.role,
+          }
         requireChatAccess(viewer)
 
-        deps.limiters.chatIp.hit(ip)
-        deps.limiters.chatViewer.hit(viewer.id!)
+        const policy = policyFor(viewer, config)
+        if (policy.rateLimits) {
+          deps.limiters.chatIp.hit(ip)
+          deps.limiters.chatViewer.hit(viewer.id!)
+        }
 
         if (!deps.chat)
           throw new AppError(
             'index_unavailable',
             'The docs index is not loaded.',
           )
-        const { question, history } = await readChatBody(
-          request,
-          config.chat.maxBodyBytes,
-        )
+        const { question, history, lang, memories, sources, style } =
+          await readChatBody(request, config.chat.maxBodyBytes)
 
         const run = await deps.chat.prepare({
           requestId,
           viewerKey: viewer.id!,
+          role: viewer.role,
           question,
           history,
+          memories,
+          style,
+          sources,
+          lang,
+          user: { handle: viewer.handle },
+          showThinking: atLeast(viewer.role, 'staff'),
+          policy,
         })
         log.mode = run.mode
         log.degraded = run.degraded
         log.sources = run.sources.length
+        log.cache = run.cacheHit ? 'hit' : 'miss'
+        if (usage) {
+          usage.cacheHit = run.cacheHit === true
+          usage.telemetry = run.telemetry
+        }
+        if (run.usedHistory != null) log.usedHistory = run.usedHistory
+        // Only how many; the text of a memory never reaches a log.
+        if (memories.length) log.memories = memories.length
+        // Enums only (tone/length): safe to log.
+        if (!isDefaultStyle(style)) log.style = styleLabel(style)
+        if (run.gate) log.gate = `${run.gate.kept}/${run.gate.total}`
 
         return sseResponse(
           async function* (signal) {
@@ -163,10 +209,23 @@ export function createApp(deps: AppDeps) {
                 if (ev.type === 'done') {
                   tokens = ev.usage.inputTokens + ev.usage.outputTokens
                   Object.assign(log, citedLog(ev))
+                  if (usage) {
+                    usage.tokens = {
+                      input: ev.usage.inputTokens,
+                      output: ev.usage.outputTokens,
+                    }
+                    if (ev.refused) outcome = 'refused'
+                    else if (ev.cached) outcome = 'cached'
+                    else if (ev.truncated) outcome = 'truncated'
+                  }
                 }
                 yield ev
               }
             } finally {
+              if (usage) {
+                usage.outcome = outcome
+                usage.finish(now() - started)
+              }
               logger.info('request', {
                 ...log,
                 status: 200,
@@ -181,6 +240,10 @@ export function createApp(deps: AppDeps) {
       } catch (e) {
         const err = toAppError(e)
         if (err.code === 'internal') logger.error('chat_failed', { requestId })
+        if (usage) {
+          usage.outcome = err.code
+          usage.finish(now() - started)
+        }
         logger.info('request', {
           ...log,
           status: err.status,

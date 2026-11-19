@@ -5,7 +5,13 @@ const PANEL_MS = 180
 
 /** Lleva al encabezado del hash actual, abriendo las secciones plegadas que lo contienen. */
 export function revealHash() {
-  const id = decodeURIComponent(window.location.hash.slice(1))
+  const raw = window.location.hash.slice(1)
+  let id = raw
+  try {
+    id = decodeURIComponent(raw)
+  } catch {
+    // Escape de porcentaje mal formado (`#100%off`): se usa el hash tal cual.
+  }
   if (!id) return
   const el = document.getElementById(id)
   if (!el) return

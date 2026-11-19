@@ -5,7 +5,12 @@ import type { PaletteIcon, PaletteItem, Permission } from './types'
 const KEY = 'astra-dev:palette:recent'
 export const MAX_RECENT = 5
 
-const PERMISSIONS: readonly string[] = ['public', 'subscriber', 'staff']
+const PERMISSIONS: readonly string[] = [
+  'public',
+  'subscriber',
+  'staff',
+  'owner',
+]
 const ICONS: readonly string[] = [
   'home',
   'docs',

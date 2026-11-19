@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "repo": "adastra-org/astra-dev",
+  "series": [
+    {
+      "date": "2026-11-10",
+      "sha": "f850488b6489",
+      "files": 132,
+      "lines": 9746,
+      "docLines": 1450,
+      "churn": 12649
+    },
+    {
+      "date": "2026-11-12",
+      "sha": "fc530eb21317",
+      "files": 156,
+      "lines": 13238,
+      "docLines": 2113,
+      "churn": 18520
+    }
+  ]
+}

@@ -14,3 +14,6 @@ mock.module('virtual:astra-docs', () => ({
     ]),
   ),
 }))
+
+// Los natives salen de `content/generated` (no existe en CI): en tests no hay grupos.
+mock.module('virtual:astra-natives', () => ({ groups: [], total: 0 }))
