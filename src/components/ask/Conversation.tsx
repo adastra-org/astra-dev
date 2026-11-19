@@ -19,6 +19,7 @@ import { useId, useRef, useState, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { describeError, type ErrorView } from '@/lib/ask/errors'
 import { fmtCount, outputSpeed, ttftMs } from '@/lib/ask/budget'
+import { applyMention, detectTrigger, type Mention } from '@/lib/ask/mentions'
 import { isBusy, isTurnBusy } from '@/lib/ask/status'
 import { isLinkable, sourceLabel, visibleSources } from '@/lib/ask/sources'
 import { questionRoom, type Quote } from '@/lib/ask/quote'
@@ -29,6 +30,8 @@ import { useLang } from '@/lib/use-lang'
 import { Activity } from './Activity'
 import { AnswerBody } from './AnswerBody'
 import { EtherOrb } from './EtherOrb'
+import { MentionChips, MentionListbox, MentionTags } from './MentionPicker'
+import { optionId, useMentionOptions } from './useMentionOptions'
 import { useAnswerSelection, type SelectionBar } from './useAnswerSelection'
 import { useAsk } from './useAsk'
 
@@ -398,6 +401,7 @@ function UserMessage({
       <p className="bg-surface-overlay text-body text-ink max-w-[85%] self-end rounded-lg px-4 py-2 break-words">
         {turn.question}
       </p>
+      <MentionTags items={turn.mentions} />
       {settled && (
         <div
           role="group"
@@ -610,10 +614,27 @@ export function Composer({
   inputRef: RefObject<HTMLTextAreaElement | null>
   onSubmit?: () => void
 }) {
-  const { draft, turns, quotes } = useAsk()
+  const { draft, turns, mentions, quotes, sessionId, viewerRole } = useAsk()
   const { tr } = useLang()
   const quotesId = useId()
   const busy = isTurnBusy(turns)
+  const listId = useId()
+  const [caret, setCaret] = useState(0)
+  const [active, setActive] = useState(0)
+  // Inicio de la `@` cerrada con Esc: no se vuelve a abrir hasta que el cursor salga de ella.
+  const [dismissed, setDismissed] = useState<number | null>(null)
+  const [notice, setNotice] = useState<'max_items' | 'max_total' | null>(null)
+
+  const trigger = detectTrigger(draft, caret)
+  const open = trigger !== null && trigger.start !== dismissed && !busy
+  const options = useMentionOptions(open ? trigger.query : null, {
+    role: viewerRole,
+    sessionId,
+    attached: mentions,
+  })
+  const activeIndex = Math.min(active, Math.max(options.items.length - 1, 0))
+  const activeItem = options.items[activeIndex]
+  const listOpen = open && (options.items.length > 0 || trigger.query !== '')
   // Lo escrito comparte el tope del server con las citas que lo anteceden.
   const room = questionRoom(quotes)
 
@@ -623,18 +644,45 @@ export function Composer({
       return
     }
     onSubmit?.()
+    setNotice(null)
     void askStore.ask()
+  }
+
+  const pick = (m: Mention) => {
+    if (!trigger) return
+    const res = askStore.addMention(m)
+    if (!res.ok) {
+      setNotice(res.reason === 'duplicate' ? null : res.reason)
+      return
+    }
+    setNotice(null)
+    const next = applyMention(draft, trigger, caret, m.label)
+    askStore.setDraft(next.text.slice(0, room))
+    setCaret(next.caret)
+    requestAnimationFrame(() =>
+      inputRef.current?.setSelectionRange(next.caret, next.caret),
+    )
   }
 
   return (
     <form
-      className="shrink-0"
+      className="relative shrink-0"
       onSubmit={(e) => {
         e.preventDefault()
         if (busy) return
         submit()
       }}
     >
+      {listOpen && (
+        <MentionListbox
+          id={listId}
+          items={options.items}
+          loading={options.loading}
+          empty={trigger.query !== ''}
+          activeIndex={activeIndex}
+          onPick={pick}
+        />
+      )}
       {quotes.length > 0 && (
         <ul
           id={quotesId}
@@ -665,50 +713,117 @@ export function Composer({
           ))}
         </ul>
       )}
-      <div className="bg-surface-sunken has-[:focus-visible]:outline-focus flex items-end gap-1 rounded-lg p-1 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2">
-        <textarea
-          ref={inputRef}
-          aria-label={tr('ask.questionLabel')}
-          {...(quotes.length ? { 'aria-describedby': quotesId } : {})}
-          rows={1}
-          maxLength={room}
-          value={draft}
-          placeholder={tr('ask.placeholder')}
-          enterKeyHint="send"
-          onChange={(e) => askStore.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing
-            ) {
-              e.preventDefault()
-              if (!busy) submit()
-            }
-          }}
-          className="text-body placeholder:text-ink-subtle text-ink field-sizing-content max-h-40 min-h-11 min-w-0 flex-1 resize-none bg-transparent px-3 py-2.5 outline-none"
+      <div className="bg-surface-sunken has-[:focus-visible]:outline-focus rounded-lg p-1 has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2">
+        <MentionChips
+          items={mentions}
+          onRemove={(key) => askStore.removeMention(key)}
         />
-        {busy ? (
-          <button
-            type="button"
-            onClick={() => askStore.stop()}
-            aria-label={tr('ask.stop')}
-            className="bg-surface-overlay text-ink hover:bg-surface-raised grid size-11 shrink-0 place-items-center rounded-md"
-          >
-            <Square className="size-4 fill-current" aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="submit"
-            aria-label={tr('ask.send')}
-            className="bg-accent-fill text-on-accent hover:bg-accent-fill-hover grid size-11 shrink-0 place-items-center rounded-md"
-          >
-            <ArrowUp className="size-5" aria-hidden="true" />
-          </button>
-        )}
+        <div className="flex items-end gap-1">
+          <textarea
+            ref={inputRef}
+            role="combobox"
+            aria-label={tr('ask.questionLabel')}
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-expanded={listOpen}
+            aria-controls={listOpen ? listId : undefined}
+            aria-activedescendant={
+              listOpen && activeItem
+                ? optionId(listId, activeItem.key)
+                : undefined
+            }
+            {...(quotes.length ? { 'aria-describedby': quotesId } : {})}
+            rows={1}
+            maxLength={room}
+            value={draft}
+            placeholder={tr('ask.placeholder')}
+            enterKeyHint="send"
+            onChange={(e) => {
+              const el = e.currentTarget
+              const at = el.selectionStart ?? el.value.length
+              askStore.setDraft(el.value)
+              setCaret(at)
+              setActive(0)
+              setNotice(null)
+              if (detectTrigger(el.value, at)?.start !== dismissed)
+                setDismissed(null)
+            }}
+            onSelect={(e) =>
+              setCaret(
+                e.currentTarget.selectionStart ?? e.currentTarget.value.length,
+              )
+            }
+            onKeyDown={(e) => {
+              if (listOpen && !e.nativeEvent.isComposing) {
+                const n = options.items.length
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setDismissed(trigger.start)
+                  return
+                }
+                if (n && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                  e.preventDefault()
+                  setActive(
+                    (activeIndex + (e.key === 'ArrowDown' ? 1 : n - 1)) % n,
+                  )
+                  return
+                }
+                if (
+                  activeItem &&
+                  (e.key === 'Tab' || e.key === 'Enter') &&
+                  !e.shiftKey
+                ) {
+                  e.preventDefault()
+                  pick(activeItem)
+                  return
+                }
+              }
+              if (
+                e.key === 'Enter' &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
+                e.preventDefault()
+                if (!busy) submit()
+              }
+            }}
+            className="text-body placeholder:text-ink-subtle text-ink field-sizing-content max-h-40 min-h-11 min-w-0 flex-1 resize-none bg-transparent px-3 py-2.5 outline-none"
+          />
+          {busy ? (
+            <button
+              type="button"
+              onClick={() => askStore.stop()}
+              aria-label={tr('ask.stop')}
+              className="bg-surface-overlay text-ink hover:bg-surface-raised grid size-11 shrink-0 place-items-center rounded-md"
+            >
+              <Square className="size-4 fill-current" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              aria-label={tr('ask.send')}
+              className="bg-accent-fill text-on-accent hover:bg-accent-fill-hover grid size-11 shrink-0 place-items-center rounded-md"
+            >
+              <ArrowUp className="size-5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-caption text-ink-subtle mt-2 flex justify-between gap-4 px-1">
-        <span className="hidden pointer-fine:inline">{tr('ask.keys')}</span>
+        {notice ? (
+          <span role="status">
+            {tr(
+              notice === 'max_items'
+                ? 'ask.mention.fullItems'
+                : 'ask.mention.fullTotal',
+            )}
+          </span>
+        ) : (
+          <span className="hidden pointer-fine:inline">
+            {tr('ask.keys')} · {tr('ask.mention.keys')}
+          </span>
+        )}
         {draft.length > room * 0.75 && (
           <span className="ml-auto tabular-nums" aria-live="polite">
             {draft.length} / {room}

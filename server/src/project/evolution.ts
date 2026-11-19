@@ -11,6 +11,8 @@ import type {
 export interface RawIssue {
   number: number
   state: 'open' | 'closed'
+  /** GitHub always sends it; optional here so the evolution fixtures stay minimal. */
+  title?: string
   created_at: string
   closed_at: string | null
   /** Present when the "issue" is really a pull request. */

@@ -11,7 +11,7 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 | 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | En curso, v0.15.0 (`feat/chat-page`)                                |
 | 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
 | 3    | Memorias (localStorage)                                                                                                          | En curso, v0.16.0 (`feat/chat-memories`, base `feat/chat-page`)     |
-| 4    | Cross-session                                                                                                                    | Esqueleto                                                           |
+| 4    | Cross-session                                                                                                                    | **Implementada en v0.21.0** (`@` en el campo de `/ask`)             |
 | 5    | Subagents                                                                                                                        | Esqueleto                                                           |
 
 ## Estado actual del código (base 9670ca7)
@@ -195,7 +195,7 @@ Todos sin red: `fetch` simulado, como los tests actuales.
 - **1 `/ask`** (página; el endpoint sigue siendo `POST /chat`): workspace (transcript, composer, rail). Context budget con `contextWindow` por proveedor (nuevo `LLM_CONTEXT_WINDOW`) y `usage` de `done`. Output speed medido en cliente. Editar mensaje = rewind + resend en cliente.
 - **2 Herramientas**: protocolo `<herramienta nombre="ejecutar">` (corte de stream en el server, ejecución en el navegador con wasmoon, resultado como rol `tool` escapado, máx. 3 rondas). `check` determinista en cliente sobre bloques `lua` pegados. Bloqueada por revisión de seguridad de M4.
 - **3 Memorias**: localStorage, inyectadas como dato en bloque propio con tope, no cacheadas.
-- **4 Cross-session**: sesiones locales, el usuario elige cuáles adjuntar, resumen para el presupuesto.
+- **4 Cross-session** (v0.21.0): sesiones locales (conversaciones de `/ask` guardadas en `localStorage`), el usuario elige con `@` cuáles adjuntar (también natives e issues), resumen acotado para el presupuesto. Contrato en [docs/server](../server/README.md#mentions-opcional-v0210) y UI en [docs/ask](../ask/README.md#menciones-con--v0210).
 - **5 Subagents**: llamadas LLM aparte, sin herramientas, con tope de cantidad y tokens; cuentan contra cupo salvo owner.
 
 ## Decisiones tomadas

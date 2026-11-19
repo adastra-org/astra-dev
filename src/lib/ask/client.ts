@@ -2,6 +2,7 @@
 // server recibe `/chat`. En desarrollo, Vite hace el mismo trabajo con un proxy (vite.config.ts),
 // así la cookie de sesión y el `Origin` son los del propio sitio.
 import { readStoredLang, type UiLang } from '@/lib/i18n'
+import type { MentionBody } from './mentions'
 import type { StyleBody } from './prefs'
 import { SseParser } from './sse'
 import { AskError, type AskEvent, type HistoryTurn } from './types'
@@ -16,6 +17,8 @@ export interface StreamOptions {
   history: HistoryTurn[]
   /** Memorias activas del usuario (solo texto). Se omite el campo si no hay. */
   memories?: string[]
+  /** Lo que el usuario adjuntó con `@` (ver `mentions.ts`). Se omite el campo si no hay. */
+  mentions?: MentionBody[]
   /** Tono y largo elegidos en el onboarding (enums). Se omite si todo es por defecto. */
   style?: StyleBody
   /** Slugs de las fuentes de la respuesta anterior: el server las usa si la pregunta sigue la charla. */
@@ -72,6 +75,7 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
         question: opts.question,
         history: opts.history,
         ...(opts.memories?.length ? { memories: opts.memories } : {}),
+        ...(opts.mentions?.length ? { mentions: opts.mentions } : {}),
         ...(opts.style && Object.keys(opts.style).length
           ? { style: opts.style }
           : {}),

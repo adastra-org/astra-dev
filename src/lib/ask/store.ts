@@ -6,8 +6,10 @@ import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
+import { bodies, canAdd, type Mention, type MentionResult } from './mentions'
 import { prefsStore, type StyleBody } from './prefs'
 import { addQuote, composeQuestion, quoteSlugs, type Quote } from './quote'
+import { newSessionId, type SessionStore, sessionStore } from './sessions'
 import {
   AskError,
   type AskEvent,
@@ -52,8 +54,10 @@ export interface Turn {
   usageEstimated: boolean
   /** Velocidad que midió el modelo (`done.tps`). Null si el proveedor no la informó. */
   serverTps: number | null
-  /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
+  /** Tokens estimados del contexto extra de este envío: memorias y sesiones mencionadas (0 si ninguno). */
   memoryTokens: number
+  /** Lo que el usuario adjuntó con `@` en esta pregunta. */
+  mentions: Mention[]
 }
 
 export type ViewerRole = Permission | 'unknown'
@@ -62,13 +66,23 @@ export interface AskState {
   open: boolean
   /** Texto sin enviar del campo; sobrevive a cerrar el panel. */
   draft: string
+  /** Menciones elegidas para la próxima pregunta (chips sobre el campo). */
+  mentions: Mention[]
   /** Fragmentos citados que acompañarán la próxima pregunta. */
   quotes: Quote[]
+  /** Identidad de la conversación en curso en `sessionStore`. */
+  sessionId: string
   turns: Turn[]
   viewerRole: ViewerRole
   /** Ventana de contexto del modelo, desde `meta`. Null hasta la primera respuesta. */
   contextWindow: number | null
 }
+
+/** Citas y menciones de un turno, para reenviarlo, editarlo o reintentarlo tal cual. */
+const replay = (t: Turn) => ({
+  quotes: t.quotes ?? [],
+  mentions: t.mentions ?? [],
+})
 
 export const emptyTurn = (
   id: number,
@@ -95,6 +109,7 @@ export const emptyTurn = (
   usageEstimated: false,
   serverTps: null,
   memoryTokens: 0,
+  mentions: [],
 })
 
 /**
@@ -192,13 +207,17 @@ export interface AskStoreOptions {
   memories?: () => string[]
   /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
   style?: () => StyleBody | undefined
+  /** Dónde se guardan las conversaciones. Por defecto las del navegador (`sessionStore`). */
+  sessions?: SessionStore
 }
 
 export class AskStore {
   #state: AskState = {
     open: false,
     draft: '',
+    mentions: [],
     quotes: [],
+    sessionId: newSessionId(),
     turns: [],
     viewerRole: 'unknown',
     contextWindow: null,
@@ -253,6 +272,18 @@ export class AskStore {
     this.#set({ draft })
   }
 
+  /** Suma una mención a la próxima pregunta, respetando los topes del server. */
+  addMention(m: Mention): MentionResult {
+    const res = canAdd(this.#state.mentions, m)
+    if (res.ok) this.#set({ mentions: [...this.#state.mentions, m] })
+    return res
+  }
+
+  removeMention(key: string): void {
+    if (this.#state.mentions.some((m) => m.key === key))
+      this.#set({ mentions: this.#state.mentions.filter((m) => m.key !== key) })
+  }
+
   /** Agrega un fragmento citado a la próxima pregunta. */
   addQuote(q: Quote): void {
     this.#set({ quotes: addQuote(this.#state.quotes, q) })
@@ -260,6 +291,19 @@ export class AskStore {
 
   removeQuote(text: string): void {
     this.#set({ quotes: this.#state.quotes.filter((q) => q.text !== text) })
+  }
+
+  /** Guarda en el navegador los intercambios terminados: la conversación queda mencionable. */
+  #persist(): void {
+    const pairs = this.#state.turns
+      .filter(
+        (t) =>
+          (t.status === 'done' || t.status === 'stopped') &&
+          t.text &&
+          !t.refused,
+      )
+      .map((t) => ({ question: t.question, answer: t.text }))
+    ;(this.#opts.sessions ?? sessionStore).save(this.#state.sessionId, pairs)
   }
 
   /** Quién es el visitante, para saber si Ask Ether le corresponde antes de que pregunte. */
@@ -289,13 +333,18 @@ export class AskStore {
 
   /**
    * Envía la pregunta (o el borrador). Ignora la llamada si ya hay una respuesta en curso. Con
-   * `quotes` (reenviar, editar, reintentar) usa esas citas; sin él, las del campo, que se consumen.
-   * Si las citas traen fuentes, viajan esas como contexto en lugar de las de la última respuesta.
+   * `attach` (reenviar, editar, reintentar) usa esas citas y menciones; sin él, las del campo, que
+   * se consumen. Si las citas traen fuentes, viajan esas como contexto en lugar de las de la última
+   * respuesta.
    */
-  async ask(question?: string, quotes?: Quote[]): Promise<void> {
+  async ask(
+    question?: string,
+    attach?: { quotes: Quote[]; mentions: Mention[] },
+  ): Promise<void> {
     const q = (question ?? this.#state.draft).trim()
     if (!q || this.busy) return
-    const sentQuotes = quotes ?? this.#state.quotes
+    const sentQuotes = attach?.quotes ?? this.#state.quotes
+    const sent = attach?.mentions ?? this.#state.mentions
     const history = historyFor(this.#state.turns)
     const quoted = quoteSlugs(sentQuotes)
     const sources = quoted.length ? quoted : sourcesFor(this.#state.turns)
@@ -309,12 +358,18 @@ export class AskStore {
         ...this.#state.turns,
         {
           ...emptyTurn(id, q, sentQuotes),
-          memoryTokens: textsTokens(memories),
+          memoryTokens: textsTokens([
+            ...memories,
+            ...sent.flatMap((m) =>
+              m.body.kind === 'session' ? [m.body.text] : [],
+            ),
+          ]),
+          mentions: sent,
           timing: { startedAt, firstDeltaAt: null, doneAt: null },
         },
       ],
       ...(usedDraft ? { draft: '' } : {}),
-      ...(quotes === undefined ? { quotes: [] } : {}),
+      ...(attach === undefined ? { quotes: [], mentions: [] } : {}),
     })
 
     const ctl = new AbortController()
@@ -324,6 +379,7 @@ export class AskStore {
         question: composeQuestion(sentQuotes, q),
         history,
         memories,
+        mentions: bodies(sent),
         ...(style ? { style } : {}),
         sources,
         signal: ctl.signal,
@@ -357,6 +413,7 @@ export class AskStore {
         this.#set({ viewerRole: 'public' })
     } finally {
       if (this.#abort === ctl) this.#abort = null
+      this.#persist()
     }
   }
 
@@ -378,7 +435,7 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn || turn.status !== 'error' || this.busy) return
     this.#set({ turns: this.#state.turns.filter((t) => t.id !== id) })
-    void this.ask(turn.question, turn.quotes)
+    void this.ask(turn.question, replay(turn))
   }
 
   /**
@@ -390,15 +447,16 @@ export class AskStore {
     if (idx < 0) return
     this.stop()
     this.#set({ turns: this.#state.turns.slice(0, idx) })
+    this.#persist()
   }
 
   /** Edita una pregunta: la conversación vuelve a ese punto y la versión nueva se envía. */
   edit(id: number, question: string): void {
     const q = question.trim()
-    if (!q || !this.#state.turns.some((t) => t.id === id)) return
     const turn = this.#state.turns.find((t) => t.id === id)
+    if (!q || !turn) return
     this.rewind(id)
-    void this.ask(q, turn?.quotes ?? [])
+    void this.ask(q, replay(turn))
   }
 
   /** Vuelve a preguntar lo mismo desde ese punto: una respuesta nueva reemplaza a la anterior. */
@@ -406,14 +464,20 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn) return
     this.rewind(id)
-    void this.ask(turn.question, turn.quotes)
+    void this.ask(turn.question, replay(turn))
   }
 
-  /** Nueva conversación. */
+  /** Nueva conversación. La anterior queda guardada y se puede mencionar con `@`. */
   reset(): void {
     this.#abort?.abort()
     this.#abort = null
-    this.#set({ turns: [], quotes: [] })
+    this.#persist()
+    this.#set({
+      turns: [],
+      mentions: [],
+      quotes: [],
+      sessionId: newSessionId(),
+    })
   }
 }
 
