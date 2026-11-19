@@ -326,7 +326,7 @@ interface Option<T extends string> {
 }
 
 /** Grupo de radios nativos con tarjetas: la elegida lleva marca y borde, no solo color. */
-function Choice<T extends string>({
+export function Choice<T extends string>({
   name,
   legend,
   value,
