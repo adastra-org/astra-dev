@@ -2,6 +2,12 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.19.12] - 2026-11-19
+
+### Fixed
+
+- `CodeBlock`: the sandbox `import()` calls moved out of the component so the React Compiler can optimize it (`react-hooks-js/todo`, #24). Loading stays lazy.
+
 ## [0.19.10] - 2026-11-19
 
 ### Added
