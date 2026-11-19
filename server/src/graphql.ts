@@ -7,6 +7,7 @@ import type { AppDeps } from './context.ts'
 import { chunkPath, type ChunkKind, type NativeMeta } from './docs/chunk.ts'
 import { AppError } from './errors.ts'
 import type { Hit } from './index/search.ts'
+import { addProjectSchema } from './project/schema.ts'
 import type { Entitlement, Viewer } from './viewer.ts'
 
 export interface GqlContext {
@@ -167,6 +168,8 @@ export function createSchema(deps: AppDeps) {
       }),
     }),
   })
+
+  addProjectSchema(builder, deps)
 
   return builder.toSchema()
 }

@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Braces,
+  ChevronDown,
   House,
   Milestone,
   Orbit,
@@ -8,7 +9,7 @@ import {
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { NAV, type NavIcon } from '@/config/nav'
 import { docs } from '@/lib/docs'
@@ -28,6 +29,18 @@ const ICONS: Record<NavIcon, LucideIcon> = {
 // Los docs importados (FiveM) son cientos: el sidebar lista los del equipo; los demás, por el índice.
 const teamDocs = docs.filter((d) => !d.origin)
 
+type Section = 'docs' | 'natives'
+const COLLAPSED_KEY = 'astra-dev:sidebar-collapsed'
+
+function readCollapsed(): Record<Section, boolean> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}')
+    return { docs: raw?.docs === true, natives: raw?.natives === true }
+  } catch {
+    return { docs: false, natives: false }
+  }
+}
+
 interface Props {
   open: boolean
   onClose: () => void
@@ -44,6 +57,17 @@ export function Sidebar({ open, onClose }: Props) {
     [lang],
   )
   const inNatives = pathname.startsWith('/natives')
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const toggle = (section: Section) =>
+    setCollapsed((c) => {
+      const next = { ...c, [section]: !c[section] }
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next))
+      } catch {
+        // Sin almacenamiento: el estado vale solo para esta visita.
+      }
+      return next
+    })
   return (
     <>
       {open && (
@@ -88,59 +112,90 @@ export function Sidebar({ open, onClose }: Props) {
               const Icon = ICONS[item.icon]
               return (
                 <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    end={item.end}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      [
-                        'text-label flex min-h-11 items-center gap-3 rounded-md px-3 transition-colors duration-(--duration-fast) lg:min-h-10',
-                        isActive
-                          ? 'bg-surface-raised text-ink'
-                          : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
-                      ].join(' ')
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <Icon
-                          className={`size-4 shrink-0 ${isActive ? 'text-accent' : ''}`}
-                          aria-hidden="true"
-                        />
-                        {tr(item.label)}
-                      </>
-                    )}
-                  </NavLink>
-                  {item.icon === 'natives' && inNatives && (
-                    <ul
-                      aria-label={tr('shell.namespaces')}
-                      className="mt-1 mb-2 ml-4 flex flex-col gap-0.5"
+                  <div className="flex items-center gap-1">
+                    <NavLink
+                      to={item.to}
+                      end={item.end}
+                      onClick={onClose}
+                      className={({ isActive }) =>
+                        [
+                          'text-label flex min-h-11 items-center gap-3 rounded-md px-3 transition-colors duration-(--duration-fast) lg:min-h-10',
+                          isActive
+                            ? 'bg-surface-raised text-ink'
+                            : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
+                        ].join(' ')
+                      }
                     >
-                      {groups.map((g) => (
-                        <li key={g.id}>
-                          <NavLink
-                            to={`/natives/ns/${g.id}`}
-                            onClick={onClose}
-                            className={({ isActive }) =>
-                              [
-                                'text-body-sm flex min-h-11 items-center justify-between gap-2 rounded-md px-3 transition-colors duration-(--duration-fast) lg:min-h-8',
-                                isActive
-                                  ? 'bg-surface-raised text-ink'
-                                  : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
-                              ].join(' ')
-                            }
-                          >
-                            <span className="truncate">{g.label}</span>
-                            <span className="text-data text-ink-subtle">
-                              {g.count}
-                            </span>
-                          </NavLink>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {item.icon === 'docs' && (
+                      {({ isActive }) => (
+                        <>
+                          <Icon
+                            className={`size-4 shrink-0 ${isActive ? 'text-accent' : ''}`}
+                            aria-hidden="true"
+                          />
+                          {tr(item.label)}
+                        </>
+                      )}
+                    </NavLink>
+                    {(item.icon === 'natives' || item.icon === 'docs') &&
+                      (item.icon === 'docs' || inNatives) && (
+                        <button
+                          type="button"
+                          onClick={() => toggle(item.icon as Section)}
+                          aria-expanded={!collapsed[item.icon as Section]}
+                          aria-controls={`sidebar-${item.icon}`}
+                          aria-label={tr(
+                            collapsed[item.icon as Section]
+                              ? 'shell.expandSection'
+                              : 'shell.collapseSection',
+                            { section: tr(item.label) },
+                          )}
+                          className="text-ink-muted hover:bg-surface-raised hover:text-ink grid size-11 shrink-0 place-items-center rounded-md lg:size-10"
+                        >
+                          <ChevronDown
+                            className={`size-4 transition-transform duration-(--duration-fast) motion-reduce:transition-none ${
+                              collapsed[item.icon as Section]
+                                ? '-rotate-90'
+                                : ''
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      )}
+                  </div>
+                  {item.icon === 'natives' &&
+                    inNatives &&
+                    !collapsed.natives && (
+                      <ul
+                        id="sidebar-natives"
+                        aria-label={tr('shell.namespaces')}
+                        className="mt-1 mb-2 ml-4 flex flex-col gap-0.5"
+                      >
+                        {groups.map((g) => (
+                          <li key={g.id}>
+                            <NavLink
+                              to={`/natives/ns/${g.id}`}
+                              onClick={onClose}
+                              className={({ isActive }) =>
+                                [
+                                  'text-body-sm flex min-h-11 items-center justify-between gap-2 rounded-md px-3 transition-colors duration-(--duration-fast) lg:min-h-8',
+                                  isActive
+                                    ? 'bg-surface-raised text-ink'
+                                    : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
+                                ].join(' ')
+                              }
+                            >
+                              <span className="truncate">{g.label}</span>
+                              <span className="text-data text-ink-subtle">
+                                {g.count}
+                              </span>
+                            </NavLink>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  {item.icon === 'docs' && !collapsed.docs && (
                     <ul
+                      id="sidebar-docs"
                       aria-label={tr('shell.docs')}
                       className="mt-1 mb-2 ml-4 flex flex-col gap-0.5"
                     >

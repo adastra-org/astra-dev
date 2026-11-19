@@ -26,5 +26,5 @@ El selector cambia la interfaz y elige qué versión de un doc o native se muest
 
 ## Pendiente
 
-- Texto de los componentes de M4 y M5 (sandbox, roadmap): se pasa al diccionario cuando sus ramas se integren. El chat (M3) ya está.
+- M3 (chat), M4 (bloque de código con sandbox) y M5 (roadmap) ya leen el diccionario. Sin traducir a propósito: contenido de docs y del plan, mensajes de StyLua y de luaparse.
 - Pasada en navegador del selector (escritorio y 375 px).
