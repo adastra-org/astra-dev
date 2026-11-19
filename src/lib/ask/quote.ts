@@ -39,12 +39,13 @@ export function makeQuote(
 ): Quote | null {
   const text = clip(squash(raw), QUOTE_MAX_CHARS)
   if (!text) return null
+  const byN = new Map(sources.map((x) => [x.n, x]))
   const seen = new Set<number>()
   const picked: QuoteSource[] = []
   for (const n of cites) {
     if (seen.has(n)) continue
     seen.add(n)
-    const s = sources.find((x) => x.n === n)
+    const s = byN.get(n)
     if (s)
       picked.push({
         n: s.n,
