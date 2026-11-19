@@ -24,6 +24,7 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 - [natives/README.md](natives/README.md) — natives publicados (M2): rutas, archivos que emite el build, notas de Astra y verificación.
 - [translate/README.md](translate/README.md) — pipeline de traducción ES con deepseek-flash: uso, flags `auto`/`reviewed`, estado.
 - [i18n/README.md](i18n/README.md) — idioma de la interfaz (ES/EN): diccionario, selector, contenido traducido y cómo agregar un texto.
+- [server-dev/README.md](server-dev/README.md) — guardas de código del server (hook), checklist de migración a Enhanced y auditoría de seguridad de resources.
 - [deploy/README.md](deploy/README.md) — pasos manuales en el VPS (DNS, cert, nginx, env) y operación del deploy blue/green. Arquitectura: [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Qué resuelve
