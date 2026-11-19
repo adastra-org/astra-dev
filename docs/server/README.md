@@ -44,12 +44,13 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 
 ## Endpoints
 
-| Ruta       | Método | Acceso                       | Qué                                                                                                                                                                                                                                                                          |
-| ---------- | ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
-| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
-| `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                             |
+| Ruta               | Método | Acceso                       | Qué                                                                                                                                                                                                                                                                          |
+| ------------------ | ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`          | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
+| `/ready`           | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
+| `/graphql`         | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
+| `/graphql` (share) | POST   | ver "Compartir una charla"   | `shareConfig`, `shareChat`, `sharedChat`, `myShares`, `revokeShare` (v0.22.0)                                                                                                                                                                                                |
+| `/chat`            | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                             |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
@@ -158,6 +159,40 @@ El único freno del owner es `OWNER_MAX_ROUNDS` (8): rondas internas (herramient
 
 Con `USAGE_DB_PATH` el server guarda una fila por request de `/chat` en SQLite (`server/src/usage/`, WAL, compartido por blue y green): quién (id, handle, rol), proveedor y modelo, si hubo fallback, tokens, `ttft_ms`, duración, `gen_tps`, resultado (`ok`, `cached`, `refused`, `rate_limited`, `budget_exceeded`, …), caché, `gpu_ms` (solo modelos locales, de los `timings` de llama.cpp) y costo estimado (solo DeepSeek). **Nunca** la pregunta, la respuesta, fragmentos, IP ni secretos. Las peticiones anónimas no se registran. Las filas se encolan en memoria y se escriben por lotes en una transacción (cada 250 ms o 100 filas, y al apagar el server), así que la escritura no está en la ruta de la request; si el disco se traba, la cola tiene tope (5.000) y descarta las más viejas contándolas. Un fallo de escritura nunca rompe la respuesta. El handler solo conoce la interfaz `UsageSink`: cambiar SQLite por otro almacén (Postgres, un colector HTTP) no toca el chat. Se purga a los `USAGE_RETENTION_DAYS` al arrancar.
 
+### Compartir una charla (v0.22.0, issue #34)
+
+Es lo único que hace que el server **guarde texto** de una conversación, así que vive aislado: otro archivo SQLite (`SHARE_DB_PATH`, WAL, compartido por blue y green), tabla `shared_chats`. El registro de uso conserva su invariante "nunca la pregunta ni la respuesta". Sin `SHARE_DB_PATH` la función está apagada: las mutaciones responden `share_unavailable` (503) y el cliente oculta el botón.
+
+| Operación (GraphQL)                    | Quién                                                    | Qué                                                                                 |
+| -------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `shareConfig`                          | público                                                  | `{enabled, maxTurns, defaultTtlHours, maxTtlHours}`. No toca la base                |
+| `shareChat(turns, audience, ttlHours)` | `subscriber`, `staff`, `owner` (como `/chat`)            | Crea y devuelve `{id, token, audience, expiresAt}`. El token se ve **una sola vez** |
+| `sharedChat(token)`                    | `staff` u `owner` (audiencia `staff`) · todos (`public`) | Turnos redactados, `sharedBy` (solo `staff`), `expiresAt`                           |
+| `myShares`                             | sesión                                                   | Los propios, sin token                                                              |
+| `revokeShare(id)`                      | dueño, `staff`, `owner`                                  | **Borra** la fila (no queda texto). Otro usuario recibe `share_not_found`           |
+
+Errores nuevos: `share_not_found` (404; inexistente, vencido y revocado son indistinguibles), `staff_required` (403), `share_limit` (409), `share_unavailable` (503).
+
+**Defensas** (todas probadas en `server/tests/share.test.ts`):
+
+| Riesgo                                           | Defensa                                                                                                                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Adivinar un enlace                               | Token de 128 bits (`randomBytes(16)`, base64url). Solo se guarda `sha256(token)`: un volcado de la base no revela enlaces. Los fallos de lectura se limitan por IP                               |
+| Fuga de contexto privado                         | Allow-list: solo `{question, text, refused, truncated, cited, sources[{n, slug, anchor}]}`. Memorias, `<entorno>`, `thinking`, `steps`, uso y tiempos no se aceptan ni se guardan                |
+| Enlaces y títulos controlados por quien comparte | El server **reconstruye** título, encabezado y `path` desde el índice a partir del `slug` y descarta slugs inexistentes. Nada de URLs externas                                                   |
+| Texto con control o bidi                         | `cleanText` quita invisibles, control y aislantes bidi (U+2066 a U+2069). Topes de 4000 (pregunta) y 24000 (respuesta) caracteres que **rechazan**, no recortan                                  |
+| Contenido que no es lo que dijo el modelo        | El snapshot lo manda el cliente, así que es falsificable. La vista lleva siempre un banner: "captura enviada por quien la compartió; Ether no verifica que sea textual"                          |
+| Enlace que vive para siempre                     | Vence (24 h, 7 d por defecto, 30 d máximo). Se purga al arrancar y de forma perezosa al leer                                                                                                     |
+| Quién ve                                         | `staff` (por defecto): rol >= `staff` o quien lo creó. `public`: sin sesión y **sin** consultar cuentas, así que si cuentas cae sigue andando. `staff` falla cerrado                             |
+| Abuso                                            | 20 activos por viewer, 2.000 globales, 20 turnos y 48 KB por charla; crear 10/h por viewer y 20/h por IP; leer 60/min por IP; fallos 10/min por IP. `/graphql` rechaza cuerpos de más de 128 KiB |
+| Fuga en logs                                     | Solo ids de share, audiencia, conteos y estado. Nunca token, pregunta ni respuesta                                                                                                               |
+
+Diferencias con el plan aprobado: el límite de lectura por IP vale para todos (el owner no lo saltea al leer); los limitadores viven dentro de `ShareService` y `policy.ts` no cambia; el de fallos cuenta solo los fallos; `shareConfig` es público para que el cliente sepa si mostrar el botón.
+
+**Pendiente de Faku en el VPS:** agregar `SHARE_DB_PATH=<ruta fuera de los slots>` a `~/deploy/env/astra-dev.env` (igual que `USAGE_DB_PATH`) para encender la función. Opcional, en el vhost para `/ask/s/`: `add_header X-Robots-Tag "noindex, nofollow" always;` y `add_header Referrer-Policy "no-referrer" always;` (la página ya pone ambas como `<meta>`; el header cubre a quien no ejecuta JS).
+
+**Fuera de alcance (issue aparte):** firmar cada respuesta del server (HMAC en `done`) para poder mostrar "verificada" y cerrar la falsificación.
+
 ## Índice semántico
 
 ```bash
@@ -237,6 +272,12 @@ Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/a
 | `USAGE_DB_PATH`                                                                  | — (sin registro)                                                | SQLite de uso. Fuera de los slots, para que blue y green lo compartan                                           |
 | `USAGE_RETENTION_DAYS`                                                           | 180                                                             | Se purga al arrancar                                                                                            |
 | `USAGE_PRICE_IN_PER_MTOK`, `USAGE_PRICE_OUT_PER_MTOK`                            | 0.14, 0.28                                                      | USD por millón de tokens, para estimar el costo de modelos alojados                                             |
+| `SHARE_DB_PATH`                                                                  | — (función apagada)                                             | SQLite de charlas compartidas, aparte del registro de uso. Fuera de los slots                                   |
+| `SHARE_DEFAULT_TTL_HOURS`, `SHARE_MAX_TTL_HOURS`                                 | 168, 720                                                        | Vencimiento por defecto y tope (horas)                                                                          |
+| `SHARE_MAX_PER_VIEWER`, `SHARE_MAX_ACTIVE`                                       | 20, 2000                                                        | Enlaces activos por viewer y globales                                                                           |
+| `SHARE_MAX_TURNS`, `SHARE_MAX_BYTES`                                             | 20, 49152                                                       | Turnos y bytes por charla compartida                                                                            |
+| `RATE_SHARE_CREATE_VIEWER_PER_HOUR`, `RATE_SHARE_CREATE_IP_PER_HOUR`             | 10, 20                                                          | Crear enlaces                                                                                                   |
+| `RATE_SHARE_READ_IP_PER_MIN`, `RATE_SHARE_MISS_IP_PER_MIN`                       | 60, 10                                                          | Leer, y leer con fallo (frena la adivinación)                                                                   |
 | `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                                     | 120000, 1000000                                                 | Reset 00:00 UTC                                                                                                 |
 | `ASTRA_GITHUB_TOKEN`                                                             | —                                                               | Secreto, solo lectura. Sin él, `project` queda apagado                                                          |
 | `PROJECT_REPO`, `PROJECT_REF`                                                    | `adastra-org/astra-dev`, `dev`                                  | Repo y rama de los que se leen plan, complejidad y commits                                                      |
@@ -412,15 +453,15 @@ Tres fallas de una conversación real (`GetActualScreenResolution` → "¿tiene 
 
 **Fallback.** `LLM_FALLBACK_PROVIDER=local`: si el principal falla _antes_ de producir texto (red, HTTP, timeout, sin saldo), el mismo pedido va al modelo local; el log registra `llm_fallback`. Una vez que empezó a llegar texto no se cambia de modelo.
 
-## Pruebas (`bun test`, 143)
+## Pruebas (`bun test`, 371)
 
-`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL), `offline-embeddings` (índice en dos archivos, reutilización de vectores, compatibilidad entre embedders, token y reintentos) `cache` (normalización, TTL, tope y descarte, clave por rol/fuentes/historial, un acierto sin modelo ni presupuesto, errores y cortes sin cachear, log) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
+`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL), `offline-embeddings` (índice en dos archivos, reutilización de vectores, compatibilidad entre embedders, token y reintentos) `cache` (normalización, TTL, tope y descarte, clave por rol/fuentes/historial, un acierto sin modelo ni presupuesto, errores y cortes sin cachear, log) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones). `share` (54 pruebas: permisos de crear, leer y revocar por rol, vencimiento con reloj inyectado, allow-list y fuentes reconstruidas, token solo como hash, límites y logs sin texto).
 
 ## Estado de verificación
 
 | Qué                                                                                          | Estado                                                                                                              |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Typecheck + 143 tests del server, `bun run check` de la raíz                                 | Verificado                                                                                                          |
+| Typecheck + 371 tests del server, `bun run check` de la raíz                                 | Verificado                                                                                                          |
 | Índice por palabras clave con el corpus real (338 docs, 7.326 natives) y consultas           | Verificado: 10.254 fragmentos, 3-7 ms por consulta; búsquedas por nombre y hash exactas                             |
 | Caché de respuestas: la pregunta repetida se sirve sin modelo (`cache: hit`, 0 tokens, 1 ms) | Verificado con tests y en el navegador contra DeepSeek real                                                         |
 | Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL                    | Verificado a mano                                                                                                   |

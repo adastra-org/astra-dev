@@ -2,6 +2,18 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.22.0] - 2026-11-19
+
+### Added
+
+- Compartir una charla de `/ask` por enlace de solo lectura (#34): botón en el rail, diálogo con vista previa exacta, audiencia `staff` (por defecto) o `public`, vencimiento 24 h / 7 d / 30 d, copiar, "Mis enlaces" y revocar. Lectura en `/ask/s/:token` con banner de captura sin verificar, `noindex` y `no-referrer`.
+- Server: operaciones GraphQL `shareConfig`, `shareChat`, `sharedChat`, `myShares`, `revokeShare`. SQLite propio (`SHARE_DB_PATH`, apagado si falta), token de 128 bits guardado solo como hash, payload por allow-list, fuentes reconstruidas desde el índice, límites y rate limits (`SHARE_*`, `RATE_SHARE_*`).
+
+### Changed
+
+- `cleanText` también quita los aislantes bidi U+2066 a U+2069 (afecta al chat).
+- `/graphql` rechaza cuerpos de más de 128 KiB.
+
 ## [0.19.10] - 2026-11-19
 
 ### Added
