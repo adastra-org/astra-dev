@@ -154,6 +154,7 @@ Desde el rail de `/ask`, **Compartir** abre un diálogo que crea un enlace de so
 - **Lectura**: `SharedChat.tsx`. Banner fijo de captura sin verificar, autoría solo en `staff`, `noindex` y `no-referrer` por `<meta>`. Vencido, revocado o inexistente dan el mismo mensaje.
 
 Lógica pura en `src/lib/ask/share.ts` (payload, enmascarado, cliente GraphQL); UI en `ShareDialog.tsx` y `pages/SharedChat.tsx`; pruebas en `share.test.ts` y `share-dialog.test.tsx`.
+
 ## Citar un fragmento (v0.20.0)
 
 Al seleccionar texto dentro de una respuesta (página y panel) aparece la barra **Citar en la pregunta**. El fragmento queda como chip sobre el campo (máx. 2, se quita con la X) y viaja con la siguiente pregunta.
