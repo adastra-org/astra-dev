@@ -2,6 +2,14 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.12.0] - 2026-11-13
+
+### Added
+
+- Local LLM provider for loopback OpenAI-compatible servers (#20).
+- Follow-up decision step with Liquid d1 (#21).
+- Context gate, `<entorno>`, local fallback, `bun dev --local` and activity view (#23).
+
 ## [0.10.1] - 2026-11-12
 
 Security-sensitive: lands the M4 sandbox.
