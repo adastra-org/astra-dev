@@ -2,6 +2,16 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.10.1] - 2026-11-12
+
+Security-sensitive: lands the M4 sandbox.
+
+### Added
+
+- M4 sandbox and M5 roadmap on dev (#19).
+- `/tools` playground (#19).
+- Collapsible sidebar (#19).
+
 ## [0.8.0] - 2026-11-12
 
 ### Added
