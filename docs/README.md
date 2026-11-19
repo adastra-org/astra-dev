@@ -25,6 +25,8 @@ Fuente de la idea: nota `astra_dev.md` (2026-11-09).
 - [translate/README.md](translate/README.md) — pipeline de traducción ES con deepseek-flash: uso, flags `auto`/`reviewed`, estado.
 - [i18n/README.md](i18n/README.md) — idioma de la interfaz (ES/EN): diccionario, selector, contenido traducido y cómo agregar un texto.
 - [server-dev/README.md](server-dev/README.md) — guardas de código del server (hook), checklist de migración a Enhanced y auditoría de seguridad de resources.
+- [mapas/README.md](mapas/README.md) — auditoría de MLOs del servidor (2026-11-16): portales sin flag, rooms, timecycles sin resolver, duplicados y carga de YMAPs por zona.
+- [fixes-2026-11-16-v0.19.3/README.md](fixes-2026-11-16-v0.19.3/README.md) — correcciones de mapas por MLO, con su estado.
 - [deploy/README.md](deploy/README.md) — pasos manuales en el VPS (DNS, cert, nginx, env) y operación del deploy blue/green. Arquitectura: [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Qué resuelve
