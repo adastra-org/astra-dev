@@ -10,6 +10,7 @@ import NativeGroup from '@/pages/NativeGroup'
 import Natives from '@/pages/Natives'
 import NotFound from '@/pages/NotFound'
 import Roadmap from '@/pages/Roadmap'
+import SharedChat from '@/pages/SharedChat'
 import Tools from '@/pages/Tools'
 
 /** Árbol de rutas. Cada `to` de `config/nav.ts` debe resolver acá (lo prueba routes.test.ts). */
@@ -26,6 +27,7 @@ export const routes: RouteObject[] = [
       { path: '/tools', element: <Tools /> },
       { path: '/roadmap', element: <Roadmap /> },
       { path: '/ask', element: <Ask /> },
+      { path: '/ask/s/:token', element: <SharedChat /> },
       { path: '/dashboard', element: <AiUsage /> },
       { path: '*', element: <NotFound /> },
     ],

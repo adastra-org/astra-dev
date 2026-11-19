@@ -42,8 +42,13 @@ jobs:
           bun install --frozen-lockfile
           (cd server && bun install --frozen-lockfile)
           bun run check
+          # Natives and fivem-docs at the shas pinned in content-sources.json (docs/import/README.md).
+          # Before the front build: the astra-natives Vite plugin publishes /data/natives/*.json
+          # from content/generated/natives, and the server index below reads the same corpus.
+          bun run import
           bun run build
           test -f dist/index.html
+          test -f dist/data/natives/index.json || { echo "::error::build published no natives (dist/data/natives/index.json)"; exit 1; }
 
       - name: Build server bundle (API + semantic index)
         # The runner lives on the VPS, so the local embedder is reachable and the index is
@@ -59,8 +64,6 @@ jobs:
         run: |
           set -eu
           export PATH="/opt/bun:$PATH"
-          # Natives and fivem-docs at the shas pinned in content-sources.json (docs/import/README.md).
-          bun run import
           prebuilt="$HOME/deploy/index-prebuilt/index.json"
           if [ -f "$prebuilt" ]; then
             echo "reusing vectors from $prebuilt"
