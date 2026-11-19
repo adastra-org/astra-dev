@@ -8,7 +8,7 @@
 #   systemctl --user enable astra-dev@blue astra-dev@green
 # The workflow only warns (::warning::) when the installed file differs from this one.
 #
-# Ports are derived from the slot in server/src/config.ts: blue 4101, green 4102 (loopback only).
+# Ports are derived from the slot in server/src/config.ts: blue 4201, green 4202 (loopback only).
 # Secrets live in ~/deploy/env/astra-dev.env (mode 600, outside the repo), never in this file.
 
 [Unit]
