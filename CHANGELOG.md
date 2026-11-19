@@ -2,6 +2,13 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.22.1] - 2026-11-19
+
+### Fixed
+
+- Production `/natives` was empty: the deploy ran `bun run import` after the front build, so the Vite plugin published no `/data/natives/*.json`. The import now runs first and the deploy fails if `dist/data/natives/index.json` is missing.
+- `server/src/usage/store.ts` formatted (left unformatted by #53, it failed the deploy of `main`).
+
 ## [0.22.0] - 2026-11-19
 
 ### Added
