@@ -2,6 +2,17 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.17.3] - 2026-11-13
+
+### Added
+
+- `/ask` page with context budget, speed and edit/resend (#31).
+- User memories in localStorage as chat context (#32).
+
+### Fixed
+
+- `/ask` fixes: ES->EN retrieval, follow-ups, UI (#39).
+
 ## [0.14.2] - 2026-11-13
 
 ### Added
