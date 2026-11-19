@@ -2,6 +2,12 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.14.2] - 2026-11-13
+
+### Added
+
+- Owner role, usage records and AI dashboard (#30).
+
 ## [0.12.0] - 2026-11-13
 
 ### Added
