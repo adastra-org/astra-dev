@@ -2,6 +2,12 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.8.0] - 2026-11-12
+
+### Added
+
+- Published natives, ES/EN interface and translation pipeline (#18).
+
 ## [0.6.1] - 2026-11-12
 
 ### Added
