@@ -2,6 +2,29 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.19.10] - 2026-11-19
+
+### Added
+
+- Deploy workflow can be run by hand from the Actions tab (`workflow_dispatch`).
+
+## [0.19.9] - 2026-11-19
+
+### Added
+
+- `AGENTS.md`, guard hook for server-side FiveM code and Enhanced migration checklist (#50).
+
+### Fixed
+
+- Onboarding dialog: `skip` declared before its first use (#50).
+- `usage-report` test pins the clock (#49, #50).
+
+## [0.19.3] - 2026-11-16
+
+### Added
+
+- MLO audit of the server and fixes checklist per MLO (#49).
+
 ## [0.19.2] - 2026-11-13
 
 ### Added
