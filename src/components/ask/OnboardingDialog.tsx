@@ -59,6 +59,11 @@ export function OnboardingDialog({
   const [index, setIndex] = useState(0)
   const [draft, setDraft] = useState<Draft>(prefs)
 
+  const skip = () => {
+    prefsStore.markDone()
+    onClose()
+  }
+
   // Al abrir: el recorrido empieza de cero con lo guardado como punto de partida.
   useEffect(() => {
     const d = ref.current
@@ -94,11 +99,6 @@ export function OnboardingDialog({
   useEffect(() => {
     if (open && index > 0) titleRef.current?.focus()
   }, [index, open])
-
-  const skip = () => {
-    prefsStore.markDone()
-    onClose()
-  }
   const finish = () => {
     prefsStore.update({ ...draft, done: true })
     onClose()
