@@ -189,7 +189,9 @@ export class UsageStore implements UsageSink {
   /** Epoch ms of the newest record's day, or null when the store is empty. */
   newestDay(): number | null {
     this.flush()
-    const rows = this.#db.query('SELECT MAX(day) AS day FROM usage_events').all() as { day: string | null }[]
+    const rows = this.#db
+      .query('SELECT MAX(day) AS day FROM usage_events')
+      .all() as { day: string | null }[]
     const day = rows[0]?.day ?? null
     return day ? new Date(day + 'T00:00:00Z').getTime() : null
   }
