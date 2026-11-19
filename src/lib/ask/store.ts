@@ -6,7 +6,9 @@ import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
+import { bodies, canAdd, type Mention, type MentionResult } from './mentions'
 import { prefsStore, type StyleBody } from './prefs'
+import { newSessionId, type SessionStore, sessionStore } from './sessions'
 import {
   AskError,
   type AskEvent,
@@ -48,8 +50,10 @@ export interface Turn {
   usageEstimated: boolean
   /** Velocidad que midió el modelo (`done.tps`). Null si el proveedor no la informó. */
   serverTps: number | null
-  /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
+  /** Tokens estimados del contexto extra de este envío: memorias y sesiones mencionadas (0 si ninguno). */
   memoryTokens: number
+  /** Lo que el usuario adjuntó con `@` en esta pregunta. */
+  mentions: Mention[]
 }
 
 export type ViewerRole = Permission | 'unknown'
@@ -58,6 +62,10 @@ export interface AskState {
   open: boolean
   /** Texto sin enviar del campo; sobrevive a cerrar el panel. */
   draft: string
+  /** Menciones elegidas para la próxima pregunta (chips sobre el campo). */
+  mentions: Mention[]
+  /** Identidad de la conversación en curso en `sessionStore`. */
+  sessionId: string
   turns: Turn[]
   viewerRole: ViewerRole
   /** Ventana de contexto del modelo, desde `meta`. Null hasta la primera respuesta. */
@@ -84,6 +92,7 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   usageEstimated: false,
   serverTps: null,
   memoryTokens: 0,
+  mentions: [],
 })
 
 /**
@@ -175,12 +184,16 @@ export interface AskStoreOptions {
   memories?: () => string[]
   /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
   style?: () => StyleBody | undefined
+  /** Dónde se guardan las conversaciones. Por defecto las del navegador (`sessionStore`). */
+  sessions?: SessionStore
 }
 
 export class AskStore {
   #state: AskState = {
     open: false,
     draft: '',
+    mentions: [],
+    sessionId: newSessionId(),
     turns: [],
     viewerRole: 'unknown',
     contextWindow: null,
@@ -235,6 +248,31 @@ export class AskStore {
     this.#set({ draft })
   }
 
+  /** Suma una mención a la próxima pregunta, respetando los topes del server. */
+  addMention(m: Mention): MentionResult {
+    const res = canAdd(this.#state.mentions, m)
+    if (res.ok) this.#set({ mentions: [...this.#state.mentions, m] })
+    return res
+  }
+
+  removeMention(key: string): void {
+    if (this.#state.mentions.some((m) => m.key === key))
+      this.#set({ mentions: this.#state.mentions.filter((m) => m.key !== key) })
+  }
+
+  /** Guarda en el navegador los intercambios terminados: la conversación queda mencionable. */
+  #persist(): void {
+    const pairs = this.#state.turns
+      .filter(
+        (t) =>
+          (t.status === 'done' || t.status === 'stopped') &&
+          t.text &&
+          !t.refused,
+      )
+      .map((t) => ({ question: t.question, answer: t.text }))
+    ;(this.#opts.sessions ?? sessionStore).save(this.#state.sessionId, pairs)
+  }
+
   /** Quién es el visitante, para saber si Ask Ether le corresponde antes de que pregunte. */
   async loadViewer(): Promise<void> {
     const f = this.#opts.fetch ?? fetch
@@ -260,10 +298,14 @@ export class AskStore {
     }
   }
 
-  /** Envía la pregunta (o el borrador). Ignora la llamada si ya hay una respuesta en curso. */
-  async ask(question?: string): Promise<void> {
+  /**
+   * Envía la pregunta (o el borrador). Ignora la llamada si ya hay una respuesta en curso. Sin
+   * `mentions` usa las elegidas en el campo y las vacía; con ellas (reintento, edición) las reutiliza.
+   */
+  async ask(question?: string, mentions?: Mention[]): Promise<void> {
     const q = (question ?? this.#state.draft).trim()
     if (!q || this.busy) return
+    const sent = mentions ?? this.#state.mentions
     const history = historyFor(this.#state.turns)
     const sources = sourcesFor(this.#state.turns)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
@@ -276,11 +318,18 @@ export class AskStore {
         ...this.#state.turns,
         {
           ...emptyTurn(id, q),
-          memoryTokens: textsTokens(memories),
+          memoryTokens: textsTokens([
+            ...memories,
+            ...sent.flatMap((m) =>
+              m.body.kind === 'session' ? [m.body.text] : [],
+            ),
+          ]),
+          mentions: sent,
           timing: { startedAt, firstDeltaAt: null, doneAt: null },
         },
       ],
       ...(usedDraft ? { draft: '' } : {}),
+      ...(mentions === undefined ? { mentions: [] } : {}),
     })
 
     const ctl = new AbortController()
@@ -290,6 +339,7 @@ export class AskStore {
         question: q,
         history,
         memories,
+        mentions: bodies(sent),
         ...(style ? { style } : {}),
         sources,
         signal: ctl.signal,
@@ -323,6 +373,7 @@ export class AskStore {
         this.#set({ viewerRole: 'public' })
     } finally {
       if (this.#abort === ctl) this.#abort = null
+      this.#persist()
     }
   }
 
@@ -344,7 +395,7 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn || turn.status !== 'error' || this.busy) return
     this.#set({ turns: this.#state.turns.filter((t) => t.id !== id) })
-    void this.ask(turn.question)
+    void this.ask(turn.question, turn.mentions)
   }
 
   /**
@@ -356,14 +407,16 @@ export class AskStore {
     if (idx < 0) return
     this.stop()
     this.#set({ turns: this.#state.turns.slice(0, idx) })
+    this.#persist()
   }
 
   /** Edita una pregunta: la conversación vuelve a ese punto y la versión nueva se envía. */
   edit(id: number, question: string): void {
     const q = question.trim()
-    if (!q || !this.#state.turns.some((t) => t.id === id)) return
+    const turn = this.#state.turns.find((t) => t.id === id)
+    if (!q || !turn) return
     this.rewind(id)
-    void this.ask(q)
+    void this.ask(q, turn.mentions)
   }
 
   /** Vuelve a preguntar lo mismo desde ese punto: una respuesta nueva reemplaza a la anterior. */
@@ -371,14 +424,15 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn) return
     this.rewind(id)
-    void this.ask(turn.question)
+    void this.ask(turn.question, turn.mentions)
   }
 
-  /** Nueva conversación. */
+  /** Nueva conversación. La anterior queda guardada y se puede mencionar con `@`. */
   reset(): void {
     this.#abort?.abort()
     this.#abort = null
-    this.#set({ turns: [] })
+    this.#persist()
+    this.#set({ turns: [], mentions: [], sessionId: newSessionId() })
   }
 }
 

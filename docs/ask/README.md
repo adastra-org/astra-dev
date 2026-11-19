@@ -72,6 +72,16 @@ Las citas a **natives** (`kind: "native"`) enlazan a `/natives/<slug>` (páginas
 
 Textos del panel en el diccionario (`ask.*` en `src/lib/i18n.ts`, ES y EN, ver [i18n/README.md](../i18n/README.md)); los mensajes de error pasan por `describeError(code, retryAfter, tr)`. El idioma de la respuesta lo decide el server: el de la pregunta.
 
+## Menciones con `@` (v0.21.0)
+
+Con `@` en el campo (al inicio o tras un espacio) se abre una lista de lo que se puede adjuntar a la próxima pregunta: **sesiones** (conversaciones de `/ask` guardadas en este navegador), **natives** y **issues** (solo staff; para el resto la sección no existe). Al elegir una opción se escribe `@etiqueta` en el texto y queda un chip arriba del campo, con una X para quitarla. Máximo 5 adjuntos por pregunta. La pregunta enviada muestra lo adjunto en solo lectura; reintentar, editar y reenviar lo reutilizan.
+
+- **Sesiones**: cada conversación con respuestas terminadas se guarda sola en `localStorage` (clave `astra.ask.sessions.v1`, hasta 20 sesiones de 12 intercambios, mismo patrón que las memorias: si no se puede guardar, vive en memoria). Al mencionarla viaja un **resumen acotado** (los últimos intercambios que entran en 2000 caracteres), nunca la conversación entera. El medidor de contexto lo suma.
+- **Natives e issues**: viaja el slug o el número; el server resuelve el contenido. Los issues pasan por el mismo permiso de staff que el resto del proyecto.
+- **Teclado**: ↑ ↓ mueven, Intro o Tab eligen, Esc cierra la lista sin cerrar el panel. Es un combobox ARIA sobre el campo (`aria-activedescendant`); el foco no sale del campo.
+- Contrato del server: [docs/server](../server/README.md#mentions-opcional-v0210).
+- Lógica en `src/lib/ask/{mentions,sessions}.ts` (puro + `SessionStore`, storage inyectable); UI en `components/ask/{MentionPicker.tsx,useMentionOptions.ts}` y el campo de `Conversation.tsx`. Tests: `mentions.test.ts`, `sessions.test.ts`.
+
 ## Accesibilidad
 
 - `<dialog>` modal nativo: foco atrapado, fondo inerte, `Esc` cierra, el foco vuelve a quien abrió. Tras seguir una cita el foco va a `#main`.

@@ -7,7 +7,7 @@ import { GraphQLError } from 'graphql'
 import type { AppDeps } from '../context.ts'
 import { AppError } from '../errors.ts'
 import type { GqlContext } from '../graphql.ts'
-import type { ProjectService } from './service.ts'
+import type { IssueRef, ProjectService } from './service.ts'
 import type {
   BurnPoint,
   Checklist,
@@ -231,8 +231,23 @@ export function addProjectSchema(builder: Builder, deps: AppDeps) {
     }),
   })
 
+  const IssueRefRef = builder.objectRef<IssueRef>('IssueRef').implement({
+    fields: (t) => ({
+      number: t.exposeInt('number'),
+      title: t.exposeString('title'),
+      state: t.exposeString('state'),
+    }),
+  })
+
   const ProjectRef = builder.objectRef<ProjectService>('Project').implement({
     fields: (t) => ({
+      /** Issues for the `@` picker in /ask. Pull requests are left out. */
+      issues: t.field({
+        type: [IssueRefRef],
+        args: { query: t.arg.string({ required: true }), limit: t.arg.int() },
+        resolve: (p, args) =>
+          guard(() => p.searchIssues(args.query.slice(0, 80), args.limit ?? 8)),
+      }),
       checklist: t.field({
         type: ChecklistRef,
         resolve: (p) => guard(() => p.checklist()),
