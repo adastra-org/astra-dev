@@ -146,12 +146,14 @@ export function createApp(deps: AppDeps) {
         const run = await deps.chat.prepare({
           requestId,
           viewerKey: viewer.id!,
+          role: viewer.role,
           question,
           history,
         })
         log.mode = run.mode
         log.degraded = run.degraded
         log.sources = run.sources.length
+        log.cache = run.cacheHit ? 'hit' : 'miss'
 
         return sseResponse(
           async function* (signal) {

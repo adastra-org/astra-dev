@@ -1,5 +1,7 @@
 import { Menu } from 'lucide-react'
+import { AskTrigger } from '@/components/ask/AskTrigger'
 import { PaletteTrigger } from '@/components/palette/PaletteTrigger'
+import { useLang } from '@/lib/use-lang'
 import { Breadcrumbs } from './Breadcrumbs'
 import { LangSwitch } from './LangSwitch'
 
@@ -15,12 +17,13 @@ interface Props {
  * para no tapar lo que queda entre pastillas.
  */
 export function TopBar({ menuOpen, onMenu, onSearch }: Props) {
+  const { tr } = useLang()
   return (
     <header className="pointer-events-none sticky top-0 z-20 flex shrink-0 items-center gap-2 px-4 pt-3 md:px-8">
       <div className="pointer-events-auto contents">
         <button
           type="button"
-          aria-label="Abrir menú"
+          aria-label={tr('shell.openMenu')}
           aria-expanded={menuOpen}
           aria-controls="sidebar"
           onClick={onMenu}
@@ -34,6 +37,7 @@ export function TopBar({ menuOpen, onMenu, onSearch }: Props) {
           aria-hidden="true"
         />
         <PaletteTrigger onOpen={onSearch} />
+        <AskTrigger />
         <LangSwitch />
       </div>
     </header>

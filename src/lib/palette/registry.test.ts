@@ -15,6 +15,7 @@ import type {
 } from './types'
 
 const ctx: PaletteContext = {
+  lang: 'es',
   docs: [],
   headings: [],
   pathname: '/',

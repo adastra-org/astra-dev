@@ -52,7 +52,7 @@ Lee `design/tokens.json` y escribe `src/styles/tokens.css` (tema Void en `:root`
 
 ## Selector de idioma
 
-Placeholder. ES activo, EN deshabilitado. No guarda estado ni cambia textos; la i18n llega en M2.
+Funcional desde M2 (v0.7.0): ES / EN, guarda la elección y cambia los textos de la interfaz. Detalle en [`i18n/README.md`](../i18n/README.md).
 
 ## Pendiente
 

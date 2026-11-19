@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import { useLang } from '@/lib/use-lang'
 import { isApple } from '@/lib/palette/shortcut'
 import { Shortcut } from './Kbd'
 
@@ -13,18 +14,19 @@ const keys = isApple(
  * el atajo al lado. El atajo se oculta en pantallas táctiles (`pointer-fine`): ahí no hay teclado.
  */
 export function PaletteTrigger({ onOpen }: { onOpen: () => void }) {
+  const { tr } = useLang()
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label="Buscar"
+      aria-label={tr('palette.search')}
       aria-haspopup="dialog"
       aria-keyshortcuts={keys[0] === '⌘' ? 'Meta+K' : 'Control+K'}
       className="text-ink-muted bg-surface-raised hover:bg-surface-overlay hover:text-ink rounded-pill flex size-11 shrink-0 items-center justify-center gap-3 md:w-44 md:justify-start md:px-4 lg:h-10 xl:w-64"
     >
       <Search className="size-5 shrink-0 md:size-4" aria-hidden="true" />
       <span className="text-body-sm hidden flex-1 text-left md:inline">
-        Buscar
+        {tr('palette.search')}
       </span>
       <span className="hidden pointer-fine:md:inline-flex">
         <Shortcut
