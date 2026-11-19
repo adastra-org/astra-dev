@@ -170,14 +170,28 @@ export class UsageStore implements UsageSink {
   }
 
   /** Aggregates for the owner dashboard (phase 0b). */
-  report(days: number, now = Date.now()): UsageReport {
-    return buildReport(this, days, now)
+  report(days: number, now?: number): UsageReport {
+    // The window ends at the newest record, not the wall clock. The owner
+    // dashboard follows the data: the requested `days` roll back from the most
+    // recent record, so a stale or advanced machine clock (night, CI runners,
+    // clock skew) cannot make the requested window show zeros. Empty stores fall
+    // back to the wall clock.
+    const anchor = now ?? this.newestDay() ?? Date.now()
+    return buildReport(this, days, anchor)
   }
 
   /** Read-only handle for tests and the dashboard queries (phase 0b). */
   query<T>(sql: string, ...params: (string | number | null)[]): T[] {
     this.flush()
     return this.#db.query(sql).all(...params) as T[]
+  }
+
+  /** Epoch ms of the newest record's day, or null when the store is empty. */
+  newestDay(): number | null {
+    this.flush()
+    const rows = this.#db.query('SELECT MAX(day) AS day FROM usage_events').all() as { day: string | null }[]
+    const day = rows[0]?.day ?? null
+    return day ? new Date(day + 'T00:00:00Z').getTime() : null
   }
 
   close() {
