@@ -58,16 +58,15 @@ export function Sidebar({ open, onClose }: Props) {
   )
   const inNatives = pathname.startsWith('/natives')
   const [collapsed, setCollapsed] = useState(readCollapsed)
-  const toggle = (section: Section) =>
-    setCollapsed((c) => {
-      const next = { ...c, [section]: !c[section] }
-      try {
-        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next))
-      } catch {
-        // Sin almacenamiento: el estado vale solo para esta visita.
-      }
-      return next
-    })
+  const toggle = (section: Section) => {
+    const next = { ...collapsed, [section]: !collapsed[section] }
+    setCollapsed(next)
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next))
+    } catch {
+      // Sin almacenamiento: el estado vale solo para esta visita.
+    }
+  }
   return (
     <>
       {open && (

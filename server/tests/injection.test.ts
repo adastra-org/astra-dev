@@ -58,7 +58,7 @@ const strayTags = (user: string) =>
       '',
     )
     .replace(/<\/fuente>/g, '')
-    .replace(/<\/?(contexto|historial|pregunta)>/g, '')
+    .replace(/<\/?(entorno|contexto|historial|pregunta)>/g, '')
     .match(/<\/?[a-zA-Z!]/g)
 
 describe('retrieved text is data, never instructions', () => {

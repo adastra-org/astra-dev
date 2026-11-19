@@ -29,3 +29,7 @@ server-dist
 # importer: source clones and generated corpus (bun run import)
 .cache
 content/generated
+
+# local env (examples are tracked)
+.env
+server/.env

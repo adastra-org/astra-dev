@@ -122,7 +122,23 @@ describe('streamChat', () => {
     expect(JSON.parse(String(sent!.init.body))).toEqual({
       question: 'hola',
       history: [{ role: 'user', content: 'antes' }],
+      lang: 'es',
     })
+  })
+
+  test('manda el idioma de la interfaz', async () => {
+    let body = ''
+    await streamChat({
+      question: 'hi',
+      history: [],
+      lang: 'en',
+      onEvent: () => {},
+      fetch: (async (_u: string, init: RequestInit) => {
+        body = String(init.body)
+        return new Response('event: done\ndata: {}\n\n')
+      }) as unknown as typeof fetch,
+    })
+    expect(JSON.parse(body).lang).toBe('en')
   })
 
   test('error JSON previo al stream: código, estado y Retry-After', async () => {
@@ -449,7 +465,10 @@ describe('markdown seguro', () => {
 
 describe('mensajes de error', () => {
   test('cada código tiene mensaje y si se puede reintentar', () => {
-    expect(describeError('unauthenticated').retry).toBe(false)
+    expect(describeError('unauthenticated').retry).toBe(true)
+    expect(describeError('unauthenticated').action?.href).toBe(
+      'https://adastrarp.com',
+    )
     expect(describeError('subscription_required').retry).toBe(false)
     expect(describeError('budget_exceeded', 7200).hint).toContain('2 h')
     expect(describeError('budget_exceeded').retry).toBe(false)

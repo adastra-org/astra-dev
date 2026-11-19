@@ -43,6 +43,8 @@ export interface CacheKeyInput {
   history: HistoryTurn[]
   /** Chunk ids of the sources placed in the prompt, in prompt order. */
   sourceIds: string[]
+  /** What the answer may depend on besides the sources: UI language, day and repo head. NOT the user: one answer is shared by everyone of the same role. */
+  context?: string
 }
 
 export function cacheKey(input: CacheKeyInput): string {
@@ -51,6 +53,7 @@ export function cacheKey(input: CacheKeyInput): string {
     normalizeQuestion(input.question),
     input.history.map((t) => [t.role, normalizeQuestion(t.content)]),
     input.sourceIds,
+    input.context ?? '',
   ])
   return createHash('sha256').update(payload).digest('hex')
 }

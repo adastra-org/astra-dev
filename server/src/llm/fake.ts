@@ -8,6 +8,8 @@ export interface FakeOptions {
   answer?: string | ((req: LlmRequest) => string)
   /** Delta size in characters. */
   chunkSize?: number
+  /** Reasoning to stream before the answer, in `chunkSize` pieces. */
+  thinking?: string
   /** Throw `llm_unavailable` instead of answering. */
   fail?: boolean
 }
@@ -32,6 +34,9 @@ export class FakeLlmProvider implements LlmProvider {
       this.#o.answer ?? 'Respuesta de prueba basada en la documentación [1].'
     const text = typeof a === 'function' ? a(req) : a
     const size = this.#o.chunkSize ?? 12
+    const thought = this.#o.thinking ?? ''
+    for (let i = 0; i < thought.length; i += size)
+      yield { type: 'thinking', text: thought.slice(i, i + size) }
     for (let i = 0; i < text.length; i += size) {
       if (req.signal?.aborted) return
       yield { type: 'delta', text: text.slice(i, i + size) }
