@@ -5,12 +5,14 @@ import type { ReactNode } from 'react'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { contextUsage } from '@/lib/ask/budget'
-import { emptyTurn, type Turn } from '@/lib/ask/store'
+import { makeQuote } from '@/lib/ask/quote'
+import { askStore, emptyTurn, type Turn } from '@/lib/ask/store'
+import type { AskSource } from '@/lib/ask/types'
 import { turnStatusText } from '@/lib/ask/status'
 import { t, type UiLang } from '@/lib/i18n'
 import { LangContext, type LangValue } from '@/lib/use-lang'
 import { ContextBudget } from './ContextBudget'
-import { Transcript, TurnView } from './Conversation'
+import { Composer, Transcript, TurnView } from './Conversation'
 
 const value = (lang: UiLang): LangValue => ({
   lang,
@@ -128,5 +130,59 @@ describe('turnStatusText', () => {
     expect(turnStatusText(done({ cited: [] }), es('en'))).toBe('Answer ready')
     expect(turnStatusText(undefined, es('es'))).toBe('')
     expect(turnStatusText(done({ status: 'error' }), es('es'))).toBe('')
+  })
+})
+
+const SRC: AskSource = {
+  n: 1,
+  kind: 'doc',
+  slug: 'server-security',
+  title: 'Seguridad del servidor',
+  heading: null,
+  anchor: null,
+  path: '/docs/developers/server-security',
+  excerpt: '',
+  score: 0.9,
+}
+
+describe('citas de texto', () => {
+  const quote = makeQuote('el server decide', [1], [SRC])!
+
+  test('el turno muestra el fragmento y sus fuentes como enlaces, aparte de lo escrito', () => {
+    const turn = done({ quotes: [quote] })
+    const html = wrap(<TurnView turn={turn} isLast locked={false} />)
+    expect(html).toContain('el server decide')
+    expect(html).toContain('Seguridad del servidor')
+    expect(html).toContain('href="/docs/developers/server-security"')
+    expect(html).toContain('como hago un rollback')
+  })
+
+  test('la respuesta marca cada cita [n] y cada turno su id para leer la selección', () => {
+    const turn = done({ text: 'Dato [1].', sources: [SRC], cited: [1] })
+    const html = wrap(<Transcript turns={[turn]} viewerRole="staff" />)
+    expect(html).toContain('data-turn="1"')
+    expect(html).toContain('data-ask-answer')
+    expect(html).toContain('data-block')
+    expect(html).toContain('data-cite="1"')
+  })
+
+  test('el composer lista las citas pendientes con un botón para quitarlas', () => {
+    askStore.reset()
+    askStore.addQuote(quote)
+    try {
+      const html = wrap(<Composer inputRef={{ current: null }} />)
+      expect(html).toContain('Fragmentos citados')
+      expect(html).toContain('el server decide')
+      expect(html).toContain('Quitar la cita: el server decide')
+    } finally {
+      askStore.reset()
+    }
+  })
+
+  test('sin citas el composer no muestra la lista', () => {
+    askStore.reset()
+    expect(wrap(<Composer inputRef={{ current: null }} />)).not.toContain(
+      'Fragmentos citados',
+    )
   })
 })
