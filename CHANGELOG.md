@@ -2,6 +2,37 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.22.0] - 2026-11-19
+
+### Added
+
+- Compartir una charla de `/ask` por enlace de solo lectura (#34): botón en el rail, diálogo con vista previa exacta, audiencia `staff` (por defecto) o `public` (por ahora solo la crea staff), vencimiento 24 h / 7 d / 30 d, copiar, "Mis enlaces" y revocar. Lectura en `/ask/s/:token` con banner de captura sin verificar, `noindex` y `no-referrer`.
+- Server: operaciones GraphQL `shareConfig`, `shareChat`, `sharedChat`, `myShares`, `revokeShare`. SQLite propio (`SHARE_DB_PATH`, apagado si falta), token de 128 bits guardado solo como hash, payload por allow-list, fuentes reconstruidas desde el índice, límites y rate limits (`SHARE_*`, `RATE_SHARE_*`).
+
+### Changed
+
+- `cleanText` también quita los aislantes bidi U+2066 a U+2069 (afecta al chat).
+- `/graphql` rechaza cuerpos de más de 128 KiB.
+
+## [0.20.0] - 2026-11-19
+
+### Added
+
+- `/ask`: select text in an answer and quote it in the next question ("Citar en la pregunta", #36). The quote carries the sources of the fragment (its `[n]` cites, or its block's when it has none) and they replace the previous answer's sources for that follow-up. Up to 2 quotes per question, shown as removable chips above the composer and as a quote block in the sent turn; Edit and Resend keep them. Client-only: no change to `POST /api/chat`.
+
+## [0.19.12] - 2026-11-19
+
+### Fixed
+
+- `CodeBlock`: the sandbox `import()` calls moved out of the component so the React Compiler can optimize it (`react-hooks-js/todo`, #24). Loading stays lazy.
+
+## [0.19.11] - 2026-11-19
+
+### Fixed
+
+- Onboarding dialog: the tour body mounts on open, so step and draft start fresh without a reset effect (#52).
+- `useRemote`: `loading` and `error` are derived in render instead of a synchronous `setState` in the effect (#29).
+
 ## [0.19.10] - 2026-11-19
 
 ### Added

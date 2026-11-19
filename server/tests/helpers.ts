@@ -16,6 +16,8 @@ import { RateLimiter, TokenBudget } from '../src/limits.ts'
 import { FakeLlmProvider } from '../src/llm/fake.ts'
 import type { LlmProvider } from '../src/llm/provider.ts'
 import { createLogger, silentLogger, type Logger } from '../src/log.ts'
+import { ShareService } from '../src/share/service.ts'
+import type { ShareStore } from '../src/share/store.ts'
 import { UsageStore, type UsageSink } from '../src/usage/store.ts'
 import { DevStubViewerPort, type ViewerPort } from '../src/viewer.ts'
 
@@ -156,6 +158,9 @@ export async function harness(
     decider?: FollowUpDecider
     gate?: ContextGate
     usage?: UsageSink
+    /** A share store (`new ShareStore(':memory:')`). Omitted = the feature is off. */
+    share?: ShareStore
+    now?: () => number
   } = {},
 ): Promise<Harness> {
   const config = testConfig(opts.env)
@@ -195,6 +200,16 @@ export async function harness(
       : null,
     usage: opts.usage ?? null,
     usageReader: opts.usage instanceof UsageStore ? opts.usage : null,
+    share: opts.share
+      ? new ShareService({
+          store: opts.share,
+          retriever,
+          config,
+          logger: opts.logger ?? logger,
+          ...(opts.now ? { now: opts.now } : {}),
+        })
+      : null,
+    ...(opts.now ? { now: opts.now } : {}),
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),

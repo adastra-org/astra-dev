@@ -89,6 +89,31 @@ export function describeError(
         hint: tr('ask.err.index.hint'),
         retry: true,
       }
+    case 'share_not_found':
+      return {
+        title: tr('share.err.notFound'),
+        hint: tr('share.err.notFound.hint'),
+        retry: false,
+      }
+    case 'staff_required':
+      return {
+        title: tr('share.err.staff'),
+        hint: tr('share.err.staff.hint'),
+        retry: false,
+        action: { label: tr('ask.err.signin'), href: ACCOUNTS_URL },
+      }
+    case 'share_limit':
+      return {
+        title: tr('share.err.limit'),
+        hint: tr('share.err.limit.hint'),
+        retry: false,
+      }
+    case 'share_unavailable':
+      return {
+        title: tr('share.err.unavailable'),
+        hint: tr('share.err.unavailable.hint'),
+        retry: false,
+      }
     case 'network':
     case 'server_unavailable':
       return {

@@ -143,6 +143,7 @@ function Body({ onNavigate }: { onNavigate: () => void }) {
             onNavigate()
             askStore.close()
           }}
+          onQuoted={() => inputRef.current?.focus()}
         />
       </div>
 
