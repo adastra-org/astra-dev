@@ -11,9 +11,32 @@ export interface DocInput {
   body: string
 }
 
+export type ChunkKind = 'doc' | 'native'
+
+/** Identity of a native, kept on its chunk for exact lookup by name or hash. */
+export interface NativeMeta {
+  /** `<source>:<NAME>`, e.g. `gta:SET_VEHICLE_DOOR_OPEN`. */
+  id: string
+  source: 'gta' | 'cfx'
+  /** Canonical name: `SET_VEHICLE_DOOR_OPEN`. */
+  name: string
+  /** Function name in Lua/JS/C#: `SetVehicleDoorOpen`. */
+  luaName: string
+  ns: string
+  apiset: 'client' | 'server' | 'shared' | null
+  /** `0x…`, uppercase, no leading zeros. */
+  hashes: string[]
+  aliases: string[]
+  signature: string
+}
+
 export interface Chunk {
   /** `<slug>#<anchor>` plus `:<n>` when a section is split. Unique in an index. */
   id: string
+  /** `doc` chunks belong to a page under `/docs`; `native` chunks to `/natives/<slug>`. */
+  kind: ChunkKind
+  /** Present on `native` chunks only. */
+  native?: NativeMeta
   slug: string
   title: string
   /** Heading path ("Section" or "Section > Subsection"), `null` for the intro. */
@@ -31,6 +54,16 @@ export interface ChunkOptions {
   maxChars?: number
   excerptChars?: number
 }
+
+/** Site path of a chunk: `/docs/<slug>#<anchor>` or `/natives/<slug>`. */
+export const chunkPath = (c: {
+  kind: ChunkKind
+  slug: string
+  anchor: string | null
+}): string =>
+  c.kind === 'native'
+    ? `/natives/${c.slug}`
+    : `/docs/${c.slug}${c.anchor ? `#${c.anchor}` : ''}`
 
 const fold = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
@@ -163,6 +196,7 @@ export function chunkDoc(doc: DocInput, opts: ChunkOptions = {}): Chunk[] {
       const base = `${doc.slug}#${s.anchor ?? ''}`
       chunks.push({
         id: i === 0 ? base : `${base}:${i + 1}`,
+        kind: 'doc',
         slug: doc.slug,
         title: doc.title,
         heading: s.heading,

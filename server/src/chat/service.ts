@@ -1,6 +1,7 @@
 // Retrieval-augmented completion, no tools. Two phases so the HTTP layer can still answer with a
 // plain JSON error: `prepare` (retrieve, build prompt, reserve budget) throws AppError; `events`
 // then streams and never throws (failures become an `error` event).
+import { chunkPath, type ChunkKind } from '../docs/chunk.ts'
 import { AppError } from '../errors.ts'
 import type { Retriever, SearchMode } from '../index/search.ts'
 import type { LlmProvider } from '../llm/provider.ts'
@@ -23,11 +24,13 @@ export interface ChatSettings {
   maxOutputTokens: number
   maxOutputChars: number
   topK: number
+  nativesTopK: number
   contextMaxChars: number
 }
 
 export interface Source {
   n: number
+  kind: ChunkKind
   slug: string
   title: string
   heading: string | null
@@ -73,9 +76,6 @@ export interface ChatInput {
   history: unknown
 }
 
-const pathOf = (slug: string, anchor: string | null) =>
-  `/docs/${slug}${anchor ? `#${anchor}` : ''}`
-
 export class ChatService {
   readonly #d: ChatDeps
   constructor(deps: ChatDeps) {
@@ -95,9 +95,16 @@ export class ChatService {
     // The query is the question plus the last user turn, so follow-ups ("and how do I draw it?") retrieve well.
     const lastUser = [...history].reverse().find((t) => t.role === 'user')
     const query = lastUser ? `${lastUser.content}\n${question}` : question
-    const found = await this.#d.retriever.search(
+    // Docs and natives are ranked apart: ~7,000 natives would otherwise crowd the docs out. A
+    // native named in the question (by name or hash) always comes first.
+    const found = await this.#d.retriever.searchMany(
       query.slice(0, s.maxQuestionChars * 2),
-      s.topK,
+      [
+        { kind: 'doc', k: s.topK },
+        ...(s.nativesTopK > 0
+          ? [{ kind: 'native' as const, k: s.nativesTopK }]
+          : []),
+      ],
     )
 
     const built: BuiltPrompt = buildPrompt({
@@ -108,11 +115,12 @@ export class ChatService {
     })
     const sources: Source[] = built.used.map((h, i) => ({
       n: i + 1,
+      kind: h.kind,
       slug: h.slug,
       title: h.title,
       heading: h.heading,
       anchor: h.anchor,
-      path: pathOf(h.slug, h.anchor),
+      path: chunkPath(h),
       excerpt: h.excerpt,
       score: Math.round(h.score * 1000) / 1000,
     }))

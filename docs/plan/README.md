@@ -35,8 +35,8 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M2 — Contenido y traducción (0.3.0)
 
-- [ ] Importar natives desde `citizenfx/natives` (JSON) a docs generadas en build.
-- [ ] Capa propia: notas de Astra sobre cada native (override sin tocar la fuente).
+- [~] Importar natives desde `citizenfx/natives`, los natives de CFX (`fivem/ext/native-decls`) y `fivem-docs`: importador hecho (7.326 natives, 333 docs, [import/README.md](../import/README.md)); falta publicarlos en el sitio (fase 3).
+- [x] Capa propia: notas de Astra sobre cada native (`content/overrides/natives/`, sin tocar la fuente).
 - [ ] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`.
 - [ ] i18n EN/ES en la UI y selector de idioma.
 

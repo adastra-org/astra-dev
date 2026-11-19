@@ -91,7 +91,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
     const n = used.length + 1
     used.push(h)
     blocks.push(
-      `<fuente n="${n}" doc="${attr(h.slug)}" seccion="${attr(h.heading ?? h.title)}">\n${escapeData(text)}\n</fuente>`,
+      `<fuente n="${n}" tipo="${h.kind}" doc="${attr(h.slug)}" seccion="${attr(h.heading ?? h.title)}">\n${escapeData(text)}\n</fuente>`,
     )
     budget -= text.length
   }

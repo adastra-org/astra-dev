@@ -17,7 +17,16 @@ export interface Config {
   accounts: { baseUrl: string; viewerPath: string; timeoutMs: number }
   /** Dev stub role. `null` means: use the accounts service. Always null in production. */
   devViewer: Role | null
-  embedder: { url: string; model: string; timeoutMs: number; dims: number }
+  embedder: {
+    url: string
+    model: string
+    timeoutMs: number
+    dims: number
+    /** Bearer token for a hosted embedder (Cloudflare Workers AI). Secret; empty = no auth header. */
+    token: string
+    /** Models whose vectors may be reused from a prebuilt index. Always includes `model`. */
+    acceptModels: string[]
+  }
   llm: {
     provider: 'deepseek' | 'fake'
     baseUrl: string
@@ -32,6 +41,8 @@ export interface Config {
     maxOutputTokens: number
     maxOutputChars: number
     topK: number
+    /** Natives added to the chat context on top of `topK` docs (0 = docs only). */
+    nativesTopK: number
     contextMaxChars: number
     minSemanticScore: number
     maxBodyBytes: number
@@ -99,6 +110,21 @@ export function loadConfig(env: Env = process.env): Config {
   if (production && provider === 'deepseek' && !apiKey)
     problems.push('DEEPSEEK_API_KEY is required in production')
 
+  const embedderUrl = url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings')
+  const embedderModel = str('EMBEDDER_MODEL', 'embeddinggemma-2')
+  const embedderToken = env.EMBEDDER_TOKEN?.trim() ?? ''
+  if (embedderToken) {
+    // A token never travels in clear over the network.
+    try {
+      const u = new URL(embedderUrl)
+      const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+      if (u.protocol !== 'https:' && !loopback)
+        problems.push('EMBEDDER_TOKEN needs an https EMBEDDER_URL')
+    } catch {
+      // already reported by url()
+    }
+  }
+
   const requestedStub = env.ASTRA_DEV_VIEWER?.trim()
   let devViewer: Role | null = null
   // In production the stub flag is ignored on purpose (main.ts logs a warning).
@@ -139,10 +165,20 @@ export function loadConfig(env: Env = process.env): Config {
     },
     devViewer,
     embedder: {
-      url: url('EMBEDDER_URL', 'http://127.0.0.1:8891/v1/embeddings'),
-      model: str('EMBEDDER_MODEL', 'embeddinggemma-2'),
+      url: embedderUrl,
+      model: embedderModel,
       timeoutMs: int('EMBEDDER_TIMEOUT_MS', 2500, 100, 60000),
       dims: int('EMBEDDER_DIMS', 256, 32, 768),
+      token: embedderToken,
+      acceptModels: [
+        ...new Set([
+          embedderModel,
+          ...str('EMBEDDER_ACCEPT_MODELS', '')
+            .split(',')
+            .map((m) => m.trim())
+            .filter(Boolean),
+        ]),
+      ],
     },
     llm: {
       provider: provider === 'fake' ? 'fake' : 'deepseek',
@@ -161,6 +197,7 @@ export function loadConfig(env: Env = process.env): Config {
       maxOutputTokens: int('CHAT_MAX_OUTPUT_TOKENS', 700, 50, 4000),
       maxOutputChars: int('CHAT_MAX_OUTPUT_CHARS', 4000, 200, 20000),
       topK: int('CHAT_TOP_K', 5, 1, 12),
+      nativesTopK: int('CHAT_NATIVES_TOP_K', 3, 0, 8),
       contextMaxChars: int('CHAT_CONTEXT_MAX_CHARS', 9000, 1000, 40000),
       minSemanticScore: num('CHAT_MIN_SEMANTIC_SCORE', 0.25, 0, 1),
       maxBodyBytes: int('CHAT_MAX_BODY_BYTES', 16384, 1024, 262144),
@@ -185,7 +222,11 @@ export const describeConfig = (c: Config) => ({
   host: c.host,
   port: c.port,
   llm: { provider: c.llm.provider, model: c.llm.model, hasKey: !!c.llm.apiKey },
-  embedder: c.embedder.url,
+  embedder: {
+    url: c.embedder.url,
+    model: c.embedder.model,
+    hasToken: !!c.embedder.token,
+  },
   accounts: c.accounts.baseUrl,
   devViewer: c.devViewer,
 })

@@ -4,6 +4,7 @@ import SchemaBuilder from '@pothos/core'
 import { GraphQLError } from 'graphql'
 import { createYoga } from 'graphql-yoga'
 import type { AppDeps } from './context.ts'
+import { chunkPath, type ChunkKind, type NativeMeta } from './docs/chunk.ts'
 import { AppError } from './errors.ts'
 import type { Hit } from './index/search.ts'
 import type { Entitlement, Viewer } from './viewer.ts'
@@ -15,6 +16,12 @@ export interface GqlContext {
 
 const MAX_QUERY_CHARS = 200
 const MAX_LIMIT = 10
+
+function parseKind(v: string | null | undefined): ChunkKind | undefined {
+  if (v === undefined || v === null || v === '') return undefined
+  if (v === 'doc' || v === 'native') return v
+  throw new AppError('bad_request', 'kind must be "doc" or "native".')
+}
 
 const asGraphQLError = (e: unknown): GraphQLError => {
   if (e instanceof AppError)
@@ -56,17 +63,37 @@ export function createSchema(deps: AppDeps) {
 
   const HitRef = builder.objectRef<Hit>('SearchHit').implement({
     fields: (t) => ({
+      kind: t.string({ resolve: (h) => h.kind }),
       slug: t.exposeString('slug'),
       title: t.exposeString('title'),
       heading: t.string({ nullable: true, resolve: (h) => h.heading }),
       anchor: t.string({ nullable: true, resolve: (h) => h.anchor }),
-      path: t.string({
-        resolve: (h) => `/docs/${h.slug}${h.anchor ? `#${h.anchor}` : ''}`,
-      }),
+      path: t.string({ resolve: (h) => chunkPath(h) }),
       excerpt: t.exposeString('excerpt'),
       score: t.exposeFloat('score'),
     }),
   })
+
+  // Identity and signature of a native, no description or examples: like search hits, the public
+  // API exposes extracts, never the full text of the corpus.
+  const NativeRef = builder
+    .objectRef<{ meta: NativeMeta; slug: string }>('Native')
+    .implement({
+      fields: (t) => ({
+        id: t.string({ resolve: (n) => n.meta.id }),
+        name: t.string({ resolve: (n) => n.meta.name }),
+        luaName: t.string({ resolve: (n) => n.meta.luaName }),
+        ns: t.string({ resolve: (n) => n.meta.ns }),
+        apiset: t.string({ nullable: true, resolve: (n) => n.meta.apiset }),
+        source: t.string({ resolve: (n) => n.meta.source }),
+        hashes: t.stringList({ resolve: (n) => n.meta.hashes }),
+        signature: t.string({ resolve: (n) => n.meta.signature }),
+        path: t.string({
+          resolve: (n) =>
+            chunkPath({ kind: 'native', slug: n.slug, anchor: null }),
+        }),
+      }),
+    })
 
   const ResultRef = builder
     .objectRef<{ mode: string; degraded: boolean; hits: Hit[] }>('SearchResult')
@@ -95,6 +122,8 @@ export function createSchema(deps: AppDeps) {
         args: {
           q: t.arg.string({ required: true }),
           limit: t.arg.int(),
+          /** `doc` or `native`; omitted = both. */
+          kind: t.arg.string(),
         },
         resolve: async (_root, args, ctx) => {
           try {
@@ -104,10 +133,33 @@ export function createSchema(deps: AppDeps) {
                 'index_unavailable',
                 'The docs index is not loaded.',
               )
+            const kind = parseKind(args.kind)
             const q = args.q.trim().slice(0, MAX_QUERY_CHARS)
             if (!q) return { mode: 'keyword', degraded: false, hits: [] }
             const limit = Math.min(Math.max(args.limit ?? 8, 1), MAX_LIMIT)
-            return await deps.retriever.search(q, limit)
+            return await deps.retriever.search(q, limit, kind ? { kind } : {})
+          } catch (e) {
+            throw asGraphQLError(e)
+          }
+        },
+      }),
+      // Exact lookup by name, Lua name or hash (`GetEntityCoords`, `0xBB75D38B`).
+      native: t.field({
+        type: [NativeRef],
+        args: { q: t.arg.string({ required: true }) },
+        resolve: (_root, args, ctx) => {
+          try {
+            deps.limiters.searchIp.hit(ctx.ip)
+            if (!deps.retriever)
+              throw new AppError(
+                'index_unavailable',
+                'The docs index is not loaded.',
+              )
+            return deps.retriever
+              .findNatives(args.q.trim().slice(0, MAX_QUERY_CHARS))
+              .flatMap((c) =>
+                c.native ? [{ meta: c.native, slug: c.slug }] : [],
+              )
           } catch (e) {
             throw asGraphQLError(e)
           }

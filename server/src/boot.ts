@@ -13,16 +13,50 @@ import type { LlmProvider } from './llm/provider.ts'
 import type { Logger } from './log.ts'
 import { createViewerPort } from './viewer.ts'
 
-/** Embedder client whose every request has a hard timeout, so a hung embedder cannot stall a request. */
-export function createEmbedder(config: Config): EmbedderClient {
+export interface EmbedderOverrides {
+  /** Per-request timeout (the index build needs far more than a query). */
+  timeoutMs?: number
+  /** Extra attempts on network errors, 429 and 5xx (backoff). 0 for the request path. */
+  retries?: number
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Embedder client whose every request has a hard timeout, so a hung embedder cannot stall a
+ * request, and the bearer token (hosted embedders) on every call.
+ */
+export function createEmbedder(
+  config: Config,
+  overrides: EmbedderOverrides = {},
+): EmbedderClient {
+  const { url, model, token } = config.embedder
+  const timeoutMs = overrides.timeoutMs ?? config.embedder.timeoutMs
+  const retries = overrides.retries ?? 0
   return new EmbedderClient({
-    baseUrl: config.embedder.url,
-    model: config.embedder.model,
-    fetch: ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
-      fetch(input, {
-        ...init,
-        signal: AbortSignal.timeout(config.embedder.timeoutMs),
-      })) as typeof fetch,
+    baseUrl: url,
+    model,
+    fetch: (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      if (token) headers.set('authorization', `Bearer ${token}`)
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const res = await fetch(input, {
+            ...init,
+            headers,
+            signal: AbortSignal.timeout(timeoutMs),
+          })
+          if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+            await sleep(500 * 2 ** attempt)
+            continue
+          }
+          return res
+        } catch (e) {
+          if (attempt >= retries) throw e
+          await sleep(500 * 2 ** attempt)
+        }
+      }
+    }) as typeof fetch,
   })
 }
 

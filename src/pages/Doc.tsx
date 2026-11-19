@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BackToTop } from '@/components/doc/BackToTop'
 import { DocHistory, DocRelations } from '@/components/doc/DocFooter'
@@ -71,29 +71,38 @@ function DocView({ meta }: { meta: DocMeta }) {
   usePublishHeadings(content ? content.toc : null)
 
   // Los enlaces del Markdown (`/docs/otro`) son `<a>` planos: se navegan sin recargar la página.
-  const onClick = (e: MouseEvent) => {
-    if (e.defaultPrevented || e.button !== 0) return
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-    const a = (e.target as HTMLElement).closest('a')
-    const href = a?.getAttribute('href')
-    if (
-      !a ||
-      !href ||
-      a.target ||
-      !href.startsWith('/') ||
-      href.startsWith('//')
-    )
-      return
-    e.preventDefault()
-    void navigate(href)
-  }
+  // Delegación en el `<article>` por listener nativo: el elemento no es interactivo, el clic es
+  // de los enlaces que contiene (que ya son operables con teclado).
+  const articleRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const article = articleRef.current
+    if (!article) return
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const a = (e.target as HTMLElement).closest('a')
+      const href = a?.getAttribute('href')
+      if (
+        !a ||
+        !href ||
+        a.target ||
+        !href.startsWith('/') ||
+        href.startsWith('//')
+      )
+        return
+      e.preventDefault()
+      void navigate(href)
+    }
+    article.addEventListener('click', onClick)
+    return () => article.removeEventListener('click', onClick)
+  }, [navigate])
 
   return (
     <div className="xl:grid xl:grid-cols-[minmax(0,44rem)_13rem] xl:gap-8">
       <article
+        ref={articleRef}
         lang={meta.lang}
         className="flex min-w-0 flex-col gap-6"
-        onClick={onClick}
       >
         <PageHeader eyebrow="Documento" title={meta.title}>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
