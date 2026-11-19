@@ -5,6 +5,7 @@ import type { Retriever } from './index/search.ts'
 import type { RateLimiter } from './limits.ts'
 import type { Logger } from './log.ts'
 import type { ProjectService } from './project/service.ts'
+import type { ShareService } from './share/service.ts'
 import type { UsageReport } from './usage/report.ts'
 import type { UsageSink } from './usage/store.ts'
 import type { ViewerPort } from './viewer.ts'
@@ -29,6 +30,8 @@ export interface AppDeps {
   usage?: UsageSink | null
   /** Aggregates for the owner dashboard. Absent = `aiUsage` answers `usage_unavailable`. */
   usageReader?: { report(days: number): UsageReport } | null
+  /** Shared chats (`SHARE_DB_PATH`). Absent = the feature is off: every `share*` operation answers `share_unavailable`. */
+  share?: ShareService | null
   limiters: {
     chatViewer: RateLimiter
     chatIp: RateLimiter

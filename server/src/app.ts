@@ -19,6 +19,9 @@ type ServerLike = { requestIP(req: Request): { address: string } | null } | null
 
 const IP_RE = /^[0-9a-fA-F:.]{3,45}$/
 
+/** Largest `/graphql` body accepted (bytes). */
+const GRAPHQL_MAX_BODY = 128 * 1024
+
 export function clientIp(
   request: Request,
   server: ServerLike,
@@ -126,6 +129,13 @@ export function createApp(deps: AppDeps) {
       // Same rule as /chat: a browser request from another site is refused before it is executed.
       try {
         checkOrigin(request, config.allowedOrigins)
+        // The largest legitimate body is a shared chat (SHARE_MAX_BYTES plus the query). nginx cuts at
+        // 64 KiB in production; this keeps a direct hit on the port bounded too.
+        if (
+          Number(request.headers.get('content-length') ?? '0') >
+          GRAPHQL_MAX_BODY
+        )
+          throw new AppError('payload_too_large', 'Request body is too large.')
       } catch (e) {
         return jsonError(toAppError(e))
       }

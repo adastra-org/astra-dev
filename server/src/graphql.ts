@@ -9,6 +9,7 @@ import { AppError } from './errors.ts'
 import type { Hit } from './index/search.ts'
 import { policyFor } from './policy.ts'
 import { addProjectSchema } from './project/schema.ts'
+import { addShareSchema } from './share/schema.ts'
 import { addUsageSchema } from './usage/schema.ts'
 import type { Entitlement, Viewer } from './viewer.ts'
 
@@ -184,8 +185,11 @@ export function createSchema(deps: AppDeps) {
     }),
   })
 
+  builder.mutationType({})
+
   addProjectSchema(builder, deps)
   addUsageSchema(builder, deps)
+  addShareSchema(builder, deps)
 
   return builder.toSchema()
 }
