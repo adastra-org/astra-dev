@@ -1,6 +1,6 @@
 // Frontmatter de un documento: separación del cuerpo y validación tipada.
 import { parse } from 'yaml'
-import type { DocLang } from '../../src/lib/docs/types.ts'
+import type { DocLang, Translated } from '../../src/lib/docs/types.ts'
 
 export interface Frontmatter {
   title: string
@@ -9,6 +9,8 @@ export interface Frontmatter {
   related: string[]
   since: string
   lang: DocLang
+  /** Solo si el propio texto es una traducción (`auto` o `reviewed`). */
+  translated?: Translated
 }
 
 export class DocError extends Error {
@@ -22,7 +24,16 @@ export class DocError extends Error {
 
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const VERSION = /^\d+\.\d+\.\d+$/
-const KEYS = ['title', 'summary', 'tags', 'related', 'since', 'lang'] as const
+const KEYS = [
+  'title',
+  'summary',
+  'tags',
+  'related',
+  'since',
+  'lang',
+  'translated',
+] as const
+export const TRANSLATED = ['auto', 'reviewed'] as const
 
 /** Separa `---\nyaml\n---\ncuerpo`. Sin frontmatter es un error (todo doc lo necesita). */
 export function splitFrontmatter(
@@ -112,5 +123,23 @@ export function validateFrontmatter(file: string, data: unknown): Frontmatter {
   if (lang !== 'es' && lang !== 'en')
     throw new DocError(file, '`lang` debe ser "es" o "en"')
 
-  return { title, summary, tags, related, since, lang }
+  const translated = d.translated
+  if (
+    translated !== undefined &&
+    !(TRANSLATED as readonly unknown[]).includes(translated)
+  )
+    throw new DocError(
+      file,
+      `\`translated\` debe ser ${TRANSLATED.map((t) => `"${t}"`).join(' o ')}`,
+    )
+
+  return {
+    title,
+    summary,
+    tags,
+    related,
+    since,
+    lang,
+    ...(translated ? { translated: translated as Translated } : {}),
+  }
 }

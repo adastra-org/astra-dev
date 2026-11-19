@@ -319,6 +319,23 @@ describe('markdown', () => {
     expect(code?.type === 'code' && code.html).toContain('var(--code-token-')
   })
 
+  test('```lua run marca el bloque como ejecutable; sin el flag, no', () => {
+    const r = render(
+      '## S\n\n```lua run\nprint("hola")\n```\n\n```lua\nlocal x = 1\n```\n\n```ts run\nconst x = 1\n```\n',
+    )
+    const code = (r.sections[0]?.blocks ?? []).filter((b) => b.type === 'code')
+    expect(code.map((b) => b.type === 'code' && b.runnable === true)).toEqual([
+      true,
+      false,
+      false,
+    ])
+    expect(code.map((b) => b.type === 'code' && b.lang)).toEqual([
+      'lua',
+      'lua',
+      'ts',
+    ])
+  })
+
   test('lenguaje desconocido o ausente: texto escapado', () => {
     const r = render('## S\n\n```\n<a> & b\n```\n')
     const b = r.sections[0]?.blocks[0]

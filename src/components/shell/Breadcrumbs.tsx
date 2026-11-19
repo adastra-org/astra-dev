@@ -2,6 +2,10 @@ import { ChevronRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { docBySlug } from '@/lib/docs'
 import { crumbsFor } from '@/lib/crumbs'
+import { displayDoc } from '@/lib/docs-query'
+import { useLang } from '@/lib/use-lang'
+import { useCurrentNative } from '@/lib/natives/current'
+import { groupById } from '@/lib/natives/groups'
 
 const link =
   'text-body-sm text-ink-muted hover:bg-surface-overlay hover:text-ink flex min-h-11 items-center justify-center rounded-pill px-2 whitespace-nowrap lg:min-h-8'
@@ -13,14 +17,27 @@ const link =
  */
 export function Breadcrumbs() {
   const { pathname } = useLocation()
-  const crumbs = crumbsFor(pathname, (slug) => docBySlug(slug)?.title)
+  const { lang, tr } = useLang()
+  const native = useCurrentNative()
+  const crumbs = crumbsFor(
+    pathname,
+    (slug) => {
+      const doc = docBySlug(slug)
+      return doc && displayDoc(doc, lang).title
+    },
+    {
+      groupLabel: (id) => groupById(id)?.label,
+      current: (slug) => (native?.slug === slug ? native : undefined),
+    },
+    tr,
+  )
   const current = crumbs[crumbs.length - 1]
   const parent = crumbs[crumbs.length - 2]
   if (!current) return null
 
   return (
     <nav
-      aria-label="Migas de pan"
+      aria-label={tr('crumbs.label')}
       className="bg-surface-raised h-11 max-w-full min-w-0 rounded-pill px-1 md:px-2 lg:h-10"
     >
       <ol className="flex h-full min-w-0 items-center">
@@ -28,7 +45,7 @@ export function Breadcrumbs() {
           <li className="flex items-center md:hidden">
             <Link
               to={parent.to}
-              aria-label={`Subir a ${parent.label}`}
+              aria-label={tr('crumbs.up', { label: parent.label })}
               className={link}
             >
               …

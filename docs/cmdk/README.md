@@ -85,6 +85,10 @@ registerPaletteProvider({
 - **Iconos**: el campo `icon` es una clave de `PaletteIcon` (`types.ts`); el componente la traduce a lucide-react. Un icono nuevo se agrega ahí y en `CommandPalette.tsx`.
 - Los proveedores de IA no se registran en `registerPublicProviders`: van en su propio módulo, cargado solo cuando el usuario tenga el nivel.
 
+## Preguntar a Ether (v0.8.0)
+
+El proveedor `ask-ether` (`src/lib/ask/palette.ts`, `order` 50, `permission: subscriber`) ofrece una sola opción: con el campo vacío "Abrir Ask Ether"; al escribir, "Preguntar: «consulta»", que abre el panel y envía la pregunta. Lo ve quien tenga nivel `subscriber` o `staff`: `askStore.loadViewer` consulta `viewer { role }` por GraphQL al cargar y llama a `setPaletteAccess`. Si el server no responde, el nivel queda `public` y la opción no aparece (el botón de la barra sí abre el panel). Detalle del panel en [ask/README.md](../ask/README.md).
+
 ## Búsqueda semántica (pendiente, M3)
 
 El palette ya está preparado para sumarla; no se implementó acá porque necesita embeddings y un server (M3: índice con WeKit `embed_text`, regenerado en build, y una consulta a ese índice). Hoy la búsqueda es léxica: sin tildes ni mayúsculas, pero no entiende "la nativa para dibujar una UI".

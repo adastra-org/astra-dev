@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Braces,
   CornerDownLeft,
   FileText,
   Hash,
@@ -16,6 +17,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { tagLabel } from '@/config/tags'
 import { docs } from '@/lib/docs'
+import { MESSAGES, type MessageKey } from '@/lib/i18n'
+import { useLang } from '@/lib/use-lang'
 import { usePageHeadings } from '@/lib/palette/headings'
 import { registerPublicProviders } from '@/lib/palette/providers'
 import { loadRecents, pushRecent, saveRecents } from '@/lib/palette/recent'
@@ -36,6 +39,7 @@ const ICONS: Record<PaletteIcon, LucideIcon> = {
   tools: Wrench,
   roadmap: Milestone,
   doc: FileText,
+  natives: Braces,
   heading: Hash,
   recent: History,
   sparkles: Sparkles,
@@ -51,6 +55,7 @@ interface Props {
  * vuelve a quien lo abrió. El contenido se monta solo mientras está abierto (estado limpio).
  */
 export function CommandPalette({ open, onClose }: Props) {
+  const { tr } = useLang()
   const ref = useRef<HTMLDialogElement>(null)
   // Tras elegir un destino el foco va al contenido; con Esc o el botón, vuelve a quien abrió.
   const toContent = useRef(false)
@@ -68,11 +73,23 @@ export function CommandPalette({ open, onClose }: Props) {
     }
   }, [open])
 
+  // Un clic en el fondo cae sobre el propio `<dialog>` (el panel lo ocupa entero). Listener
+  // nativo: es un atajo de ratón, el equivalente de teclado (Esc) ya cierra por `onCancel`.
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === d) onClose()
+    }
+    d.addEventListener('click', onBackdrop)
+    return () => d.removeEventListener('click', onBackdrop)
+  }, [onClose])
+
   return (
     <dialog
       ref={ref}
       data-palette=""
-      aria-label="Buscar en Astra Dev"
+      aria-label={tr('palette.title')}
       // Esc: se cierra por estado, no por el navegador, para que `open` siga siendo la verdad.
       onCancel={(e) => {
         e.preventDefault()
@@ -80,8 +97,6 @@ export function CommandPalette({ open, onClose }: Props) {
       }}
       // Esc repetido o cierre del navegador sin `cancel`.
       onClose={() => open && onClose()}
-      // Un clic en el fondo cae sobre el propio `<dialog>` (el panel lo ocupa entero).
-      onClick={(e) => e.target === e.currentTarget && onClose()}
       className="palette-dialog bg-surface-raised text-ink border-border shadow-card backdrop:bg-brand-dark/70 mx-auto mt-[10dvh] mb-auto max-h-[min(34rem,calc(100dvh-10dvh-1rem))] w-[calc(100%-2rem)] max-w-xl flex-col overflow-hidden rounded-lg border p-0 open:flex"
     >
       {open && (
@@ -89,6 +104,11 @@ export function CommandPalette({ open, onClose }: Props) {
       )}
     </dialog>
   )
+}
+
+/** Encabezado de grupo: clave del diccionario, o el texto tal cual si no lo es. */
+function sectionLabel(label: string, tr: (k: MessageKey) => string): string {
+  return label in MESSAGES.es ? tr(label as MessageKey) : label
 }
 
 interface View {
@@ -107,6 +127,7 @@ function Body({
 }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { lang, tr } = useLang()
   const headings = usePageHeadings()
   const listId = useId()
   const [recents] = useState(loadRecents)
@@ -125,7 +146,7 @@ function Body({
     void runProviders({
       providers: listPaletteProviders(),
       query,
-      ctx: { docs, headings, pathname, recents },
+      ctx: { docs, headings, pathname, recents, lang },
       access: getPaletteAccess(),
       signal: ctl.signal,
       onResult: (id, items) => {
@@ -137,7 +158,7 @@ function Body({
         setView({ query, results: new Map(results), done: true })
     })
     return () => ctl.abort()
-  }, [query, headings, pathname, recents])
+  }, [query, headings, pathname, recents, lang])
 
   const settled = view.done && view.query === query
   const sections = buildSections(listPaletteProviders(), view.results)
@@ -156,8 +177,13 @@ function Body({
   const message = !settled
     ? ''
     : flat.length === 0
-      ? 'Sin resultados'
-      : `${flat.length} ${flat.length === 1 ? 'resultado' : 'resultados'}`
+      ? tr('palette.noResults')
+      : tr(
+          flat.length === 1 ? 'palette.resultsCount' : 'palette.resultsPlural',
+          {
+            n: flat.length,
+          },
+        )
   useEffect(() => {
     const t = setTimeout(() => setAnnounced(message), 300)
     return () => clearTimeout(t)
@@ -211,10 +237,9 @@ function Body({
             aria-hidden="true"
           />
           <input
-            autoFocus
             type="text"
             role="combobox"
-            aria-label="Buscar"
+            aria-label={tr('palette.search')}
             aria-expanded="true"
             aria-controls={listId}
             aria-autocomplete="list"
@@ -223,7 +248,7 @@ function Body({
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="go"
-            placeholder="Busca documentos, secciones y páginas"
+            placeholder={tr('palette.placeholder')}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -235,7 +260,7 @@ function Body({
         </div>
         <button
           type="button"
-          aria-label="Cerrar búsqueda"
+          aria-label={tr('palette.close')}
           onClick={onClose}
           className="text-ink-muted hover:bg-surface-overlay hover:text-ink grid size-11 shrink-0 place-items-center rounded-md"
         >
@@ -248,7 +273,7 @@ function Body({
           <ul
             id={listId}
             role="listbox"
-            aria-label="Resultados"
+            aria-label={tr('palette.results')}
             className="flex flex-col gap-2"
           >
             {sections.map((s, n) => (
@@ -259,7 +284,7 @@ function Body({
                     id={`${listId}-${s.id}`}
                     className="text-eyebrow px-3 pt-2 pb-1"
                   >
-                    {s.label}
+                    {sectionLabel(s.label, tr)}
                   </li>
                   {s.items.map((item, k) => {
                     const i = (starts[n] ?? 0) + k
@@ -282,10 +307,10 @@ function Body({
         {settled && flat.length === 0 && (
           <div className="px-3 py-8 text-center">
             <p className="text-body text-ink">
-              Sin resultados para «{query.trim()}».
+              {tr('palette.empty', { query: query.trim() })}
             </p>
             <p className="text-body-sm text-ink-muted mt-1">
-              Prueba con otro término o con una parte del nombre.
+              {tr('palette.emptyHint')}
             </p>
           </div>
         )}
@@ -297,17 +322,23 @@ function Body({
 
       <div className="text-body-sm text-ink-muted hidden shrink-0 items-center gap-4 px-4 py-2 pointer-fine:flex">
         <span className="inline-flex items-center gap-2">
-          <Shortcut keys={['↑', '↓']} label="Flechas arriba y abajo" /> navegar
+          <Shortcut keys={['↑', '↓']} label={tr('palette.arrows')} />{' '}
+          {tr('palette.navigate')}
         </span>
         <span className="inline-flex items-center gap-2">
-          <Shortcut keys={['Inicio', 'Fin']} label="Inicio y Fin" /> extremos
+          <Shortcut
+            keys={lang === 'es' ? ['Inicio', 'Fin'] : ['Home', 'End']}
+            label={tr('palette.homeEnd')}
+          />{' '}
+          {tr('palette.jump')}
         </span>
         <span className="inline-flex items-center gap-2">
           <CornerDownLeft className="size-4" aria-hidden="true" />
-          <span className="sr-only">Intro</span> abrir
+          <span className="sr-only">{tr('palette.enter')}</span>{' '}
+          {tr('palette.open')}
         </span>
         <span className="inline-flex items-center gap-2">
-          <Shortcut keys={['Esc']} label="Esc" /> cerrar
+          <Shortcut keys={['Esc']} label="Esc" /> {tr('palette.closeKey')}
         </span>
       </div>
     </>
@@ -328,6 +359,7 @@ function Option({
   onChoose: () => void
 }) {
   const Icon = ICONS[item.icon]
+  const { lang, tr } = useLang()
   return (
     <li
       id={id}
@@ -355,13 +387,17 @@ function Option({
         )}
       </span>
       {item.tags && item.tags.length > 0 && (
-        <span className="flex shrink-0 gap-1" role="group" aria-label="Tags">
+        <span
+          className="flex shrink-0 gap-1"
+          role="group"
+          aria-label={tr('palette.tags')}
+        >
           {item.tags.map((t) => (
             <span
               key={t}
               className="text-data text-ink-muted bg-surface-sunken rounded-sm px-2 py-1 whitespace-nowrap uppercase"
             >
-              {tagLabel(t)}
+              {tagLabel(t, lang)}
             </span>
           ))}
         </span>

@@ -1,5 +1,18 @@
-import { Check, Copy } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Check,
+  CircleAlert,
+  Copy,
+  ListChecks,
+  LoaderCircle,
+  Play,
+  Sparkles,
+  Square,
+  TriangleAlert,
+} from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { Diagnostic } from '@/lib/sandbox/lint'
+import type { RunResult } from '@/lib/sandbox/run'
+import { useLang } from '@/lib/use-lang'
 
 interface Props {
   code: string
@@ -7,14 +20,59 @@ interface Props {
   lang?: string
   /** HTML ya resaltado del interior de `<code>` (lo genera el build). Sin él, texto plano. */
   html?: string
+  /** `lua run` en el Markdown: muestra Ejecutar, Revisar y Formatear (M4). */
+  runnable?: boolean
+  /** El código se puede editar a mano (el playground de /tools). Sin esto, solo Formatear lo cambia. */
+  editable?: boolean
+  /** Sin borde propio: el bloque vive dentro de un contenedor que ya lo tiene (un borde por nivel). */
+  bare?: boolean
 }
 
-export function CodeBlock({ code, lang, html }: Props) {
+type ToolBusy = 'lint' | 'format' | null
+
+const LIMIT_KEY = {
+  time: 'code.limit.time',
+  instructions: 'code.limit.instructions',
+  memory: 'code.limit.memory',
+  output: 'code.limit.output',
+} as const
+
+const ms = (n: number) => `${Math.round(n)} ms`
+
+/** El bloque de código. `CodeBlock` no sabe ejecutar: carga el sandbox solo al pulsar. */
+export function CodeBlock({
+  code,
+  lang,
+  html,
+  runnable,
+  editable = false,
+  bare = false,
+}: Props) {
+  const { tr } = useLang()
   const [copied, setCopied] = useState(false)
+  const [edited, setEdited] = useState<string | null>(null)
+  const [running, setRunning] = useState(false)
+  const [lines, setLines] = useState<string[]>([])
+  const [result, setResult] = useState<RunResult | null>(null)
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[] | null>(null)
+  const [toolBusy, setToolBusy] = useState<ToolBusy>(null)
+  const [toolError, setToolError] = useState<string | null>(null)
+  const alive = useRef(true)
+  const cancelRun = useRef<(() => void) | null>(null)
+  const text = edited ?? code
+
+  // Al desmontar (navegación): se mata el worker y no se escribe estado.
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      cancelRun.current?.()
+    }
+  }, [])
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(code)
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -22,35 +80,447 @@ export function CodeBlock({ code, lang, html }: Props) {
     }
   }
 
+  // Sin `finally`: el compilador de React no lo soporta. Cada intento devuelve su resultado y el
+  // llamador limpia el estado después, solo si el componente sigue montado.
+  const attemptRun = async (): Promise<RunResult | null> => {
+    try {
+      const { runLua } = await import('@/lib/sandbox/run')
+      if (!alive.current) return null
+      const handle = runLua(text, (_line, all) => {
+        if (alive.current) setLines([...all])
+      })
+      cancelRun.current = handle.cancel
+      const r = await handle.result
+      cancelRun.current = null
+      return r
+    } catch (e) {
+      return crashResult(e, tr)
+    }
+  }
+
+  const run = async () => {
+    if (running) return
+    setRunning(true)
+    setLines([])
+    setResult(null)
+    setDiagnostics(null)
+    setToolError(null)
+    const r = await attemptRun()
+    if (!alive.current) return
+    if (r) setResult(r)
+    setRunning(false)
+  }
+
+  const stop = () => cancelRun.current?.()
+
+  const attemptLint = async () => {
+    try {
+      const { lint } = await import('@/lib/sandbox/tools')
+      return await lint(text)
+    } catch {
+      return loadFailure(tr)
+    }
+  }
+
+  const review = async () => {
+    if (toolBusy) return
+    setToolBusy('lint')
+    setToolError(null)
+    const r = await attemptLint()
+    if (!alive.current) return
+    if (r.ok) setDiagnostics(r.value)
+    else setToolError(r.message)
+    setToolBusy(null)
+  }
+
+  const attemptFormat = async () => {
+    try {
+      const { format: formatLua } = await import('@/lib/sandbox/tools')
+      return await formatLua(text)
+    } catch {
+      return loadFailure(tr)
+    }
+  }
+
+  const format = async () => {
+    if (toolBusy || running) return
+    setToolBusy('format')
+    setToolError(null)
+    const r = await attemptFormat()
+    if (!alive.current) return
+    if (!r.ok) {
+      setToolError(r.message)
+    } else if (r.value.formatted) {
+      setEdited(r.value.code)
+      setDiagnostics(null)
+    } else {
+      setDiagnostics([r.value.diagnostic])
+    }
+    setToolBusy(null)
+  }
+
+  const output =
+    result !== null || lines.length > 0
+      ? { result, lines }
+      : running
+        ? { result: null, lines }
+        : null
+
   return (
-    <figure className="code-fig bg-surface-sunken border-border max-w-3xl min-w-0 overflow-hidden rounded-md border">
-      <figcaption className="flex min-h-11 items-center justify-between px-4">
-        <span className="text-data text-ink-subtle uppercase">
-          {lang ?? 'texto'}
-        </span>
-        <button
-          type="button"
-          onClick={copy}
-          className="text-label text-ink-muted hover:bg-surface-raised hover:text-ink -mr-2 flex min-h-11 items-center gap-2 rounded-md px-3 md:min-h-8"
+    <figure
+      className={[
+        'code-fig bg-surface-sunken max-w-3xl min-w-0 overflow-hidden rounded-md',
+        bare ? '' : 'border-border border',
+      ].join(' ')}
+    >
+      <CodeToolbar
+        lang={lang}
+        runnable={runnable}
+        running={running}
+        toolBusy={toolBusy}
+        copied={copied}
+        onRun={run}
+        onStop={stop}
+        onReview={review}
+        onFormat={format}
+        onCopy={copy}
+      />
+      <CodeBody
+        text={text}
+        html={edited === null ? html : undefined}
+        editable={editable}
+        onEdit={setEdited}
+      />
+      {output && (
+        <OutputRegion
+          result={output.result}
+          lines={output.lines}
+          running={running}
+        />
+      )}
+      {diagnostics !== null && <Diagnostics list={diagnostics} />}
+      {toolError !== null && (
+        <p
+          role="alert"
+          className="border-border text-body-sm text-warning flex items-start gap-2 border-t px-4 py-3"
         >
-          {copied ? (
-            <Check className="text-success size-4" aria-hidden="true" />
-          ) : (
-            <Copy className="size-4" aria-hidden="true" />
-          )}
-          {copied ? 'Copiado' : 'Copiar'}
-        </button>
-      </figcaption>
-      <pre className="text-code text-ink overflow-x-auto p-4" tabIndex={0}>
-        {html === undefined ? (
-          <code>{code}</code>
-        ) : (
-          <code dangerouslySetInnerHTML={{ __html: html }} />
-        )}
-      </pre>
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          {toolError}
+        </p>
+      )}
       <span className="sr-only" role="status">
-        {copied ? 'Código copiado al portapapeles' : ''}
+        {copied ? tr('code.copiedStatus') : ''}
       </span>
     </figure>
+  )
+}
+
+type Tr = ReturnType<typeof useLang>['tr']
+
+/** Un fallo al correr: el mensaje del error, o "no cargó el sandbox" si no es un `Error`. */
+function crashResult(e: unknown, tr: Tr): RunResult {
+  const isError = e instanceof Error
+  return {
+    status: 'crash',
+    message: isError ? e.message : tr('code.crash.load'),
+    ...(isError ? {} : { reason: 'load' as const }),
+    ms: 0,
+    lines: [],
+  }
+}
+
+const loadFailure = (tr: Tr) => ({
+  ok: false as const,
+  message: tr('code.crash.load'),
+})
+
+function CodeToolbar({
+  lang,
+  runnable,
+  running,
+  toolBusy,
+  copied,
+  onRun,
+  onStop,
+  onReview,
+  onFormat,
+  onCopy,
+}: {
+  lang?: string
+  runnable?: boolean
+  running: boolean
+  toolBusy: ToolBusy
+  copied: boolean
+  onRun: () => void
+  onStop: () => void
+  onReview: () => void
+  onFormat: () => void
+  onCopy: () => void
+}) {
+  const { tr } = useLang()
+  return (
+    <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-1">
+      <span className="text-data text-ink-subtle uppercase">
+        {lang ?? tr('code.text')}
+      </span>
+      <div className="flex flex-wrap items-center justify-end gap-1">
+        {runnable &&
+          (running ? (
+            <ToolButton
+              icon={Square}
+              label={tr('code.stop')}
+              onClick={onStop}
+            />
+          ) : (
+            <ToolButton icon={Play} label={tr('code.run')} onClick={onRun} />
+          ))}
+        {runnable && !running && (
+          <>
+            <ToolButton
+              icon={toolBusy === 'lint' ? LoaderCircle : ListChecks}
+              label={tr('code.lint')}
+              onClick={onReview}
+              busy={toolBusy === 'lint'}
+            />
+            <ToolButton
+              icon={toolBusy === 'format' ? LoaderCircle : Sparkles}
+              label={tr('code.format')}
+              onClick={onFormat}
+              busy={toolBusy === 'format'}
+            />
+          </>
+        )}
+        <ToolButton
+          icon={copied ? Check : Copy}
+          label={copied ? tr('code.copied') : tr('code.copy')}
+          onClick={onCopy}
+          tone={copied ? 'success' : undefined}
+        />
+      </div>
+    </figcaption>
+  )
+}
+
+/** El código: textarea si se edita a mano, `<pre>` si no. `html` solo viene sin editar. */
+function CodeBody({
+  text,
+  html,
+  editable,
+  onEdit,
+}: {
+  text: string
+  html?: string
+  editable: boolean
+  onEdit: (v: string) => void
+}) {
+  const { tr } = useLang()
+  if (editable)
+    return (
+      <textarea
+        value={text}
+        onChange={(e) => onEdit(e.target.value)}
+        aria-label={tr('code.editor')}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        rows={Math.min(24, Math.max(8, text.split('\n').length + 1))}
+        className="text-code text-ink block w-full resize-y bg-transparent p-4 whitespace-pre outline-none"
+      />
+    )
+  return (
+    <pre className="text-code text-ink overflow-x-auto p-4" tabIndex={0}>
+      {html !== undefined ? (
+        <code dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <code>{text}</code>
+      )}
+    </pre>
+  )
+}
+
+function OutputRegion({
+  result,
+  lines,
+  running,
+}: {
+  result: RunResult | null
+  lines: string[]
+  running: boolean
+}) {
+  const { tr } = useLang()
+  return (
+    <div
+      role="region"
+      aria-label={tr('code.output')}
+      className="border-border bg-surface border-t px-4 py-3"
+    >
+      <div role="status" aria-live="polite">
+        <Status result={result} running={running} />
+      </div>
+      {lines.length > 0 && (
+        <pre className="text-code text-ink-muted mt-2 overflow-x-auto whitespace-pre-wrap">
+          {lines.join('\n')}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+function ToolButton({
+  icon: Icon,
+  label,
+  onClick,
+  busy,
+  tone,
+}: {
+  icon: typeof Play
+  label: string
+  onClick: () => void
+  busy?: boolean
+  tone?: 'success'
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-label flex min-h-11 items-center gap-2 rounded-md px-3 hover:bg-surface-raised hover:text-ink md:min-h-8 ${
+        tone === 'success' ? 'text-success' : 'text-ink-muted'
+      }`}
+    >
+      <Icon
+        className={`size-4 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`}
+        aria-hidden="true"
+      />
+      {label}
+    </button>
+  )
+}
+
+/** Qué pasó, en una línea. El detalle del error va aparte, debajo de la salida. */
+function Status({
+  result,
+  running,
+}: {
+  result: RunResult | null
+  running: boolean
+}): ReactNode {
+  const { tr } = useLang()
+  if (running)
+    return (
+      <p className="text-body-sm text-ink-subtle flex items-center gap-2">
+        <LoaderCircle
+          className="size-4 animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        {tr('code.running')}
+      </p>
+    )
+  if (result === null) return null
+  if (result.status === 'finished') {
+    const o = result.outcome
+    if (o.status === 'ok')
+      return (
+        <p className="text-body-sm text-success flex items-center gap-2">
+          <Check className="size-4" aria-hidden="true" />
+          {tr('code.ok')} · {ms(result.ms)}
+          {result.lines.length === 0 && (
+            <span className="text-ink-subtle">{tr('code.noOutput')}</span>
+          )}
+        </p>
+      )
+    if (o.status === 'limit')
+      return (
+        <p className="text-body-sm text-warning flex items-start gap-2">
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0"
+            aria-hidden="true"
+          />
+          {tr(LIMIT_KEY[o.reason])} · {ms(result.ms)}
+        </p>
+      )
+    return (
+      <div className="text-body-sm flex flex-col gap-1">
+        <p className="text-warning flex items-center gap-2">
+          <TriangleAlert className="size-4" aria-hidden="true" />
+          {o.line !== null
+            ? tr('code.errorLine', { line: o.line })
+            : tr('code.error')}
+          <span className="text-ink-subtle">· {ms(result.ms)}</span>
+        </p>
+        <pre className="text-code text-ink-muted overflow-x-auto whitespace-pre-wrap">
+          {o.message}
+        </pre>
+      </div>
+    )
+  }
+  if (result.status === 'timeout')
+    return (
+      <p className="text-body-sm text-warning flex items-start gap-2">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        {tr('code.timeout')} · {ms(result.ms)}
+      </p>
+    )
+  if (result.status === 'cancelled')
+    return (
+      <p className="text-body-sm text-ink-muted flex items-center gap-2">
+        <Square className="size-3.5" aria-hidden="true" />
+        {tr('code.cancelled')} · {ms(result.ms)}
+      </p>
+    )
+  return (
+    <p className="text-body-sm text-warning flex items-start gap-2">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      {result.reason ? tr(`code.crash.${result.reason}`) : result.message}
+    </p>
+  )
+}
+
+function Diagnostics({ list }: { list: Diagnostic[] }) {
+  const { tr } = useLang()
+  return (
+    <div
+      role="region"
+      aria-label={tr('code.review')}
+      className="border-border bg-surface border-t px-4 py-3"
+    >
+      {list.length === 0 ? (
+        <p className="text-body-sm text-success flex items-center gap-2">
+          <Check className="size-4" aria-hidden="true" />
+          {tr('code.noFindings')}
+        </p>
+      ) : (
+        <ul className="text-body-sm flex flex-col gap-2">
+          {list.map((d) => (
+            <li
+              key={`${d.line}:${d.column}:${d.code ?? d.message}`}
+              className="flex items-start gap-2"
+            >
+              <TriangleAlert
+                className={`mt-0.5 size-4 shrink-0 ${
+                  d.severity === 'error' ? 'text-warning' : 'text-ink-subtle'
+                }`}
+                aria-hidden="true"
+              />
+              <span>
+                <span className="text-data text-ink-subtle mr-2 uppercase">
+                  {d.severity === 'error'
+                    ? tr('code.error')
+                    : tr('code.warning')}{' '}
+                  · {d.line}:{d.column}
+                </span>
+                {d.code && d.name
+                  ? tr(
+                      d.code === 'unavailable'
+                        ? 'code.lint.unavailable'
+                        : 'code.lint.unusedLocal',
+                      { name: d.name },
+                    )
+                  : d.message}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

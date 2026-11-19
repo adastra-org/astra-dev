@@ -1,6 +1,6 @@
-# Server de Ask Ether (M3, v0.4.0)
+# Server de Ask Ether (M3, v0.4.0; caché de respuestas v0.8.0)
 
-Mitad servidor del chat de solo lectura sobre la documentación. Vive en [`server/`](../../server/) como paquete Bun aparte (su propio `package.json` y `bun.lock`). La UI (paleta Ctrl+K, panel del chat) es otra tarea y consume los endpoints de abajo.
+Mitad servidor del chat de solo lectura sobre la documentación. Vive en [`server/`](../../server/) como paquete Bun aparte (su propio `package.json` y `bun.lock`). La UI (panel del chat, entrada en la paleta Ctrl+K) está en [ask/README.md](../ask/README.md) y consume los endpoints de abajo.
 
 ```
 browser ──► nginx ──► /api/*  ──► astra-dev@<slot> (Bun, 127.0.0.1:4101|4102)
@@ -44,47 +44,72 @@ El chat público **nunca** se conecta a Ether/Hermes (tiene shell y sudo en el V
 
 ## Endpoints
 
-| Ruta       | Método | Acceso                       | Qué                                                                                                                                                                        |
-| ---------- | ------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                              |
-| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                       |
-| `/graphql` | POST   | público                      | `viewer { id handle role emailVerified entitlements { kind validUntil } }`, `searchDocs(q, limit) { mode degraded hits { slug title heading anchor path excerpt score } }` |
-| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?}`. Respuesta SSE                                                                                                                               |
+| Ruta       | Método | Acceso                       | Qué                                                                                                                                                                                                                                                                          |
+| ---------- | ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`  | GET    | público (loopback en deploy) | `{"ok":true}`                                                                                                                                                                                                                                                                |
+| `/ready`   | GET    | idem                         | `{ok, sha, version, slot, index:{chunks, semantic, model, builtAt, sourceHash}, llm}`. **503** si el índice no cargó                                                                                                                                                         |
+| `/graphql` | POST   | público                      | `viewer { … }`, `searchDocs(q, limit, kind) { mode degraded hits { kind slug title heading anchor path excerpt score } }` (`kind`: `doc` o `native`), `native(q) { id name luaName ns apiset source hashes signature path }` (búsqueda exacta por nombre, nombre Lua o hash) |
+| `/chat`    | POST   | `subscriber` o `staff`       | Cuerpo `{question, history?, memories?, style?, sources?, lang?}`. Respuesta SSE                                                                                                                                                                                             |
 
 `/graphql` no expone el texto completo de los fragmentos (solo extracto). `q` tiene tope de 200 caracteres y `limit` de 10.
 
 ### `POST /chat`
 
-Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
+Cuerpo: `{"question": "texto", "history": [{"role":"user|assistant","content":"..."}], "memories": ["preferencia"], "style": {"tone":"formal","length":"brief"}, "sources": ["get-vehicle-class"]}`. Errores previos al stream son JSON `{"error":{"code","message","retryAfter?"}}` con el estado HTTP; una vez que empieza el stream, un fallo llega como evento `error`.
 
-| Estado | `code`                  | Cuándo                                                |
-| ------ | ----------------------- | ----------------------------------------------------- |
-| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, tipo MIME |
-| 401    | `unauthenticated`       | Sin sesión                                            |
-| 403    | `subscription_required` | Con sesión pero rol `public`                          |
-| 403    | `forbidden_origin`      | `Origin` no permitido                                 |
-| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                    |
-| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                   |
-| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)      |
-| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)               |
-| 503    | `viewer_unavailable`    | Cuentas no responde                                   |
-| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                  |
+| Estado | `code`                  | Cuándo                                                                                                                |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 400    | `bad_request`           | JSON inválido, `question` vacía o no texto, `memories`, `style` o `sources` mal formados o sobre sus topes, tipo MIME |
+| 401    | `unauthenticated`       | Sin sesión                                                                                                            |
+| 403    | `subscription_required` | Con sesión pero rol `public`                                                                                          |
+| 403    | `forbidden_origin`      | `Origin` no permitido                                                                                                 |
+| 413    | `payload_too_large`     | Cuerpo sobre `CHAT_MAX_BODY_BYTES`                                                                                    |
+| 429    | `rate_limited`          | Rate limit (cabecera `Retry-After`)                                                                                   |
+| 429    | `budget_exceeded`       | Presupuesto diario de tokens (resetea 00:00 UTC)                                                                      |
+| 502    | `llm_unavailable`       | (como evento `error` dentro del stream)                                                                               |
+| 503    | `viewer_unavailable`    | Cuentas no responde                                                                                                   |
+| 503    | `index_unavailable`     | `data/index.json` ausente o inválido                                                                                  |
+
+**`memories` (opcional, v0.16.0).** Lista de preferencias del usuario que el cliente guarda en su navegador y manda con cada pregunta. Validación estricta, sin recorte silencioso: tiene que ser un array de strings, como mucho 12, cada una de 1 a 280 caracteres (después de limpiar caracteres invisibles y de control), 2000 caracteres entre todas. Ausente, `null` o `[]` equivale a no mandar nada; cualquier otra forma o exceso es `400 bad_request` antes de buscar o llamar al modelo. Los topes valen también para `owner` (son el formato del campo, no una política de uso); `CHAT_MAX_BODY_BYTES` sigue aplicando al cuerpo completo.
+
+- Van al modelo en un bloque propio `<memorias>` (una línea `- texto` por memoria, escapado con `escapeData`), entre `<entorno>` y `<contexto>`. Son dato del usuario: la regla 9 del prompt dice que solo adaptan tono y formato, no son fuentes citables y no cambian las reglas.
+- **No se cachean**: con memorias la respuesta ni se lee ni se guarda en la caché (la clave no las incluye a propósito).
+- **No se loguean**: el log de la request lleva solo `memories: <cantidad>`; ni el log ni `usage_events` tienen el texto. Probado en `server/tests/memories.test.ts`.
+- No cuentan para `CHAT_CONTEXT_MAX_CHARS` (eso recorta fuentes): se suman aparte, como mucho 2000 caracteres (unos 700 tokens).
+
+**`style` (opcional, v0.19.1).** Tono y largo de la respuesta, elegidos en el onboarding del chat (`/ask`). Es una preferencia **acotada**, nunca texto libre: un objeto plano `{ tone?, length? }` donde `tone` es `neutral` | `formal` | `cercano` y `length` es `brief` | `balanced` | `detailed`. Validación estricta: cualquier otra forma, una clave de más o un valor fuera del enum es `400 bad_request` antes de buscar o llamar al modelo. Ausente, `null` o `{}` equivale a `neutral`/`balanced`, que es el comportamiento de antes. Código: `server/src/chat/style.ts`.
+
+- Va al modelo en un bloque propio `<estilo>` (entre `<memorias>` y `<contexto>`) con frases fijas que el server elige a partir del enum (`tono: ...`, `largo: ...`), escapado con `escapeData`. Con los valores por defecto no hay bloque. La regla 10 del prompt dice que solo cambia la forma (no son fuentes, no se citan, no cambian las reglas) y que `brief`/`detailed` sustituyen el máximo de palabras de la regla 6 (120 / 400).
+- **Caché**: el estilo cambia la respuesta, así que entra a la clave (`context`) cuando no es el por defecto: el mismo texto con otro tono no comparte entrada. Con los valores por defecto la clave es la de siempre. A diferencia de `memories`, no apaga la caché: son pocos valores, no datos del usuario.
+- **Log**: la request lleva `style: "tono/largo"` (solo los enums) cuando no es el por defecto. No va a `usage_events`.
+- El nombre y el color que se eligen en el onboarding **no** viajan: se quedan en el navegador.
+
+**`sources` (opcional, v0.17.1).** Slugs de las fuentes que citó la respuesta anterior (los `slug` del evento `sources`). Sirve para los follow-ups: "explicame eso", "y cómo lo uso?", "dame un ejemplo". Validación estricta: array de strings, como mucho 8, cada una de hasta 160 caracteres con la forma de un slug (`[A-Za-z0-9][A-Za-z0-9._/-]*`); duplicados se juntan; ausente, `null` o `[]` es no mandar nada; cualquier otra forma es `400 bad_request`. Un slug desconocido no encuentra nada ni falla el pedido. El server solo los usa como filtro del índice, nunca como texto.
+
+- **Cuándo cuentan**: solo si la pregunta depende de la charla (hay `history` y el decider no dijo "standalone"; sin decider o sin respuesta del decider cuenta como dependiente). Con `history` vacío o decider en `false`, se ignoran.
+- **Qué hacen**: se rankean aparte, dentro de esos slugs, con la consulta (turno anterior + pregunta), hasta 4 fragmentos, y van primero en `<contexto>`. El gate no los descarta (es lo que se acaba de hablar), y a los demás fragmentos el gate los juzga con la consulta completa, no con "explicame eso" a secas.
+- **Sin fuentes**: si no llegan `sources` la búsqueda sigue con el turno anterior en la consulta. Si aun así no hay ningún fragmento pero la pregunta es un follow-up de una respuesta real del asistente (no un rechazo), el modelo se llama igual con `<historial>` como material; la regla 1 del prompt le permite reformular, ampliar o ilustrar lo ya dicho, no agregar hechos. Sin charla previa, o tras un rechazo, o con una pregunta de otro tema (decider `false`), sigue el rechazo sin llamar al modelo.
+- Cubierto en `server/tests/followup.test.ts`.
 
 Eventos SSE (`Content-Type: text/event-stream`, `X-Accel-Buffering: no`, `X-Request-Id`):
 
 ```
-event: meta     data: {"requestId":"…","mode":"semantic|keyword","degraded":false}
+event: meta     data: {"requestId":"…","mode":"semantic|keyword","degraded":false,"contextWindow":65536}   (contextWindow: `LLM_CONTEXT_WINDOW`; el cliente lo muestra como presupuesto)
+event: step     data: {"step":{"id":"history|search|gate|cache","ms":12,…}}   (0 a 4, antes de `sources`)
+event: thinking data: {"text":"…"}                      (solo staff, entre `sources` y los `delta`)
 event: sources  data: {"sources":[{"n":1,"slug":"…","title":"…","heading":"…","anchor":"…","path":"/docs/slug#anchor","excerpt":"…","score":0.71}]}
 event: delta    data: {"text":"…"}                      (muchos)
-event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"usage":{"inputTokens":…,"outputTokens":…}}
+event: done     data: {"cited":[1,2],"refused":false,"truncated":false,"cached":true,"usage":{"inputTokens":…,"outputTokens":…},"usageEstimated":false,"tps":125.4}   (`cached` solo si salió de la caché; `usageEstimated` true cuando el proveedor no informó uso; `tps` solo con un modelo local, v0.19.2: tokens por segundo que midió el propio modelo, razonamiento incluido. Ausente = no se informa y el cliente no la inventa)
 event: error    data: {"code":"llm_unavailable","message":"…"}   (en lugar de done)
 ```
+
+`step` cuenta lo que hizo el pipeline antes del modelo, solo con números y tiempos (nunca contenido): `history` (`usedHistory`), `search` (`mode`, `docs`, `natives`), `gate` (`kept`, `total`) y `cache` (la respuesta salió de la caché; se suma a los pasos de la búsqueda). Lo ve cualquier viewer. `thinking` es el razonamiento que el proveedor expone (`reasoning_content`); el server lo reenvía **solo a `staff`**, hasta `CHAT_MAX_THINKING_CHARS`, y nunca entra a la respuesta, a la caché ni al historial. Un cliente viejo ignora los dos eventos. La búsqueda ocurre antes de abrir el stream, así que los `step` llegan juntos al empezar; lo que se ve en vivo durante la espera es el razonamiento y el estado "escribiendo".
 
 La respuesta cita con `[n]`; `n` indexa `sources`. `path` es el enlace al sitio (`slug` + ancla del encabezado). Idioma: español por defecto, inglés si la pregunta está en inglés.
 
 ## Permisos
 
-`Viewer = { id, handle, role: 'public' | 'subscriber' | 'staff', emailVerified, entitlements: [{ kind, validUntil }] }`, resuelto por el puerto `ViewerPort` (`server/src/viewer.ts`). El contrato de cuentas está en `docs/accounts/README.md` de `adastra-site` (PR #21):
+`Viewer = { id, handle, role: 'public' | 'subscriber' | 'staff' | 'owner', emailVerified, entitlements: [{ kind, validUntil }] }`, resuelto por el puerto `ViewerPort` (`server/src/viewer.ts`). El contrato de cuentas está en `docs/accounts/README.md` de `adastra-site` (PR #21):
 
 - **`HttpViewerPort`** (producción): reenvía solo la cabecera `Cookie` a `GET {ACCOUNTS_BASE_URL}{ACCOUNTS_VIEWER_PATH}` (por defecto `https://adastrarp.com/api/auth/viewer`). `401/403/404` = anónimo. Error de red o 5xx = `viewer_unavailable`. Caché en memoria de 5 s por cookie (cuentas pide pocos segundos como máximo: una sesión o entitlement revocado puede seguir 5 s).
 - **`DevStubViewerPort`**: `ASTRA_DEV_VIEWER=public|subscriber|staff`. Ignorado en producción.
@@ -107,7 +132,31 @@ Cuentas solo lista entitlements activos; aun así se descartan los vencidos. `em
 
 > El contrato sale del doc de cuentas (PR #21 de `adastra-site`, aún abierto). Si cambia, solo cambia `parseViewer`.
 
-Hoy `subscriber` y `staff` pueden chatear. `staff` read-write queda para cuando haya herramientas de escritura (no las hay: el chat es de solo lectura).
+Hoy `subscriber`, `staff` y `owner` pueden chatear. `staff` read-write queda para cuando haya herramientas de escritura (no las hay: el chat es de solo lectura).
+
+### Dashboard de IA (v0.14.0)
+
+`aiUsage(days)` (GraphQL, solo `owner`) devuelve los agregados del registro de uso: totales, tokens y GPU por día, por modelo, top 10 de usuarios y resultados. Errores: `unauthenticated`, `owner_required`, `usage_unavailable` (sin `USAGE_DB_PATH`). `days` va de 1 a 180. La página es `/dashboard`, ver [chat/README.md](../chat/README.md).
+
+### Rol `owner` (v0.13.0)
+
+`owner` no viene de cuentas: es un rol del server que exige dos cosas a la vez, `OWNER_IDS` (ids separados por comas) **y** `role: staff` en cuentas (`OwnerOverlayViewerPort`, sobre el puerto de cuentas). Quitar staff en cuentas revoca owner dentro de la caché de 5 s; `OWNER_IDS` vacío = nadie es owner; una entrada mal formada hace fallar el arranque. `owner` implica todo lo de staff (`atLeast(role, 'staff')`, un solo helper para los chequeos).
+
+Qué se saltea, decidido en un solo lugar (`server/src/policy.ts`, `policyFor`):
+
+| Límite                                                                                         | Owner                                               | Resto   |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------- |
+| Rate limits (chat por viewer e IP, search, project)                                            | no aplican                                          | aplican |
+| Presupuesto diario de tokens, por viewer y global                                              | no aplica, y sus tokens no consumen el de los demás | aplica  |
+| `CHAT_MAX_QUESTION_CHARS`, `CHAT_MAX_HISTORY_*`, `CHAT_MAX_OUTPUT_*`, `CHAT_CONTEXT_MAX_CHARS` | techos altos fijos (`OWNER_CHAT_SETTINGS`)          | aplican |
+| `CHAT_MAX_BODY_BYTES`                                                                          | aplica (protege al server)                          | aplica  |
+| Circuito del embedder (30 s) y caché                                                           | aplican                                             | aplican |
+
+El único freno del owner es `OWNER_MAX_ROUNDS` (8): rondas internas (herramientas, subagents) en un mensaje antes de pedir confirmación para seguir. El contador y el evento SSE `confirm` llegan con las fases 2 y 5; hoy solo existe en la política. Ver [chat/README.md](../chat/README.md).
+
+### Registro de uso (v0.13.0)
+
+Con `USAGE_DB_PATH` el server guarda una fila por request de `/chat` en SQLite (`server/src/usage/`, WAL, compartido por blue y green): quién (id, handle, rol), proveedor y modelo, si hubo fallback, tokens, `ttft_ms`, duración, `gen_tps`, resultado (`ok`, `cached`, `refused`, `rate_limited`, `budget_exceeded`, …), caché, `gpu_ms` (solo modelos locales, de los `timings` de llama.cpp) y costo estimado (solo DeepSeek). **Nunca** la pregunta, la respuesta, fragmentos, IP ni secretos. Las peticiones anónimas no se registran. Las filas se encolan en memoria y se escriben por lotes en una transacción (cada 250 ms o 100 filas, y al apagar el server), así que la escritura no está en la ruta de la request; si el disco se traba, la cola tiene tope (5.000) y descarta las más viejas contándolas. Un fallo de escritura nunca rompe la respuesta. El handler solo conoce la interfaz `UsageSink`: cambiar SQLite por otro almacén (Postgres, un colector HTTP) no toca el chat. Se purga a los `USAGE_RETENTION_DAYS` al arrancar.
 
 ## Índice semántico
 
@@ -115,47 +164,87 @@ Hoy `subscriber` y `staff` pueden chatear. `staff` read-write queda para cuando 
 cd server && bun run index        # o: bun --cwd server run index
 ```
 
-Lee `content/docs/**/*.md` (`DOCS_DIR`), parte cada doc por encabezado (`##` y `###`, con la introducción y el `summary` como primer fragmento; bloques largos se parten por bloque) y escribe `server/data/index.json` (`INDEX_PATH`, ignorado por git):
+Lee `content/docs/**/*.md` (`DOCS_DIR`) y el corpus del importador en `content/generated/` (`GENERATED_DIR`; los docs de fivem-docs y los natives, ver [import/README.md](../import/README.md); correr `bun run import` en la raíz antes. Si no existe, el índice sale solo con docs y avisa). Parte cada doc por encabezado (`##` y `###`, con la introducción y el `summary` como primer fragmento; bloques largos se parten por bloque), arma **un fragmento por native** y escribe `server/data/index.json` (`INDEX_PATH`, ignorado por git) más, si es semántico, `server/data/index.vec` con los vectores (Float32, orden de `chunks`, `dims` por fragmento; el hash del `.vec` está en el JSON y el server rechaza un par de generaciones distintas):
 
 ```
-{ version: 1, builtAt, sourceHash, model, dims, semantic, chunks: [{ id, slug, title, heading, anchor, text, excerpt, vector? }] }
+{ version: 3, builtAt, sourceHash, model, dims, semantic, vectors: { file, bytes, hash } | null,
+  chunks: [{ id, kind, native?, slug, title, heading, anchor, text, excerpt }] }
 ```
+
+- `kind` es `doc` (página bajo `/docs`, con `anchor`) o `native` (página `/natives/<slug>`, sin ancla). Un fragmento `native` lleva `native`: `id`, nombre, nombre Lua, `ns`, `apiset`, hashes, alias y firma. El texto empieza por los nombres y la firma, que es lo que se busca, y se corta a 2400 caracteres (los ejemplos largos primero).
+- Con 7.326 natives el índice completo tiene ~10.000 fragmentos y ~10 MB sin vectores. Se genera en menos de 1 s por palabras clave.
 
 - Los vectores salen de `@wefaber/embed` (`EmbedderClient`), truncados (Matryoshka) a `EMBEDDER_DIMS` (256) y normalizados. Documento y consulta usan los prefijos de tarea de EmbeddingGemma (`server/src/index/prompts.ts`); si cambia el modelo, se cambian ahí y se regenera.
+- Los vectores pueden calcularse fuera del VPS (PC o Cloudflare) y reutilizarse con `REUSE_FROM`, `EMBEDDER_TOKEN` y `EMBEDDER_ACCEPT_MODELS`: ver [import/README.md, fase 4b](../import/README.md#fase-4b-embeddings-fuera-del-vps). `bun run embed:compat` compara dos embedders.
 - **El embedder es local al VPS** (`http://127.0.0.1:8891/v1/embeddings`, unidad `embedder`). En otra máquina no responde: el índice sale **solo por palabras clave** (`semantic: false`), con un aviso, y el build **no falla**. Regenerarlo en el VPS (lo hace `deploy.yml`, el runner vive ahí) lo deja semántico.
 - `anchor` es el id del encabezado en la página renderizada. El test `scripts/docs/chunk-parity.test.ts` obliga a que coincida con el algoritmo del motor de docs.
 - El server carga el índice una vez al arrancar. Un doc nuevo requiere regenerar y desplegar (el deploy ya lo hace).
 
+**Natives por nombre o hash** (`server/src/index/lookup.ts`): los embeddings y BM25 son malos con identificadores, así que un native nombrado en la consulta se busca aparte y va **primero**, con `score: 1`, aunque el embedder esté caído. Coincide por nombre canónico, nombre Lua (`GetEntityCoords` = `GET_ENTITY_COORDS`), alias y hash de 64 o 32 bits. Una consulta de un solo token coincide por cualquier nombre (`wait`); dentro de una frase solo cuentan hashes e identificadores (con `_` o camelCase), para que "wait for the resource" no fije el native `WAIT`. Si GTA y CFX comparten nombre salen los dos, GTA primero. El tokenizador de BM25 separa camelCase, así que "open the door of a vehicle" encuentra `SetVehicleDoorOpen` por palabras.
+
+**Docs y natives por separado**: ~7.000 natives desplazarían a los docs de cualquier ranking conjunto. `Retriever.searchMany` hace una sola incrustación de la consulta y arma un ranking por tipo (`kind`); el chat pide `CHAT_TOP_K` docs más `CHAT_NATIVES_TOP_K` natives (3 por defecto, 0 = solo docs). El `<fuente>` del prompt lleva `tipo="doc|native"`.
+
 **Recuperación** (`server/src/index/search.ts`): coseno top-k con el embedder; si el embedder falla o tarda más de `EMBEDDER_TIMEOUT_MS`, o el índice no tiene vectores, o nada supera `CHAT_MIN_SEMANTIC_SCORE`, cae a BM25 por palabras clave (sin tildes, con plurales, título y encabezado pesan más). Tras un fallo del embedder se lo salta 30 s para no sumar timeouts. `meta.degraded` y `mode` informan qué pasó. Nunca lanza.
+
+## Caché de respuestas (v0.8.0)
+
+`server/src/chat/cache.ts`. Una pregunta repetida sobre las mismas fuentes se responde sin llamar al modelo y sin gastar presupuesto de tokens.
+
+- **Clave** (SHA-256): rol del viewer + pregunta normalizada (minúsculas, sin tildes ni signos, espacios simples) + historial normalizado + **ids de los fragmentos** que entrarían en el prompt, en orden. Si dos viewers pueden ver contexto distinto (hoy no: todos los roles con chat ven el mismo corpus), las claves difieren y nunca comparten respuesta; la caída a palabras clave también cambia los ids y por tanto la clave.
+- **Qué se guarda**: solo respuestas completas y correctas. Un error del modelo o una respuesta cortada por longitud **no** se cachean.
+- **Acotada**: TTL (`CHAT_CACHE_TTL_SECONDS`, 3600) y máximo de entradas con descarte del menos usado (`CHAT_CACHE_MAX_ENTRIES`, 500). `0` en cualquiera la apaga.
+- **Un acierto sigue contando** para el rate limit por viewer e IP, y repite el stream SSE (`meta`, `sources`, `delta`, `done` con `cached: true` y uso 0), así el cliente no distingue el camino.
+- El log de la petición lleva `cache: hit|miss`. Pregunta y respuesta siguen sin loguearse; las claves son hashes y viven solo en memoria.
 
 ## Variables de entorno
 
 Todas con valor por defecto salvo las marcadas. En el VPS van en `~/deploy/env/astra-dev.env` (modo 600, formato `CLAVE=valor`).
 
-| Variable                                                      | Defecto                                                         | Notas                                                                    |
-| ------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `NODE_ENV`                                                    | (la unidad pone `production`)                                   | En producción: sin stub de viewer, sin proveedor `fake`, key obligatoria |
-| `DEEPSEEK_API_KEY`                                            | — **obligatoria en producción**                                 | Secreto                                                                  |
-| `ACCOUNTS_BASE_URL`                                           | `https://adastrarp.com`                                         | Servicio de cuentas (adastra-site)                                       |
-| `ALLOWED_ORIGINS`                                             | `https://development.adastrarp.com`                             | Coma separada. En dev suma `localhost:5173`                              |
-| `ASTRA_SLOT`                                                  | `dev` (la unidad pone `blue`/`green`)                           | Define el puerto: blue 4101, green 4102, otro 4100                       |
-| `PORT`, `HOST`                                                | por slot, `127.0.0.1`                                           | Solo loopback                                                            |
-| `TRUST_PROXY`                                                 | `true` en producción                                            | Confía en `X-Real-IP` de nginx                                           |
-| `INDEX_PATH`, `BUILD_INFO_PATH`                               | `data/index.json`, `build.json`                                 | `build.json` lo escribe el deploy (sha, versión)                         |
-| `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_MS`       | `127.0.0.1:8891/v1/embeddings`, `embeddinggemma-2`, 2500        | Local al VPS                                                             |
-| `EMBEDDER_DIMS`                                               | 256                                                             | Cambiarlo exige regenerar el índice                                      |
-| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción                                          |
-| `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                 | `/api/auth/viewer`, 3000                                        |                                                                          |
-| `ASTRA_DEV_VIEWER`                                            | —                                                               | Stub de dev. Ignorado en producción                                      |
-| `CHAT_MAX_QUESTION_CHARS`                                     | 800                                                             |                                                                          |
-| `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`       | 6, 800                                                          |                                                                          |
-| `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`             | 700, 4000                                                       |                                                                          |
-| `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                        | 5, 9000                                                         |                                                                          |
-| `CHAT_MIN_SEMANTIC_SCORE`                                     | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`       |
-| `CHAT_MAX_BODY_BYTES`                                         | 16384                                                           |                                                                          |
-| `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`            | 6, 20                                                           | Ventana deslizante de 60 s                                               |
-| `RATE_SEARCH_IP_PER_MIN`                                      | 60                                                              | `searchDocs` público                                                     |
-| `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                  | 40000, 1000000                                                  | Reset 00:00 UTC                                                          |
+| Variable                                                                         | Defecto                                                         | Notas                                                                                                           |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                                       | (la unidad pone `production`)                                   | En producción: sin stub de viewer, sin proveedor `fake`, key obligatoria                                        |
+| `DEEPSEEK_API_KEY`                                                               | — **obligatoria en producción**                                 | Secreto                                                                                                         |
+| `ACCOUNTS_BASE_URL`                                                              | `https://adastrarp.com`                                         | Servicio de cuentas (adastra-site)                                                                              |
+| `ALLOWED_ORIGINS`                                                                | `https://development.adastrarp.com`                             | Coma separada. En dev suma `localhost:5173`                                                                     |
+| `ASTRA_SLOT`                                                                     | `dev` (la unidad pone `blue`/`green`)                           | Define el puerto: blue 4101, green 4102, otro 4100                                                              |
+| `PORT`, `HOST`                                                                   | por slot, `127.0.0.1`                                           | Solo loopback                                                                                                   |
+| `TRUST_PROXY`                                                                    | `true` en producción                                            | Confía en `X-Real-IP` de nginx                                                                                  |
+| `INDEX_PATH`, `BUILD_INFO_PATH`                                                  | `data/index.json`, `build.json`                                 | `build.json` lo escribe el deploy (sha, versión)                                                                |
+| `EMBEDDER_URL`, `EMBEDDER_MODEL`, `EMBEDDER_TIMEOUT_MS`                          | `127.0.0.1:8891/v1/embeddings`, `embeddinggemma-2`, 2500        | Local al VPS                                                                                                    |
+| `EMBEDDER_DIMS`                                                                  | 256                                                             | Cambiarlo exige regenerar el índice                                                                             |
+| `EMBEDDER_TOKEN`                                                                 | —                                                               | Secreto. Bearer para un embedder hospedado (Cloudflare). Exige https                                            |
+| `EMBEDDER_ACCEPT_MODELS`                                                         | — (siempre incluye `EMBEDDER_MODEL`)                            | Modelos cuyos vectores se aceptan de un índice ajeno (tras `embed:compat`)                                      |
+| `LLM_CONTEXT_WINDOW`                                                             | 65536 (`local`: 8192); 1024 a 2000000                           | Ventana del modelo en tokens. Va en `meta` y alimenta el medidor de `/ask`; confirmar el valor real de DeepSeek |
+| `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS`                    | `deepseek`, `https://api.deepseek.com`, `deepseek-flash`, 60000 | `fake` solo fuera de producción; `local` ver abajo                                                              |
+| `DECISION_URL`, `DECISION_TIMEOUT_MS`, `DECISION_FOLLOWUP_THRESHOLD`             | — (apagado), 1500, 0,25                                         | Clasificador de follow-ups; ver "Decision model". Solo loopback                                                 |
+| `DECISION_GATE_THRESHOLD`, `DECISION_GATE_FLOOR`, `DECISION_GATE_FRAGMENT_CHARS` | 0,5, 0,3, 1500                                                  | Filtro de fragmentos; ver "Decision model"                                                                      |
+| `LLM_FALLBACK_PROVIDER`, `LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_MODEL`           | — (apagado), `http://127.0.0.1:8080/v1`, `local`                | Fallback local si el modelo principal falla antes de responder. Solo con `LLM_PROVIDER=deepseek`; URL loopback  |
+| `ACCOUNTS_VIEWER_PATH`, `ACCOUNTS_TIMEOUT_MS`                                    | `/api/auth/viewer`, 3000                                        |                                                                                                                 |
+| `ASTRA_DEV_VIEWER`                                                               | —                                                               | Stub de dev. Ignorado en producción                                                                             |
+| `CHAT_MAX_QUESTION_CHARS`                                                        | 800                                                             |                                                                                                                 |
+| `CHAT_MAX_HISTORY_TURNS`, `CHAT_MAX_HISTORY_TURN_CHARS`                          | 6, 800                                                          |                                                                                                                 |
+| `CHAT_MAX_THINKING_CHARS`                                                        | 12000                                                           | Razonamiento que se reenvía a staff (`thinking`). 0 = nunca                                                     |
+| `CHAT_MAX_OUTPUT_TOKENS`, `CHAT_MAX_OUTPUT_CHARS`                                | 4096, 16000                                                     |                                                                                                                 |
+| `CHAT_TOP_K`, `CHAT_CONTEXT_MAX_CHARS`                                           | 5, 9000                                                         |                                                                                                                 |
+| `CHAT_NATIVES_TOP_K`                                                             | 3                                                               | Natives que se suman a los docs en el contexto. 0 = solo docs                                                   |
+| `CHAT_MIN_SEMANTIC_SCORE`                                                        | 0.25                                                            | **Sin calibrar** con el embedder real: ajustar mirando `meta.mode`                                              |
+| `CHAT_MAX_BODY_BYTES`                                                            | 16384                                                           |                                                                                                                 |
+| `CHAT_CACHE_TTL_SECONDS`, `CHAT_CACHE_MAX_ENTRIES`                               | 3600, 500                                                       | Caché de respuestas. 0 en cualquiera = apagada                                                                  |
+| `RATE_CHAT_VIEWER_PER_MIN`, `RATE_CHAT_IP_PER_MIN`                               | 6, 20                                                           | Ventana deslizante de 60 s                                                                                      |
+| `RATE_SEARCH_IP_PER_MIN`                                                         | 60                                                              | `searchDocs` público                                                                                            |
+| `OWNER_IDS`                                                                      | —                                                               | Ids de cuentas que pueden ser `owner` (además deben ser `staff` en cuentas)                                     |
+| `OWNER_MAX_ROUNDS`                                                               | 8                                                               | Rondas por mensaje del owner antes de pedir confirmación                                                        |
+| `USAGE_DB_PATH`                                                                  | — (sin registro)                                                | SQLite de uso. Fuera de los slots, para que blue y green lo compartan                                           |
+| `USAGE_RETENTION_DAYS`                                                           | 180                                                             | Se purga al arrancar                                                                                            |
+| `USAGE_PRICE_IN_PER_MTOK`, `USAGE_PRICE_OUT_PER_MTOK`                            | 0.14, 0.28                                                      | USD por millón de tokens, para estimar el costo de modelos alojados                                             |
+| `DAILY_TOKENS_VIEWER`, `DAILY_TOKENS_GLOBAL`                                     | 120000, 1000000                                                 | Reset 00:00 UTC                                                                                                 |
+| `ASTRA_GITHUB_TOKEN`                                                             | —                                                               | Secreto, solo lectura. Sin él, `project` queda apagado                                                          |
+| `PROJECT_REPO`, `PROJECT_REF`                                                    | `adastra-org/astra-dev`, `dev`                                  | Repo y rama de los que se leen plan, complejidad y commits                                                      |
+| `PROJECT_PLAN_PATH`, `PROJECT_COMPLEXITY_PATH`                                   | `docs/plan/README.md`, `docs/project/complexity.json`           | Relativos al repo                                                                                               |
+| `PROJECT_CACHE_TTL_SECONDS`, `RATE_PROJECT_VIEWER_PER_MIN`                       | 300, 30                                                         | Caché de "Proyecto" y su rate limit por viewer                                                                  |
+| `GITHUB_API_URL`                                                                 | `https://api.github.com`                                        | Para pruebas con un GitHub falso                                                                                |
+| `MYCHECKLIST_URL`, `MYCHECKLIST_LIST`                                            | `https://checklist.wefaber.net`, `Ad Astra`                     | Lista externa que se muestra en el checklist                                                                    |
+| `MYCHECKLIST_TOKEN`                                                              | —                                                               | Secreto, `mck_…` en modo `read`. Sin él, la lista externa queda `disabled`                                      |
 
 Un valor inválido hace fallar el arranque con el listado de problemas (un deploy mal configurado no llega a vivo: `/ready` no responde y el script no cambia el slot).
 
@@ -163,7 +252,7 @@ Un valor inválido hace fallar el arranque con el listado de problemas (un deplo
 
 - **Rate limit, presupuesto y caché de viewer están en memoria del proceso.** Un reinicio los reinicia, y los dos slots (blue/green) no comparten estado: durante un deploy un viewer podría gastar el tope en cada uno. Aceptable para un VPS y un equipo chico; antes de escalar a varias instancias va un store compartido.
 - La estimación de tokens (3 caracteres por token) es conservadora; el consumo real se concilia con el `usage` del proveedor.
-- Sin caché de respuestas (el plan M3 lo menciona; falta).
+- La caché de respuestas también es del proceso: un reinicio o el otro slot la vacían, y un doc nuevo llega con un deploy (que reinicia el proceso).
 - El umbral semántico y los prefijos de tarea del embedder no están calibrados contra el embedder real (no es accesible fuera del VPS).
 - Si Cloudflare proxea el dominio, nginx necesita `real_ip_header CF-Connecting-IP` con los rangos de Cloudflare (`set_real_ip_from`), o `$remote_addr` será el borde de Cloudflare y el límite por IP se compartirá entre todos.
 - El stream usa `fetch` sin reintentos: un fallo del proveedor se informa y el usuario reintenta.
@@ -218,28 +307,126 @@ Rollback: `/home/hermes/deploy/astra-dev.sh rollback` mueve sitio y API al slot 
 
 ## Desarrollo local
 
+**Un solo comando, desde la raíz** (`scripts/dev.ts`):
+
+```bash
+bun dev                 # Vite (5173) + server de Ask Ether (4100); el LLM sale de server/.env
+bun dev --local         # + IA local: embedder (8891), LLM (8080), decision model (8081) con llama-server
+bun dev --local --think # el LLM local razona y el panel lo muestra (solo staff; gasta tokens)
+bun dev --fake          # LLM de prueba, sin modelos
+bun dev --no-server     # solo Vite (el `dev` de antes: `bun run dev:vite`)
+bun dev --local --port 5174   # lo que no es nuestro va a Vite
+```
+
+- Con `--local` el server arranca con `LLM_PROVIDER=local`, `LLM_MODEL=lfm` y `DECISION_URL`; no hace falta tocar ningún `.env`. Los modelos salen de `ASTRA_MODELS_DIR` (default `E:/Proyectos/_scratch/models`): `embeddinggemma-300M-Q8_0.gguf`, `LFM2.5-2.6B-Q4_K_M.gguf`, `d1-Omni-2B-Q8_0.gguf`. `llama-server` se busca en `LLAMA_SERVER`, en el PATH y en el paquete WinGet `ggml.llamacpp`. Los logs van a `.cache/dev/`.
+- Lo que ya responde en su puerto (un servicio o un server que levantaste a mano) se reutiliza y no se cierra al salir. Si cambiaste el `.env` o el índice, reiniciá ese proceso: `--watch` recarga código, no el `.env`.
+- `ASTRA_DEV_VIEWER` queda en `staff` salvo que lo definas en el entorno o en `server/.env*`: sin viewer el panel pide iniciar sesión y en dev no hay dónde (las cuentas viven en adastra-site).
+- El índice de dev no se versiona. Con el embedder local arriba: `cd server && bun run index` (~1 min). Es para probar; el índice de release lo genera el VPS.
+- Ctrl+C cierra Vite, el server y los modelos que levantó este comando.
+
+Por separado, sin el wrapper:
+
 ```bash
 cd server && bun install
 NO_EMBED=1 bun run index                                   # índice por palabras clave (sin embedder)
 ASTRA_DEV_VIEWER=subscriber LLM_PROVIDER=fake bun run dev  # 127.0.0.1:4100, chat con el proveedor de prueba
+bun run dev:local                                          # stub subscriber + proveedor real si hay DEEPSEEK_API_KEY; acepta localhost:5173-5176
 bun run check                                              # typecheck + tests (también corre en el `check` de la raíz)
 ```
 
-Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. El server no habla con Vite: la UI en dev debe apuntar a `http://127.0.0.1:4100` (el origen `localhost:5173` ya está permitido en dev).
+Con `DEEPSEEK_API_KEY` en el entorno y sin `LLM_PROVIDER=fake`, el chat usa DeepSeek de verdad. La UI en dev llama `/api/*` y Vite lo reenvía a `127.0.0.1:4100` quitando el prefijo (`vite.config.ts`), igual que nginx: mismo origen y misma cookie. Con `bun run dev:local` el panel funciona de punta a punta.
 
-## Pruebas (`bun test`, 87)
+### Modelo local (`LLM_PROVIDER=local`)
 
-`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
+Para probar o correr Ask Ether sin DeepSeek, contra un servidor OpenAI-compatible en la misma máquina (llama.cpp, Ollama, LM Studio). Reglas:
+
+- `LLM_BASE_URL` debe ser loopback (`localhost`, `127.0.0.1`, `[::1]`); si no, el server no arranca. Por defecto `http://127.0.0.1:8080/v1`.
+- No usa key: `DEEPSEEK_API_KEY` no se envía y no hace falta, tampoco en producción.
+- Cada pedido manda `chat_template_kwargs: {enable_thinking: false}`: los modelos de razonamiento (Liquid LFM3, Qwen3) gastarían todo el presupuesto de tokens pensando y devolverían la respuesta vacía. llama.cpp lo respeta; otros servidores lo ignoran.
+
+Probado (2026-11-12) con llama.cpp b12314 en una RTX 5070 (12 GB), `Q4_K_M`, 4 preguntas por `/chat` con el índice por palabras clave (3 sobre la doc, 1 fuera de tema):
+
+| Modelo (`LiquidAI/…-GGUF`) | Tamaño | Resultado                                                                                                                                                                         |
+| -------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LFM2.5-2.6B`              | 1,7 GB | **El único usable.** Respuestas directas y bien formadas, con citas `[n]` correctas; define "native" desde el glosario. Una respuesta cita una fuente de más. 2-5 s por respuesta |
+| `LFM3-1.7B`                | 1,1 GB | Contesta con la doc pero abre con `<contexto>` y copia fragmentos del prompt; las citas valen, el formato no. 2-8 s                                                               |
+| `LFM3-VL-2B`               | 1,1 GB | Rechaza "¿Qué es una native?" aunque la fuente está, y en otra pregunta mezcla el rechazo con el contexto copiado (`<contexto>`, `<pregunta>`). Descartado                        |
+
+Los tres rechazan bien lo que está fuera de la doc ("No encuentro eso…"; ese rechazo sale del server sin llamar al modelo). Los modelos de razonamiento necesitan el `enable_thinking: false` de arriba.
+
+```bash
+llama-server -m LFM2.5-2.6B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -ngl 99 -c 8192 --alias lfm --reasoning-budget 0
+NO_EMBED=1 bun run index
+LLM_PROVIDER=local LLM_MODEL=lfm ASTRA_DEV_VIEWER=staff bun run dev
+```
+
+`--reasoning-budget 0` es obligatorio con LFM2.5: su plantilla de chat siempre abre `<think>` (no hay interruptor, `enable_thinking` no existe ahí) y el modelo razona ~2 000 caracteres en inglés antes de responder. Con `max_tokens` 700 (el tope de antes; hoy es 4096) eso se come el presupuesto: a veces `content` queda vacío (`llm_unavailable`) o la respuesta sale cortada. Con el flag, 6 de 6 respuestas seguidas terminaron en `stop` sin razonamiento (con `--reasoning off` el problema sigue igual). `bun dev --local` ya lo pasa.
+
+Alcanza para desarrollo sin red o sin saldo de DeepSeek. No lo tomamos como reemplazo en producción: un modelo de 2-3B se equivoca en detalles (cita de más, nombres de tokens) y no se midió con el índice completo de natives ni con embedder.
+
+### Decision model (`DECISION_URL`)
+
+Un clasificador chico decide si la pregunta nueva necesita el turno anterior para entenderse. Si no lo necesita, la búsqueda usa solo la pregunta; hoy (sin decisor) siempre se le suma el último turno del usuario y un tema anterior contamina los resultados. Los modelos `d1` de Liquid AI no generan texto: contestan sí/no o elegir-una-opción con probabilidades calibradas en un solo forward pass, por `/v1/systemone` de llama.cpp.
+
+```bash
+llama-server -m d1-Omni-2B-Q8_0.gguf --host 127.0.0.1 --port 8081 -ngl 99 -b 4096 -ub 4096
+DECISION_URL=http://127.0.0.1:8081 bun run dev
+```
+
+Reglas: `DECISION_URL` vacío = apagado (comportamiento de siempre) y debe ser loopback porque recibe el texto de la pregunta. Si el decisor falla, tarda más de `DECISION_TIMEOUT_MS` o contesta algo raro, se usa el historial como antes: el decisor solo puede **acortar** una búsqueda, nunca bloquear una pregunta. Con la sesión sin historial no se lo consulta. El log de `/chat` suma `usedHistory`.
+
+Medición (2026-11-12, llama.cpp b12314, RTX 5070, `Q8_0`, 36 casos propios en español y 18 de validación):
+
+| Modelo         | Tamaño | Follow-up (con historial)                              | `route` answer/clarify/offtopic | Latencia |
+| -------------- | ------ | ------------------------------------------------------ | ------------------------------- | -------- |
+| `d1-omni-600M` | 407 MB | 10/18 a 0,5; 12/18 en el mejor umbral                  | 21/34: contesta `answer` a todo | 12 ms    |
+| `d1-Omni-2B`   | 1,8 GB | 14/18 a 0,5; 18/18 a 0,20 (17/18 a 0,30 en validación) | 29/34                           | 37 ms    |
+
+- **El 600M no sirve** para esto. El **2B sí** para el follow-up, y con un umbral bajo: la probabilidad queda por debajo de 0,5 incluso en follow-ups reales. Por eso el umbral por defecto es 0,25 (perder contexto cuesta más que arrastrarlo).
+- **`route` no se usa.** El 2B marca `offtopic` en ~16 % de preguntas válidas con confianza 0,5-0,65 ("¿Qué es una native?" con historial, "¿Qué pasa si no hay saldo?"). Bloquear con eso rechazaría preguntas buenas. Hoy el rechazo sale del puntaje de retrieval.
+- **Efecto en la búsqueda, medido con el índice real (5 docs, solo palabras clave) y el 2B:** el decisor acertó 14/14 (8 independientes → `false`, 6 follow-ups → `true`, ~16 ms). El top-1 de las preguntas independientes tras un historial ajeno pasó de 4/8 a 5/8; los follow-ups quedaron en 6/6. La mejora es chica porque el buscador por palabras clave falla solo en varias de esas preguntas aun sin historial, y una (`¿Qué es un backlink?`) empeoró: el historial la ayudaba por casualidad. Falta medirlo con embedder y el índice de natives.
+
+### Preguntas en español sobre natives (v0.17.1)
+
+Los natives están indexados en inglés (`GET_VEHICLE_CLASS`) y el embedder cruza mal español-inglés en identificadores: "cómo obtengo la velocidad de un vehículo" dejaba fuera el native correcto aunque existiera. `Retriever.searchMany` ahora fusiona (RRF, k=60) el ranking semántico de natives con un match léxico sobre las palabras del _nombre_ (`server/src/index/names.ts`): la pregunta se traduce con un glosario ES->EN de verbos (`obtengo`->get, `cambio`->set, `elimino`->delete...) y sustantivos (`matrícula`->plate, `clase`->class...) en `server/src/index/glossary.ts`, y se puntúa con F1 ponderado por idf (los verbos casi no pesan, un verbo solo no matchea nada, mínimo 0,4 para votar). El mismo glosario expande la búsqueda BM25 cuando el embedder no responde. El glosario es vocabulario general: si falta una palabra, se agrega ahí, no se parchea una pregunta. Tests: `server/tests/retrieval-es.test.ts`.
+
+### Calidad de respuestas (v0.19.2)
+
+Tres fallas de una conversación real (`GetActualScreenResolution` → "¿tiene variables de entrada?" → "¿me mostrás un uso de ejemplo?", que derivó a natives de audio) y su causa:
+
+- **Follow-up sin tema.** La consulta era `último turno del usuario + pregunta`; ninguna nombra el native, y palabras como "variables" o "ejemplo" arrastran natives que las contienen (`SET_VARIABLE_ON_SOUND`). El gate, que juzgaba esa misma consulta, los dejaba pasar (8 de 8) y el modelo los usaba. Ahora, en un follow-up, el **tema** (el título de cada fuente que citó la respuesta anterior, que en un native es su nombre; sin `sources`, los natives nombrados en la conversación) va primero en la consulta, el gate lo recibe aparte (`select(q, hits, {topic})`: "¿trata del tema y hace falta para responder?"; medido con el 2B en ese caso: 0,91 el native correcto, ≤ 0,06 el audio, contra 0,75-0,86 sin tema), y el prompt lo muestra en `<tema>` con la regla 10: no mezclar nativas ni documentos sin relación con la pregunta. Las fuentes arrastradas van primero, nunca las juzga el gate y, si una pregunta vaga no puntúa ninguna, igual quedan.
+- **Un native nombrado en la pregunta** (`GetActualScreenResolution`, hash, alias) hace que la pregunta se sostenga sola: no se consulta al decisor (que la marcaba como follow-up y mezclaba el turno anterior), no se le suma historial y el gate no lo puede descartar (antes lo descartó con score 1).
+- **Velocidad absurda ("2852 tokens por segundo").** `usage.outputTokens` cuenta también los tokens de razonamiento, pero el reloj del cliente arrancaba en el primer texto visible: el modelo pensaba ~7 s y emitía la respuesta en una ráfaga. Ahora el server manda `done.tps` desde los `timings` de llama.cpp (`predicted_n / predicted_ms`); sin eso el cliente solo mide si no hubo razonamiento, hubo ≥ 500 ms de texto y ≥ 8 tokens, y descarta por encima de 1000 tok/s (muestra "— tokens por segundo"). El registro de uso (`gen_tps`) usa el mismo criterio.
+
+**Glosario de dibujo y texto.** Se sumaron al glosario ES→EN los verbos y sustantivos de `DRAW_*`, `SET_TEXT_*` y `*_TEXT_COMMAND_*` (dibujar, mostrar, escribir, rectángulo, línea, subtítulo, mensaje, pantalla, fuente, tamaño, contorno, sombra...). Con el embedder caído (solo BM25), "cómo dibujo un rectángulo" pasó de rechazo a `DRAW_RECT`.
+
+**Si todo se rechaza y no debería:** antes de tocar umbrales, comprobar que el índice corresponde al embedder que corre. Un `index.json` generado con otro GGUF da cosenos ~0 contra las consultas (un fragmento embebido hoy contra su propio vector daba −0,02), la búsqueda cae a palabras clave y "cómo dibujo texto en pantalla" no encuentra nada. Se arregla con `cd server && bun run index` (~1 min) con el embedder local arriba.
+
+### Qué entra al prompt: gate y `<entorno>`
+
+**Gate de contexto.** Con `DECISION_URL`, después de recuperar los fragmentos, el mismo `d1-Omni-2B` contesta una pregunta sí/no por fragmento: "¿hace falta esto para responder?". Quedan los fragmentos con probabilidad >= `DECISION_GATE_THRESHOLD` (0,5). Si ninguno llega, queda el mejor si pasa `DECISION_GATE_FLOOR` (0,3); si tampoco, no entra nada y el chat rechaza sin llamar al modelo ni gastar presupuesto. El gate solo **quita** contenido, nunca agrega ni reescribe. Si un fragmento no se puede juzgar (error, timeout) se deja pasar todo, como sin gate. El log de `/chat` suma `gate: kept/total`. Medición (14 preguntas, 50 fragmentos, índice real): a 0,5 entra el 56 % del texto, el 83 % de lo que queda es del doc correcto y se conserva el doc correcto en 9 de 10 preguntas. El arranque en frío de `llama-server` puede pasar el timeout de las primeras llamadas: ahí el gate se salta solo.
+
+**`<entorno>`.** El mensaje al modelo empieza con datos del contexto de la pregunta, escapados como el resto (nunca en el system prompt): `idioma_de_la_interfaz` (el cliente manda `lang`: `es` o `en`, cualquier otro valor es `es`), `fecha`, `version_del_sitio`, `rama` y `ultimo_commit` (GitHub, rama `PROJECT_REF`, cache `PROJECT_CACHE_TTL`; sin token se omiten) y `quien_pregunta` (handle y rol). El system prompt dice que es contexto: no se cita con `[n]`, no se repite y no se saluda por el nombre. El **usuario no entra en la clave del cache** (una respuesta se comparte entre quienes tienen el mismo rol); sí entran idioma, día y commit. Cuando exista memoria por usuario, la respuesta personalizada tendrá que saltarse el cache.
+
+**Respuesta en blanco.** Si el modelo devuelve solo espacios (pasa con modelos chicos) es un evento `error` (`llm_unavailable`), no un éxito, y no se cachea.
+
+**Fallback.** `LLM_FALLBACK_PROVIDER=local`: si el principal falla _antes_ de producir texto (red, HTTP, timeout, sin saldo), el mismo pedido va al modelo local; el log registra `llm_fallback`. Una vez que empezó a llegar texto no se cambia de modelo.
+
+## Pruebas (`bun test`, 143)
+
+`chunk` (encabezados, anclas, partición, extractos), `search` (índice, ranking semántico, BM25, degradado con embedder caído, enfriamiento), `llm` (proveedor falso y DeepSeek con `fetch` simulado, sin `tools`), `permissions` (roles, puerto HTTP, stub ignorado en producción, 401/403/503, Origin), `limits` (rate limit, presupuesto, ruta HTTP), `chat` (formato SSE, topes, rechazo, citas, logs sin datos sensibles, `/ready`, GraphQL), `offline-embeddings` (índice en dos archivos, reutilización de vectores, compatibilidad entre embedders, token y reintentos) `cache` (normalización, TTL, tope y descarte, clave por rol/fuentes/historial, un acierto sin modelo ni presupuesto, errores y cortes sin cachear, log) e `injection` (fixtures de inyección con un "modelo" que solo se porta bien si recibe exactamente nuestras instrucciones).
 
 ## Estado de verificación
 
-| Qué                                                                                  | Estado                                                                                                              |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Typecheck + 87 tests del server, `bun run check` de la raíz                          | Verificado                                                                                                          |
-| Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL            | Verificado a mano                                                                                                   |
-| Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401     | Verificado a mano                                                                                                   |
-| Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable | Verificado                                                                                                          |
-| DeepSeek real: respuesta con citas y rechazo fuera del tema                          | Verificado a mano contra la API (índice por palabras clave)                                                         |
-| Índice semántico y ranking con el embedder real                                      | **No verificado**: el embedder solo existe en el VPS                                                                |
-| Contrato de `/api/auth/viewer`                                                       | Tests con el payload real documentado por cuentas. **No verificado** contra el endpoint desplegado (PR #21 abierto) |
-| Unidad systemd, vhost `/api/`, script y workflow                                     | **No verificado**: sin aplicar en el VPS (el script pasa `bash -n`; el workflow parsea como YAML)                   |
+| Qué                                                                                          | Estado                                                                                                              |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Typecheck + 143 tests del server, `bun run check` de la raíz                                 | Verificado                                                                                                          |
+| Índice por palabras clave con el corpus real (338 docs, 7.326 natives) y consultas           | Verificado: 10.254 fragmentos, 3-7 ms por consulta; búsquedas por nombre y hash exactas                             |
+| Caché de respuestas: la pregunta repetida se sirve sin modelo (`cache: hit`, 0 tokens, 1 ms) | Verificado con tests y en el navegador contra DeepSeek real                                                         |
+| Server en dev (stub + proveedor falso): `/health`, `/ready`, SSE, GraphQL                    | Verificado a mano                                                                                                   |
+| Bundle de producción (solo deps de producción) arranca y responde `/ready` y 401             | Verificado a mano                                                                                                   |
+| Índice por palabras clave desde `content/docs` y degradado con embedder inalcanzable         | Verificado                                                                                                          |
+| DeepSeek real: respuesta con citas y rechazo fuera del tema                                  | Verificado a mano contra la API (índice por palabras clave)                                                         |
+| Índice semántico y ranking con el embedder real                                              | **No verificado**: el embedder solo existe en el VPS                                                                |
+| Contrato de `/api/auth/viewer`                                                               | Tests con el payload real documentado por cuentas. **No verificado** contra el endpoint desplegado (PR #21 abierto) |
+| Unidad systemd, vhost `/api/`, script y workflow                                             | **No verificado**: sin aplicar en el VPS (el script pasa `bash -n`; el workflow parsea como YAML)                   |

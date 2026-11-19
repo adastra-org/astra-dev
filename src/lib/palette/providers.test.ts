@@ -26,6 +26,7 @@ const doc = (
 })
 
 const ctx: PaletteContext = {
+  lang: 'es',
   docs: [
     doc('deploy', 'Flujo de deploy', ['proyecto', 'deploy'], 'Blue green.'),
     doc('estilo', 'Sistema de diseño', ['proyecto', 'diseno']),
@@ -64,10 +65,11 @@ describe('proveedores públicos', () => {
     ])
   })
 
-  test('nav: los cuatro destinos; "hoja de ruta" encuentra Roadmap', async () => {
+  test('nav: los cinco destinos; "hoja de ruta" encuentra Roadmap', async () => {
     expect(await ids(navProvider, '')).toEqual([
       'nav:/',
       'nav:/docs',
+      'nav:/natives',
       'nav:/tools',
       'nav:/roadmap',
     ])

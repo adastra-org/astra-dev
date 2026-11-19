@@ -1,33 +1,40 @@
 import { Languages } from 'lucide-react'
-import { LANGS } from '@/config/nav'
+import { useLang } from '@/lib/use-lang'
+import { UI_LANGS } from '@/lib/i18n'
 
-/** Placeholder: el idioma activo es ES y EN no está disponible. Sin lógica hasta M2. */
+/** Selector de idioma de la interfaz (ES / EN). La elección queda en `localStorage`. */
 export function LangSwitch() {
+  const { lang, setLang, tr } = useLang()
   return (
     <div
       role="group"
-      aria-label="Idioma"
+      aria-label={tr('lang.name')}
       className="bg-surface-raised rounded-pill flex shrink-0 items-center"
     >
       <Languages
         className="text-ink-subtle mr-1 ml-3 hidden size-4 md:block"
         aria-hidden="true"
       />
-      {LANGS.map((l) => (
+      {UI_LANGS.map((code) => (
         <button
-          key={l.code}
+          key={code}
           type="button"
-          disabled={!l.available}
-          aria-pressed={l.code === 'es'}
-          title={l.available ? undefined : 'Inglés llega con la traducción'}
+          lang={code}
+          aria-pressed={code === lang}
+          aria-label={
+            code === lang
+              ? undefined
+              : tr('lang.switchTo', { lang: tr(`lang.${code}`) })
+          }
+          onClick={() => setLang(code)}
           className={[
             'text-data rounded-pill min-h-11 min-w-11 px-3 lg:min-h-10',
-            l.code === 'es'
+            code === lang
               ? 'bg-accent-fill text-on-accent'
-              : 'text-ink-subtle disabled:opacity-70',
+              : 'text-ink-subtle hover:text-ink',
           ].join(' ')}
         >
-          {l.label}
+          {tr(`lang.${code}`)}
         </button>
       ))}
     </div>

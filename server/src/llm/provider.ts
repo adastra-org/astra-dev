@@ -21,7 +21,19 @@ export interface LlmUsage {
 
 export type LlmChunk =
   | { type: 'delta'; text: string }
+  /** The model's reasoning, when it exposes it (`reasoning_content`). Never part of the answer. */
+  | { type: 'thinking'; text: string }
   | { type: 'usage'; usage: LlmUsage }
+  /** Which provider and model answered. First chunk; lets a fallback show up in the usage record. */
+  | { type: 'served'; provider: 'deepseek' | 'local'; model: string }
+  /** Local models only: milliseconds the machine spent on this call (llama.cpp `timings`). */
+  | {
+      type: 'timing'
+      gpuMs: number
+      /** Tokens the model generated (reasoning included) and the time that took: the real speed. */
+      predictedTokens?: number
+      predictedMs?: number
+    }
 
 export interface LlmProvider {
   readonly name: string

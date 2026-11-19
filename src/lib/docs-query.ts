@@ -1,7 +1,7 @@
 // Consultas puras sobre la lista de docs (índice, filtro, resolución de enlaces). Sin el módulo
 // virtual, para poder probarlas con `bun test`.
 import { tagLabel } from '@/config/tags'
-import type { DocMeta } from './docs/types'
+import type { DocLang, DocMeta, Translated } from './docs/types'
 
 const collator = new Intl.Collator('es')
 
@@ -11,6 +11,38 @@ export const fold = (s: string) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+
+/** Lo que se muestra de un doc en un idioma: título, resumen y el flag si es una traducción. */
+export interface DocDisplay {
+  title: string
+  summary: string
+  lang: DocLang
+  /** Presente solo cuando el texto mostrado es una traducción. */
+  translated?: Translated
+}
+
+/**
+ * Texto del doc en el idioma pedido. Si no hay traducción cae al original (el del doc), así que un
+ * doc sin traducir sigue viéndose. El flag `translated` solo aparece cuando de verdad se muestra
+ * una traducción (la del frontmatter del propio doc o la de `translations`).
+ */
+export function displayDoc(doc: DocMeta, want: DocLang = 'es'): DocDisplay {
+  const t =
+    want === 'es' && doc.lang !== 'es' ? doc.translations?.es : undefined
+  if (t)
+    return {
+      title: t.title,
+      summary: t.summary,
+      lang: want,
+      translated: t.translated,
+    }
+  return {
+    title: doc.title,
+    summary: doc.summary,
+    lang: doc.lang,
+    ...(doc.translated ? { translated: doc.translated } : {}),
+  }
+}
 
 export interface DocGroup {
   tag: string
@@ -27,7 +59,9 @@ export function groupByTag(docs: readonly DocMeta[]): DocGroup[] {
   return [...map.entries()]
     .map(([tag, list]) => ({
       tag,
-      docs: [...list].sort((a, b) => collator.compare(a.title, b.title)),
+      docs: [...list].sort((a, b) =>
+        collator.compare(displayDoc(a).title, displayDoc(b).title),
+      ),
     }))
     .sort((a, b) => collator.compare(tagLabel(a.tag), tagLabel(b.tag)))
 }
@@ -37,7 +71,14 @@ export function filterDocs(docs: readonly DocMeta[], query: string): DocMeta[] {
   const words = fold(query).split(/\s+/).filter(Boolean)
   if (!words.length) return [...docs]
   return docs.filter((d) => {
-    const hay = fold([d.title, ...d.tags, ...d.tags.map(tagLabel)].join(' '))
+    const hay = fold(
+      [
+        d.title,
+        displayDoc(d).title,
+        ...d.tags,
+        ...d.tags.flatMap((t) => [tagLabel(t), tagLabel(t, 'en')]),
+      ].join(' '),
+    )
     return words.every((w) => hay.includes(w))
   })
 }
@@ -108,9 +149,17 @@ export function rankDocs(docs: readonly DocMeta[], query: string): RankedDoc[] {
   const ranked = docs.flatMap((doc): RankedDoc[] => {
     const score = words.length
       ? scoreMatch(query, {
-          title: doc.title,
-          keywords: [...doc.tags, ...doc.tags.map(tagLabel)],
-          body: doc.summary,
+          title: displayDoc(doc).title,
+          keywords: [
+            ...doc.tags,
+            ...doc.tags.flatMap((t) => [tagLabel(t), tagLabel(t, 'en')]),
+          ],
+          // Resumen en el idioma mostrado y, si hay traducción, también el original (los
+          // identificadores y nombres en inglés se siguen encontrando).
+          body:
+            displayDoc(doc).lang === doc.lang
+              ? doc.summary
+              : `${displayDoc(doc).summary} ${doc.title} ${doc.summary}`,
         })
       : 1
     if (!score) return []
@@ -121,6 +170,8 @@ export function rankDocs(docs: readonly DocMeta[], query: string): RankedDoc[] {
     return [{ doc, score, matchedTags }]
   })
   return ranked.sort(
-    (a, b) => b.score - a.score || collator.compare(a.doc.title, b.doc.title),
+    (a, b) =>
+      b.score - a.score ||
+      collator.compare(displayDoc(a.doc).title, displayDoc(b.doc).title),
   )
 }

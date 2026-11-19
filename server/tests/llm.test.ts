@@ -53,6 +53,23 @@ describe('DeepSeekProvider', () => {
       fetch: fetchImpl,
     })
 
+  test('reasoning_content becomes thinking chunks, apart from the answer', async () => {
+    const llm = make((async () =>
+      sseBody([
+        'data: {"choices":[{"delta":{"reasoning_content":"Miro la fuente 1. "}}]}',
+        'data: {"choices":[{"delta":{"reasoning_content":"Cito."}}]}',
+        'data: {"choices":[{"delta":{"content":"Listo [1]."}}]}',
+        'data: [DONE]',
+      ])) as unknown as typeof fetch)
+    const out = await collect(llm.stream({ messages: [], maxOutputTokens: 5 }))
+    expect(out).toEqual([
+      { type: 'served', provider: 'deepseek', model: 'deepseek-flash' },
+      { type: 'thinking', text: 'Miro la fuente 1. ' },
+      { type: 'thinking', text: 'Cito.' },
+      { type: 'delta', text: 'Listo [1].' },
+    ])
+  })
+
   test('sends a plain completion (no tools), key only in the header, to the configured base URL', async () => {
     let seen: { url: string; init: RequestInit } | undefined
     const llm = make((async (url: string, init: RequestInit) => {
@@ -79,11 +96,13 @@ describe('DeepSeekProvider', () => {
     })
     expect(Object.keys(body)).not.toContain('tools')
     expect(Object.keys(body)).not.toContain('tool_choice')
+    expect(Object.keys(body)).not.toContain('chat_template_kwargs')
     expect(JSON.stringify(body)).not.toContain('sk-test')
     expect((seen!.init.headers as Record<string, string>).authorization).toBe(
       'Bearer sk-test',
     )
     expect(out).toEqual([
+      { type: 'served', provider: 'deepseek', model: 'deepseek-flash' },
       { type: 'delta', text: 'Ho' },
       { type: 'delta', text: 'la' },
       { type: 'usage', usage: { inputTokens: 10, outputTokens: 2 } },
@@ -120,6 +139,99 @@ describe('DeepSeekProvider', () => {
         'data: {"choices":[{"delta":{"content":"ok"}}]}',
       ])) as unknown as typeof fetch)
     const out = await collect(llm.stream({ messages: [], maxOutputTokens: 1 }))
-    expect(out).toEqual([{ type: 'delta', text: 'ok' }])
+    expect(out).toEqual([
+      { type: 'served', provider: 'deepseek', model: 'deepseek-flash' },
+      { type: 'delta', text: 'ok' },
+    ])
+  })
+})
+
+describe('DeepSeekProvider as a local server', () => {
+  test('no key means no Authorization header, and the name is local', async () => {
+    let seen: RequestInit | undefined
+    const llm = new DeepSeekProvider({
+      name: 'local',
+      apiKey: '',
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      model: 'lfm2',
+      timeoutMs: 5000,
+      fetch: (async (_u: string, init: RequestInit) => {
+        seen = init
+        return sseBody([
+          'data: {"choices":[{"delta":{"content":"ok"}}]}',
+          'data: [DONE]',
+        ])
+      }) as unknown as typeof fetch,
+    })
+    expect(llm.name).toBe('local')
+    const out = await collect(llm.stream({ messages: [], maxOutputTokens: 5 }))
+    expect(out).toEqual([
+      { type: 'served', provider: 'local', model: 'lfm2' },
+      { type: 'delta', text: 'ok' },
+    ])
+    expect(Object.keys(seen!.headers as object)).not.toContain('authorization')
+    expect(JSON.parse(String(seen!.body)).chat_template_kwargs).toEqual({
+      enable_thinking: false,
+    })
+  })
+
+  test('timing: llama.cpp timings become gpuMs, only for a local provider', async () => {
+    const body = () =>
+      sseBody([
+        'data: {"choices":[{"delta":{"content":"ok"}}]}',
+        'data: {"choices":[],"timings":{"prompt_ms":120.4,"predicted_ms":300.2}}',
+        'data: [DONE]',
+      ])
+    const mk = (name: 'local' | 'deepseek') =>
+      new DeepSeekProvider({
+        name,
+        apiKey: '',
+        baseUrl: 'http://127.0.0.1:8080/v1',
+        model: 'm',
+        timeoutMs: 5000,
+        fetch: (async () => body()) as unknown as typeof fetch,
+      })
+    const local = await collect(
+      mk('local').stream({ messages: [], maxOutputTokens: 5 }),
+    )
+    expect(local).toContainEqual({ type: 'timing', gpuMs: 421 })
+    const hosted = await collect(
+      mk('deepseek').stream({ messages: [], maxOutputTokens: 5 }),
+    )
+    expect(hosted.some((c) => c.type === 'timing')).toBe(false)
+  })
+})
+
+describe('speed from the local timings', () => {
+  const stream = (timings: string) =>
+    new DeepSeekProvider({
+      name: 'local',
+      apiKey: '',
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      model: 'm',
+      timeoutMs: 5000,
+      fetch: (async () =>
+        sseBody([
+          'data: {"choices":[{"delta":{"content":"ok"}}]}',
+          `data: {"choices":[],"timings":${timings}}`,
+          'data: [DONE]',
+        ])) as unknown as typeof fetch,
+    }).stream({ messages: [], maxOutputTokens: 5 })
+
+  test('predicted_n and predicted_ms travel with the timing', async () => {
+    const out = await collect(
+      stream('{"prompt_ms":100,"predicted_ms":2000,"predicted_n":240}'),
+    )
+    expect(out).toContainEqual({
+      type: 'timing',
+      gpuMs: 2100,
+      predictedTokens: 240,
+      predictedMs: 2000,
+    })
+  })
+
+  test('without predicted_n there is no speed to report', async () => {
+    const out = await collect(stream('{"prompt_ms":100,"predicted_ms":2000}'))
+    expect(out).toContainEqual({ type: 'timing', gpuMs: 2100 })
   })
 })

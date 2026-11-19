@@ -1,9 +1,14 @@
-// DeepSeek (OpenAI-compatible chat completions) behind `LlmProvider`. The key comes from the server
-// env only. No tools are ever sent. The only network destination is `baseUrl`.
+// OpenAI-compatible chat completions behind `LlmProvider`: DeepSeek, or a local server (llama.cpp,
+// Ollama, LM Studio) when `name` is 'local'. The key comes from the server env only; a local server
+// needs none, so the header is sent only when there is one. No tools are ever sent. The only network
+// destination is `baseUrl`.
 import { AppError } from '../errors.ts'
 import type { LlmChunk, LlmProvider, LlmRequest } from './provider.ts'
 
 export interface DeepSeekOptions {
+  /** Provider name reported in /health. Default 'deepseek'. */
+  name?: 'deepseek' | 'local'
+  /** Empty = no Authorization header (local server). */
   apiKey: string
   baseUrl: string
   model: string
@@ -15,11 +20,12 @@ const unavailable = () =>
   new AppError('llm_unavailable', 'The language model is not available.')
 
 export class DeepSeekProvider implements LlmProvider {
-  readonly name = 'deepseek'
+  readonly name: string
   readonly #o: DeepSeekOptions
 
   constructor(options: DeepSeekOptions) {
     this.#o = options
+    this.name = options.name ?? 'deepseek'
   }
 
   async *stream(req: LlmRequest): AsyncGenerator<LlmChunk> {
@@ -34,7 +40,9 @@ export class DeepSeekProvider implements LlmProvider {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${this.#o.apiKey}`,
+          ...(this.#o.apiKey
+            ? { authorization: `Bearer ${this.#o.apiKey}` }
+            : {}),
         },
         body: JSON.stringify({
           model: this.#o.model,
@@ -43,6 +51,11 @@ export class DeepSeekProvider implements LlmProvider {
           temperature: 0.2,
           stream: true,
           stream_options: { include_usage: true },
+          // Local reasoning models (Liquid LFM3, Qwen3) would spend the whole token budget thinking and
+          // return an empty answer; llama.cpp honors this template flag, other servers ignore it.
+          ...(this.name === 'local'
+            ? { chat_template_kwargs: { enable_thinking: false } }
+            : {}),
         }),
         signal,
       })
@@ -54,6 +67,11 @@ export class DeepSeekProvider implements LlmProvider {
       throw unavailable()
     }
 
+    yield {
+      type: 'served',
+      provider: this.#o.name ?? 'deepseek',
+      model: this.#o.model,
+    }
     const decoder = new TextDecoder()
     let buf = ''
     try {
@@ -67,16 +85,47 @@ export class DeepSeekProvider implements LlmProvider {
           const data = line.slice(5).trim()
           if (data === '[DONE]') return
           let json: {
-            choices?: { delta?: { content?: unknown } }[]
+            choices?: {
+              delta?: { content?: unknown; reasoning_content?: unknown }
+            }[]
             usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
+            timings?: {
+              prompt_ms?: unknown
+              predicted_ms?: unknown
+              predicted_n?: unknown
+            }
           }
           try {
             json = JSON.parse(data)
           } catch {
             continue
           }
-          const text = json.choices?.[0]?.delta?.content
+          const delta = json.choices?.[0]?.delta
+          const thought = delta?.reasoning_content
+          if (typeof thought === 'string' && thought)
+            yield { type: 'thinking', text: thought }
+          const text = delta?.content
           if (typeof text === 'string' && text) yield { type: 'delta', text }
+          // llama.cpp reports how long the machine worked. Only a local model has a GPU time.
+          const tm = json.timings
+          if (this.name === 'local' && tm) {
+            const ms =
+              (typeof tm.prompt_ms === 'number' ? tm.prompt_ms : 0) +
+              (typeof tm.predicted_ms === 'number' ? tm.predicted_ms : 0)
+            const n = tm.predicted_n
+            const pm = tm.predicted_ms
+            if (ms > 0)
+              yield {
+                type: 'timing',
+                gpuMs: Math.round(ms),
+                ...(typeof n === 'number' &&
+                typeof pm === 'number' &&
+                n > 0 &&
+                pm > 0
+                  ? { predictedTokens: n, predictedMs: pm }
+                  : {}),
+              }
+          }
           const u = json.usage
           if (
             u &&

@@ -4,6 +4,9 @@ import type { ChatService } from './chat/service.ts'
 import type { Retriever } from './index/search.ts'
 import type { RateLimiter } from './limits.ts'
 import type { Logger } from './log.ts'
+import type { ProjectService } from './project/service.ts'
+import type { UsageReport } from './usage/report.ts'
+import type { UsageSink } from './usage/store.ts'
 import type { ViewerPort } from './viewer.ts'
 
 export interface BuildInfo {
@@ -20,6 +23,12 @@ export interface AppDeps {
   /** `null` when the index file is missing or invalid: /ready is 503 and chat/search return `index_unavailable`. */
   retriever: Retriever | null
   chat: ChatService | null
+  /** "Proyecto" (M5). `null`/absent when `ASTRA_GITHUB_TOKEN` is not set: `project` answers `project_unavailable`. */
+  project?: ProjectService | null
+  /** Per-request usage records. Absent = none are kept. */
+  usage?: UsageSink | null
+  /** Aggregates for the owner dashboard. Absent = `aiUsage` answers `usage_unavailable`. */
+  usageReader?: { report(days: number): UsageReport } | null
   limiters: {
     chatViewer: RateLimiter
     chatIp: RateLimiter

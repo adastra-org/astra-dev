@@ -35,10 +35,10 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M2 — Contenido y traducción (0.3.0)
 
-- [ ] Importar natives desde `citizenfx/natives` (JSON) a docs generadas en build.
-- [ ] Capa propia: notas de Astra sobre cada native (override sin tocar la fuente).
-- [ ] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`.
-- [ ] i18n EN/ES en la UI y selector de idioma.
+- [x] Importar natives desde `citizenfx/natives`, los natives de CFX (`fivem/ext/native-decls`) y `fivem-docs`: importador (7.326 natives, 333 docs, [import/README.md](../import/README.md)) y publicación en el sitio bajo `/natives` ([natives/README.md](../natives/README.md)). Build verificado; falta la pasada en navegador.
+- [x] Capa propia: notas de Astra sobre cada native (`content/overrides/natives/`, sin tocar la fuente).
+- [~] Traducción ES vía `ds.ts` (deepseek-flash), revisada; marcar `translated: auto|reviewed`: pipeline hecho y probado ([translate/README.md](../translate/README.md)); **sin traducciones generadas** (la cuenta de DeepSeek no tiene saldo) y sin revisar.
+- [x] i18n EN/ES en la UI y selector de idioma ([i18n/README.md](../i18n/README.md)). Tests de paridad y de render; falta la pasada en navegador.
 
 ## M3 — Ask Ether (0.4.0)
 
@@ -46,31 +46,32 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 - [ ] Índice de embeddings de todas las docs (WeKit `embed_text`), regenerado en build.
 - [ ] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto.
 - [ ] Respuesta redactada por LLM sobre los resultados (componente Ask Ether de WeKit), con citas a las páginas.
-- [ ] Rate limit y caché de consultas.
+- [x] Rate limit y caché de consultas: rate limit por viewer e IP, presupuesto diario y caché de respuestas (v0.8.0). Ver [server/README.md](../server/README.md#caché-de-respuestas-v080).
 
-Estado del server de Ask Ether (v0.4.0, [server/README](../server/README.md)). Mitad servidor hecha; falta la UI del chat y verificar contra el embedder real y las cuentas reales. Se ticka el ítem de arriba cuando esté completo (servidor + UI):
+Estado de Ask Ether: servidor (v0.4.0, [server/README](../server/README.md)) y panel del chat (v0.8.0, [ask/README](../ask/README.md)) hechos y verificados en local. **Falta verificar contra el embedder real y las cuentas reales** (solo existen en el VPS), por eso los ítems de índice, búsqueda y permisos siguen en `[~]` y los ítems de arriba (índice, búsqueda, respuesta) siguen sin tickear:
 
 - [~] Índice de embeddings: `bun run index` y degradado a palabras clave verificados; el índice semántico real **no** (el embedder solo existe en el VPS). `deploy.yml` lo regenera, sin aplicar.
 - [~] Búsqueda en lenguaje natural: `searchDocs` (GraphQL) y recuperación del chat verificados con embedder simulado; falta el ranking con el embedder real.
-- [~] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y a mano contra DeepSeek; falta el panel en la UI.
-- [~] Rate limit y caché: rate limit por viewer e IP y presupuesto diario de tokens hechos (en memoria); **falta la caché**.
+- [x] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y contra DeepSeek, y panel del chat (citas como enlaces a las páginas, rechazo, límites, estados, teclado, 375 px) verificado en el navegador. El componente Ask Ether de WeKit no existe: ver [ask/README](../ask/README.md#decisión-componentes-propios).
+- [x] Rate limit y caché: rate limit por viewer e IP, presupuesto diario de tokens y caché de respuestas, todo en memoria del proceso (límite conocido: no se comparte entre slots).
 - [~] Permisos por `Viewer`: mapeo del payload real de cuentas (`staff` por `role`, `subscriber` por entitlement `tebex-subscriber` vigente) probado con fixtures; falta probarlo contra el endpoint desplegado.
 
 ## M4 — Sandbox de código (0.5.0)
 
-Es código no confiable del usuario: revisión de seguridad antes de merge.
+Es código no confiable del usuario: revisión de seguridad antes de merge. Detalle en [sandbox/README.md](../sandbox/README.md). Publicado como v0.9.0.
 
-- [ ] Decidir runtime (ver decisiones abiertas).
-- [ ] Ejecución aislada con límites de tiempo y memoria; sin red ni filesystem.
-- [ ] Salida: stdout, errores, tiempo de ejecución.
-- [ ] Lint y format del snippet (Lua).
-- [ ] Botón "Ejecutar" en bloques de código marcados en el Markdown.
+- [x] Decidir runtime: Lua 5.4 en WASM (wasmoon) en un Web Worker, sin server ni contenedor.
+- [x] Ejecución aislada con límites de tiempo, memoria, instrucciones y salida; sin red ni filesystem.
+- [x] Salida: stdout, errores con línea, tiempo de ejecución, límites alcanzados y crashes.
+- [x] Lint y format del snippet (Lua): luaparse con reglas propias y StyLua `CfxLua`.
+- [x] Página `/tools` con el playground de Lua (editor, Ejecutar, Revisar, Formatear) y la lista de herramientas que vienen (mapeo, vehículos, conversión de assets). v0.10.1.
+- [~] Botón "Ejecutar" en bloques de código marcados en el Markdown (```lua run): implementado con Revisar, Formatear y panel de salida; revisión de seguridad de código hecha ([sandbox/README.md](../sandbox/README.md#revisión-de-seguridad-2026-11-12)), **falta que la repita una persona y la pasada en navegador real** antes de merge.
 
 ## M5 — Proyecto: checklist y evolución (0.6.0)
 
-- [ ] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel.
-- [ ] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server).
-- [ ] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal.
+- [~] Integración MyChecklist (`checklist.wefaber.net`) y GitHub Projects, patrón de WePanel. Checklist del plan (`docs/plan/README.md`), milestones de GitHub y lista de MyChecklist por Code Mode hechos y probados con fixtures. GitHub verificado en vivo contra `adastra-org/astra-dev` (2026-11-12); **MyChecklist sin verificar contra el servicio real** (sin token). No se usa la API de GitHub Projects: ver [project/README.md](../project/README.md).
+- [x] Panel de evolución: issues, commits, burndown (API de GitHub, caché en server por TTL con ETag y copia vieja). Página `/roadmap` solo para staff.
+- [x] Complejidad: métrica por repo (líneas, archivos, churn) con serie temporal en `docs/project/complexity.json`, generada por `bun run complexity`.
 - [ ] Más adelante: WeGraph para pesos y relaciones entre decisiones.
 
 ## Decisiones abiertas
