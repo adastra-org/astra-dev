@@ -2,6 +2,11 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.20.0] - 2026-11-19
+
+### Added
+
+- `/ask`: select text in an answer and quote it in the next question ("Citar en la pregunta", #36). The quote carries the sources of the fragment (its `[n]` cites, or its block's when it has none) and they replace the previous answer's sources for that follow-up. Up to 2 quotes per question, shown as removable chips above the composer and as a quote block in the sent turn; Edit and Resend keep them. Client-only: no change to `POST /api/chat`.
 ## [0.19.12] - 2026-11-19
 
 ### Fixed
