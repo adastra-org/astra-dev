@@ -44,6 +44,14 @@ export function crumbsFor(
   )
   if (hidden) return [...crumbs, { label: tr(hidden.label), to: hidden.to }]
 
+  // Charla compartida (`/ask/s/<token>`): el token no va en la etiqueta.
+  if (/^\/ask\/s\/[^/]+\/?$/.test(pathname))
+    return [
+      ...crumbs,
+      { label: tr('ask.page.title'), to: '/ask' },
+      { label: tr('share.view.title'), to: pathname },
+    ]
+
   const section = sections.find(
     (n) => pathname === n.to || pathname.startsWith(`${n.to}/`),
   )

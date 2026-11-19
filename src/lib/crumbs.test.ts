@@ -22,6 +22,22 @@ describe('crumbsFor', () => {
     ])
   })
 
+  test('charla compartida: Inicio / Ask Ether / Charla compartida, sin el token', () => {
+    const c = crumbsFor('/ask/s/abc_123-x', (s) => titles[s])
+    expect(c.map((x) => x.label)).toEqual([
+      'Inicio',
+      'Ask Ether',
+      'Charla compartida',
+    ])
+    expect(c[1]?.to).toBe('/ask')
+    expect(labels('/ask/s/abc/')).toEqual([
+      'Inicio',
+      'Ask Ether',
+      'Charla compartida',
+    ])
+    expect(labels('/ask/otra')).toEqual(['Inicio', 'Página no encontrada'])
+  })
+
   test('documento: usa el título, con la ruta propia en la última miga', () => {
     expect(crumbsFor('/docs/glosario', (s) => titles[s])).toEqual([
       { label: 'Inicio', to: '/' },
