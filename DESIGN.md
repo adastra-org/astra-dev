@@ -114,6 +114,18 @@ Detalle y archivos en `docs/ask/README.md`. Es el único elemento con movimiento
 - Color: `data-chat-accent` (página `/ask` y panel) redefine `--accent`, `--accent-fill`, `--accent-fill-hover` y, en `mono`, `--on-accent`. Solo en la zona de chat; el tema del sitio no cambia. Cada preset cumple 4.5:1 en Void y Dawn (`accent.test.ts`). Las muestras del diálogo usan el propio preset, sin hex.
 - Copy: español neutro con tú, sin exclamaciones; dice qué se guarda (solo este navegador) y qué viaja al server (tono y largo, nunca texto escrito).
 
+### Compartir una charla
+
+Detalle y modelo de amenazas en `docs/server/README.md` y `docs/ask/README.md`. Es la única función que hace que el server guarde texto, así que el diálogo dice qué se guarda y por cuánto.
+
+- Botón "Compartir" en el rail de `/ask` (sección sesión, junto a "Nueva charla"). Deshabilitado sin turnos terminados o con una respuesta en curso; no existe si el server no tiene la función encendida.
+- `<dialog>` modal nativo, un solo borde, a 375 px el ancho menos 16 px. Orden: turnos a incluir (casillas de 44 px, por defecto los últimos), vista previa exacta en `<details>`, quién lo ve, vencimiento, "Crear enlace".
+- Quién lo ve: `staff` por defecto; `public` (solo si `publicAllowed`, hoy staff) pide una casilla de confirmación antes de habilitar "Crear enlace". Las opciones usan `Choice` (check + borde `accent`, nunca solo color).
+- Avisos en caja `surface-sunken` con icono: menciones de memorias reemplazadas por `[memoria]`, turnos generados con memorias activas, respuesta demasiado larga. Errores en `role="alert"`.
+- Resultado: URL en un campo de solo lectura con "Copiar" (`role="status"` anuncia "Copiado"). El enlace se muestra una vez; después solo se lista y se revoca ("Mis enlaces", icono `Trash2` con nombre accesible).
+- Lectura (`/ask/s/:token`): banner fijo `role="note"` ("captura enviada por quien la compartió, Ether no verifica que sea textual"), autoría solo en audiencia `staff`, vencimiento, turnos con `AnswerBody` y fuentes internas. Sin enlaces externos, `noindex` y `no-referrer`. Los estados vencido, revocado o sin permiso usan caja de aviso con motivo y salida.
+- Copy: español neutro con tú, sin exclamaciones.
+
 ## Docs reading layout
 
 The reader is a developer in the middle of a task, possibly with ADHD. A doc page is built so the first screen already

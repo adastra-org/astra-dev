@@ -556,7 +556,7 @@ function Notes({ turn }: { turn: Turn }) {
   )
 }
 
-function SourceRow({
+export function SourceRow({
   source,
   onNavigate,
 }: {

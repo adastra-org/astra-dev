@@ -623,6 +623,73 @@ print(("%.2f"):format(math.pi))
   'ask.rail.session': 'Sesión',
   'ask.rail.questions': 'Preguntas: {n}',
   'ask.rail.tokens': 'Tokens enviados y recibidos: {n}',
+  'share.button': 'Compartir',
+  'share.title': 'Compartir esta charla',
+  'share.lead':
+    'Se guarda una copia del texto en el servidor y se abre con un enlace. No incluye tus memorias ni lo que Ether sabe de tu entorno.',
+  'share.turns.legend': 'Preguntas que se incluyen',
+  'share.turns.item': 'Pregunta {n}: {q}',
+  'share.turns.none': 'Elige al menos una pregunta.',
+  'share.turns.max': 'Un enlace admite hasta {n} preguntas.',
+  'share.preview': 'Vista previa de lo que se envía',
+  'share.preview.question': 'Pregunta',
+  'share.preview.answer': 'Respuesta',
+  'share.audience.legend': 'Quién puede abrirlo',
+  'share.audience.staff': 'Equipo de Ad Astra',
+  'share.audience.staff.desc':
+    'Solo quien inició sesión con rol de equipo. Se muestra tu nombre de usuario.',
+  'share.audience.public': 'Cualquiera con el enlace',
+  'share.audience.public.desc':
+    'No pide iniciar sesión. No se muestra tu nombre.',
+  'share.audience.confirm':
+    'Entiendo que cualquiera con el enlace podrá leer estas respuestas.',
+  'share.ttl.legend': 'Vence en',
+  'share.ttl.24': '24 horas',
+  'share.ttl.168': '7 días',
+  'share.ttl.720': '30 días',
+  'share.scrubbed':
+    'Se reemplazaron {n} menciones literales de tus memorias por [memoria].',
+  'share.memoriesWarn':
+    'Alguna respuesta se generó con tus memorias activas. Revisa la vista previa: una memoria dicha con otras palabras no se detecta.',
+  'share.tooLong':
+    'Una pregunta o respuesta es demasiado larga para compartirla. Desmárcala.',
+  'share.create': 'Crear enlace',
+  'share.creating': 'Creando…',
+  'share.close': 'Cerrar',
+  'share.done.title': 'Enlace listo',
+  'share.done.hint':
+    'Se muestra una sola vez. Guárdalo ahora; si lo pierdes, revócalo y crea otro.',
+  'share.url.label': 'Enlace',
+  'share.copy': 'Copiar',
+  'share.copied': 'Copiado',
+  'share.mine': 'Mis enlaces',
+  'share.mine.empty': 'No tienes enlaces activos.',
+  'share.mine.loading': 'Cargando tus enlaces…',
+  'share.mine.item':
+    '{audience}: vence el {date}, {turns} preguntas, {views} vistas',
+  'share.revoke': 'Revocar',
+  'share.revoke.label': 'Revocar el enlace que vence el {date}',
+  'share.revoked': 'Enlace revocado.',
+  'share.err.notFound': 'Este enlace no existe o ya venció.',
+  'share.err.notFound.hint':
+    'Pídele a quien lo compartió que genere uno nuevo.',
+  'share.err.staff': 'Este enlace es solo para el equipo.',
+  'share.err.staff.hint':
+    'Inicia sesión con una cuenta del equipo de Ad Astra y vuelve a abrirlo.',
+  'share.err.limit': 'No se pudo crear el enlace.',
+  'share.err.limit.hint':
+    'Alcanzaste el máximo de enlaces activos. Revoca alguno e inténtalo de nuevo.',
+  'share.err.unavailable': 'Compartir no está disponible por ahora.',
+  'share.err.unavailable.hint': 'Inténtalo más tarde.',
+  'share.view.title': 'Charla compartida',
+  'share.view.banner':
+    'Captura enviada por quien la compartió. Ether no verifica que el texto sea el original.',
+  'share.view.by': 'Compartida por {handle}',
+  'share.view.byPublic': 'Compartida por un miembro de Ad Astra',
+  'share.view.expires': 'Vence el {date}',
+  'share.view.loading': 'Abriendo la charla…',
+  'share.view.question': 'Pregunta',
+  'share.view.back': 'Ir al chat',
 } as const
 
 export type MessageKey = keyof typeof es
@@ -1237,6 +1304,70 @@ print(("%.2f"):format(math.pi))
   'ask.rail.session': 'Session',
   'ask.rail.questions': 'Questions: {n}',
   'ask.rail.tokens': 'Tokens sent and received: {n}',
+  'share.button': 'Share',
+  'share.title': 'Share this chat',
+  'share.lead':
+    'A copy of the text is stored on the server and opens with a link. It does not include your memories or what Ether knows about your environment.',
+  'share.turns.legend': 'Questions to include',
+  'share.turns.item': 'Question {n}: {q}',
+  'share.turns.none': 'Pick at least one question.',
+  'share.turns.max': 'A link holds up to {n} questions.',
+  'share.preview': 'Preview of what gets sent',
+  'share.preview.question': 'Question',
+  'share.preview.answer': 'Answer',
+  'share.audience.legend': 'Who can open it',
+  'share.audience.staff': 'Ad Astra team',
+  'share.audience.staff.desc':
+    'Only people signed in with a team role. Your username is shown.',
+  'share.audience.public': 'Anyone with the link',
+  'share.audience.public.desc': 'No sign-in needed. Your name is not shown.',
+  'share.audience.confirm':
+    'I understand anyone with the link will be able to read these answers.',
+  'share.ttl.legend': 'Expires in',
+  'share.ttl.24': '24 hours',
+  'share.ttl.168': '7 days',
+  'share.ttl.720': '30 days',
+  'share.scrubbed':
+    '{n} literal mentions of your memories were replaced with [memoria].',
+  'share.memoriesWarn':
+    'Some answers were generated with your memories on. Check the preview: a memory worded differently is not detected.',
+  'share.tooLong': 'A question or answer is too long to share. Uncheck it.',
+  'share.create': 'Create link',
+  'share.creating': 'Creating…',
+  'share.close': 'Close',
+  'share.done.title': 'Link ready',
+  'share.done.hint':
+    'It is shown only once. Save it now; if you lose it, revoke it and create another.',
+  'share.url.label': 'Link',
+  'share.copy': 'Copy',
+  'share.copied': 'Copied',
+  'share.mine': 'My links',
+  'share.mine.empty': 'You have no active links.',
+  'share.mine.loading': 'Loading your links…',
+  'share.mine.item':
+    '{audience}: expires {date}, {turns} questions, {views} views',
+  'share.revoke': 'Revoke',
+  'share.revoke.label': 'Revoke the link that expires {date}',
+  'share.revoked': 'Link revoked.',
+  'share.err.notFound': 'This link does not exist or has expired.',
+  'share.err.notFound.hint': 'Ask whoever shared it to create a new one.',
+  'share.err.staff': 'This link is for the team only.',
+  'share.err.staff.hint':
+    'Sign in with an Ad Astra team account and open it again.',
+  'share.err.limit': 'The link could not be created.',
+  'share.err.limit.hint':
+    'You reached the limit of active links. Revoke one and try again.',
+  'share.err.unavailable': 'Sharing is not available right now.',
+  'share.err.unavailable.hint': 'Try again later.',
+  'share.view.title': 'Shared chat',
+  'share.view.banner':
+    'Capture sent by whoever shared it. Ether does not verify the text is the original.',
+  'share.view.by': 'Shared by {handle}',
+  'share.view.byPublic': 'Shared by an Ad Astra member',
+  'share.view.expires': 'Expires {date}',
+  'share.view.loading': 'Opening the chat…',
+  'share.view.question': 'Question',
+  'share.view.back': 'Go to the chat',
 }
 
 export const MESSAGES: Record<UiLang, Record<MessageKey, string>> = { es, en }

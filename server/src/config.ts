@@ -106,6 +106,27 @@ export interface Config {
     priceInPerMTok: number
     priceOutPerMTok: number
   }
+  /**
+   * Shared conversations (`/ask/s/<token>`). The only place the server keeps chat text, so it lives
+   * in its own SQLite file, apart from the usage records, and is off until `SHARE_DB_PATH` is set.
+   */
+  share: {
+    /** Empty = the feature is off (`share_unavailable`). Outside the slot dirs, like the usage DB. */
+    dbPath: string
+    defaultTtlHours: number
+    maxTtlHours: number
+    /** Active links per person / in total. */
+    maxPerViewer: number
+    maxActive: number
+    maxTurns: number
+    /** Serialized size of one shared conversation. */
+    maxBytes: number
+    createViewerPerHour: number
+    createIpPerHour: number
+    readIpPerMin: number
+    /** Reads of unknown, expired or revoked links, per IP: slows token guessing. */
+    missIpPerMin: number
+  }
 }
 
 type Env = Record<string, string | undefined>
@@ -295,6 +316,11 @@ export function loadConfig(env: Env = process.env): Config {
     }
   }
 
+  const shareMaxTtl = int('SHARE_MAX_TTL_HOURS', 720, 1, 8760)
+  const shareDefaultTtl = int('SHARE_DEFAULT_TTL_HOURS', 168, 1, 8760)
+  if (shareDefaultTtl > shareMaxTtl)
+    problems.push('SHARE_DEFAULT_TTL_HOURS must not exceed SHARE_MAX_TTL_HOURS')
+
   const config: Config = {
     production,
     slot,
@@ -428,6 +454,24 @@ export function loadConfig(env: Env = process.env): Config {
       retentionDays: int('USAGE_RETENTION_DAYS', 180, 1, 3650),
       priceInPerMTok: num('USAGE_PRICE_IN_PER_MTOK', 0.14, 0, 1000),
       priceOutPerMTok: num('USAGE_PRICE_OUT_PER_MTOK', 0.28, 0, 1000),
+    },
+    share: {
+      dbPath: str('SHARE_DB_PATH', ''),
+      defaultTtlHours: shareDefaultTtl,
+      maxTtlHours: shareMaxTtl,
+      maxPerViewer: int('SHARE_MAX_PER_VIEWER', 20, 1, 1000),
+      maxActive: int('SHARE_MAX_ACTIVE', 2000, 1, 100_000),
+      maxTurns: int('SHARE_MAX_TURNS', 20, 1, 50),
+      maxBytes: int('SHARE_MAX_BYTES', 49_152, 1024, 60_000),
+      createViewerPerHour: int(
+        'RATE_SHARE_CREATE_VIEWER_PER_HOUR',
+        10,
+        1,
+        10000,
+      ),
+      createIpPerHour: int('RATE_SHARE_CREATE_IP_PER_HOUR', 20, 1, 10000),
+      readIpPerMin: int('RATE_SHARE_READ_IP_PER_MIN', 60, 1, 10000),
+      missIpPerMin: int('RATE_SHARE_MISS_IP_PER_MIN', 10, 1, 10000),
     },
   }
 

@@ -23,6 +23,8 @@ import {
   MyChecklistSource,
 } from './project/mychecklist.ts'
 import { ProjectService } from './project/service.ts'
+import { ShareService } from './share/service.ts'
+import { ShareStore } from './share/store.ts'
 import { createViewerPort } from './viewer.ts'
 
 export interface EmbedderOverrides {
@@ -176,6 +178,21 @@ export async function buildDeps(
       logger.error('usage_store_unavailable', { reason: (e as Error).message })
     }
   }
+  let share: ShareService | null = null
+  if (config.share.dbPath) {
+    try {
+      share = new ShareService({
+        store: new ShareStore(config.share.dbPath),
+        retriever,
+        config,
+        logger,
+      })
+      logger.info('share_store', { purged: share.purge() })
+    } catch (e) {
+      // Sharing is optional: a bad path must not keep the chat down.
+      logger.error('share_store_unavailable', { reason: (e as Error).message })
+    }
+  }
   const chat = retriever
     ? new ChatService({
         retriever,
@@ -230,6 +247,7 @@ export async function buildDeps(
     project: createProject(config, logger),
     usage,
     usageReader: usage,
+    share,
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),

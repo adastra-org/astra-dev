@@ -1,10 +1,11 @@
-import { Gauge, SquarePen, TriangleAlert } from 'lucide-react'
+import { Gauge, Share2, SquarePen, TriangleAlert } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { ContextBudget } from '@/components/ask/ContextBudget'
 import { Composer, Transcript } from '@/components/ask/Conversation'
 import { MemoriesPanel } from '@/components/ask/MemoriesPanel'
 import { OnboardingDialog } from '@/components/ask/OnboardingDialog'
 import { PersonalizePanel } from '@/components/ask/PersonalizePanel'
+import { ShareDialog } from '@/components/ask/ShareDialog'
 import { useAsk } from '@/components/ask/useAsk'
 import { useAskPrefs } from '@/components/ask/useAskPrefs'
 import { useMemories } from '@/components/ask/useMemories'
@@ -16,6 +17,12 @@ import {
   sessionTotals,
 } from '@/lib/ask/budget'
 import { memoryTokens } from '@/lib/ask/memories'
+import {
+  fetchShareConfig,
+  SHARE_OFF,
+  shareableTurns,
+  type ShareConfig,
+} from '@/lib/ask/share'
 import { isTurnBusy, turnStatusText } from '@/lib/ask/status'
 import { askStore } from '@/lib/ask/store'
 import { useTitle } from '@/lib/title'
@@ -40,6 +47,17 @@ export default function Ask() {
   const endRef = useRef<HTMLDivElement>(null)
   const last = turns.at(-1)
   const busy = isTurnBusy(turns)
+  // Compartir (issue #34): el botón solo aparece si el server tiene la función encendida.
+  const [shareConfig, setShareConfig] = useState<ShareConfig>(SHARE_OFF)
+  const [sharing, setSharing] = useState(false)
+  useEffect(() => {
+    const ctl = new AbortController()
+    void fetchShareConfig({ signal: ctl.signal }).then((c) => {
+      if (!ctl.signal.aborted) setShareConfig(c)
+    })
+    return () => ctl.abort()
+  }, [])
+  const canShare = shareableTurns(turns).length > 0 && !busy
 
   // Sigue el final mientras llega texto, pero solo si la persona está cerca del final.
   const tail = `${turns.length}:${last?.text.length ?? 0}:${last?.status ?? ''}`
@@ -65,6 +83,15 @@ export default function Ask() {
         open={onboarding}
         onClose={() => setOnboarding(false)}
       />
+      {shareConfig.enabled && (
+        <ShareDialog
+          open={sharing}
+          onClose={() => setSharing(false)}
+          turns={turns}
+          memories={memories.items.map((m) => m.text)}
+          config={shareConfig}
+        />
+      )}
       <PageHeader
         eyebrow={tr('ask.page.eyebrow')}
         title={tr('ask.page.title')}
@@ -140,6 +167,17 @@ export default function Ask() {
               <SquarePen className="size-4" aria-hidden="true" />
               {tr('ask.newChat')}
             </button>
+            {shareConfig.enabled && (
+              <button
+                type="button"
+                disabled={!canShare}
+                onClick={() => setSharing(true)}
+                className="text-label text-ink bg-surface-raised hover:bg-surface-overlay inline-flex min-h-11 w-fit items-center gap-2 rounded-md px-3 disabled:opacity-50 md:min-h-8"
+              >
+                <Share2 className="size-4" aria-hidden="true" />
+                {tr('share.button')}
+              </button>
+            )}
           </section>
 
           <PersonalizePanel onOpen={() => setOnboarding(true)} />

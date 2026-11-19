@@ -143,6 +143,18 @@ La primera vez que se abre `/ask` aparece un diálogo de tres pasos (hola y nomb
 - Lógica en `src/lib/ask/prefs.ts` (enums, lectura defensiva, `PrefsStore`) y `onboarding.ts` (pasos y avance, portado de `eternum/lux`); UI en `OnboardingDialog.tsx` y `PersonalizePanel.tsx`.
 - Voz con Cartesia: fuera de alcance (issue #42).
 
+## Compartir una charla (v0.22.0)
+
+Desde el rail de `/ask`, **Compartir** abre un diálogo que crea un enlace de solo lectura (`/ask/s/<token>`). El botón solo existe si el server tiene la función encendida (`shareConfig.enabled`). Modelo de amenazas, permisos y variables en [docs/server](../server/README.md#compartir-una-charla-v0220-issue-34); reglas visuales en [`DESIGN.md`](../../DESIGN.md#compartir-una-charla).
+
+- **Qué se envía** (allow-list en `buildSharePayload`): por cada turno elegido, pregunta, respuesta y las fuentes citadas como `{n, slug, anchor}`. Nunca memorias, `<entorno>`, razonamiento, pasos, uso ni tiempos. Solo turnos terminados o detenidos con texto.
+- **Memorias**: el cliente reemplaza por `[memoria]` las coincidencias literales de todas tus memorias guardadas y avisa cuántas fueron y si algún turno se generó con memorias activas. La pregunta es texto libre: la vista previa muestra exactamente lo que se envía y cada turno se puede desmarcar.
+- **Quién ve**: `staff` por defecto (cuenta con rol de equipo); `public` cualquiera con el enlace, y pide marcar una confirmación. Por ahora solo staff y owner crean enlaces `public` (`shareConfig.publicAllowed`; el texto viene del cliente y un suscriptor podría publicar respuestas inventadas). **Vence** en 24 h, 7 días (por defecto) o 30 días.
+- **Enlace**: se muestra una vez, con Copiar. "Mis enlaces" lista los activos y permite revocar (borra el contenido del server).
+- **Lectura**: `SharedChat.tsx`. Banner fijo de captura sin verificar, autoría solo en `staff`, `noindex` y `no-referrer` por `<meta>`. Vencido, revocado o inexistente dan el mismo mensaje.
+
+Lógica pura en `src/lib/ask/share.ts` (payload, enmascarado, cliente GraphQL); UI en `ShareDialog.tsx` y `pages/SharedChat.tsx`; pruebas en `share.test.ts` y `share-dialog.test.tsx`.
+
 ## Citar un fragmento (v0.20.0)
 
 Al seleccionar texto dentro de una respuesta (página y panel) aparece la barra **Citar en la pregunta**. El fragmento queda como chip sobre el campo (máx. 2, se quita con la X) y viaja con la siguiente pregunta.
