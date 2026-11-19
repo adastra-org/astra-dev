@@ -120,7 +120,7 @@ Detalle y modelo de amenazas en `docs/server/README.md` y `docs/ask/README.md`. 
 
 - Botón "Compartir" en el rail de `/ask` (sección sesión, junto a "Nueva charla"). Deshabilitado sin turnos terminados o con una respuesta en curso; no existe si el server no tiene la función encendida.
 - `<dialog>` modal nativo, un solo borde, a 375 px el ancho menos 16 px. Orden: turnos a incluir (casillas de 44 px, por defecto los últimos), vista previa exacta en `<details>`, quién lo ve, vencimiento, "Crear enlace".
-- Quién lo ve: `staff` por defecto; `public` pide una casilla de confirmación antes de habilitar "Crear enlace". Las opciones usan `Choice` (check + borde `accent`, nunca solo color).
+- Quién lo ve: `staff` por defecto; `public` (solo si `publicAllowed`, hoy staff) pide una casilla de confirmación antes de habilitar "Crear enlace". Las opciones usan `Choice` (check + borde `accent`, nunca solo color).
 - Avisos en caja `surface-sunken` con icono: menciones de memorias reemplazadas por `[memoria]`, turnos generados con memorias activas, respuesta demasiado larga. Errores en `role="alert"`.
 - Resultado: URL en un campo de solo lectura con "Copiar" (`role="status"` anuncia "Copiado"). El enlace se muestra una vez; después solo se lista y se revoca ("Mis enlaces", icono `Trash2` con nombre accesible).
 - Lectura (`/ask/s/:token`): banner fijo `role="note"` ("captura enviada por quien la compartió, Ether no verifica que sea textual"), autoría solo en audiencia `staff`, vencimiento, turnos con `AnswerBody` y fuentes internas. Sin enlaces externos, `noindex` y `no-referrer`. Los estados vencido, revocado o sin permiso usan caja de aviso con motivo y salida.

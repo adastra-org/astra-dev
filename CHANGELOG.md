@@ -6,7 +6,7 @@ Notable changes per release, newest first. Format: [Keep a Changelog](https://ke
 
 ### Added
 
-- Compartir una charla de `/ask` por enlace de solo lectura (#34): botón en el rail, diálogo con vista previa exacta, audiencia `staff` (por defecto) o `public`, vencimiento 24 h / 7 d / 30 d, copiar, "Mis enlaces" y revocar. Lectura en `/ask/s/:token` con banner de captura sin verificar, `noindex` y `no-referrer`.
+- Compartir una charla de `/ask` por enlace de solo lectura (#34): botón en el rail, diálogo con vista previa exacta, audiencia `staff` (por defecto) o `public` (por ahora solo la crea staff), vencimiento 24 h / 7 d / 30 d, copiar, "Mis enlaces" y revocar. Lectura en `/ask/s/:token` con banner de captura sin verificar, `noindex` y `no-referrer`.
 - Server: operaciones GraphQL `shareConfig`, `shareChat`, `sharedChat`, `myShares`, `revokeShare`. SQLite propio (`SHARE_DB_PATH`, apagado si falta), token de 128 bits guardado solo como hash, payload por allow-list, fuentes reconstruidas desde el índice, límites y rate limits (`SHARE_*`, `RATE_SHARE_*`).
 
 ### Changed

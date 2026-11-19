@@ -358,22 +358,24 @@ export function ShareDialog({
                 {built.withMemories && <Note>{tr('share.memoriesWarn')}</Note>}
                 {built.tooLong && <Note>{tr('share.tooLong')}</Note>}
 
-                <Choice
-                  name={`${uid}-audience`}
-                  legend={tr('share.audience.legend')}
-                  value={audience}
-                  options={(['staff', 'public'] as const).map((v) => ({
-                    value: v,
-                    label: tr(`share.audience.${v}` as MessageKey),
-                    desc: tr(`share.audience.${v}.desc` as MessageKey),
-                  }))}
-                  onChange={(v) => {
-                    setAudience(v)
-                    setConfirmed(false)
-                  }}
-                />
+                {config.publicAllowed && (
+                  <Choice
+                    name={`${uid}-audience`}
+                    legend={tr('share.audience.legend')}
+                    value={audience}
+                    options={(['staff', 'public'] as const).map((v) => ({
+                      value: v,
+                      label: tr(`share.audience.${v}` as MessageKey),
+                      desc: tr(`share.audience.${v}.desc` as MessageKey),
+                    }))}
+                    onChange={(v) => {
+                      setAudience(v)
+                      setConfirmed(false)
+                    }}
+                  />
+                )}
 
-                {audience === 'public' && (
+                {config.publicAllowed && audience === 'public' && (
                   <label className="has-[:focus-visible]:outline-focus flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-1 py-2 has-[:focus-visible]:outline-2">
                     <input
                       type="checkbox"

@@ -147,7 +147,7 @@ Desde el rail de `/ask`, **Compartir** abre un diálogo que crea un enlace de so
 
 - **Qué se envía** (allow-list en `buildSharePayload`): por cada turno elegido, pregunta, respuesta y las fuentes citadas como `{n, slug, anchor}`. Nunca memorias, `<entorno>`, razonamiento, pasos, uso ni tiempos. Solo turnos terminados o detenidos con texto.
 - **Memorias**: el cliente reemplaza por `[memoria]` las coincidencias literales de todas tus memorias guardadas y avisa cuántas fueron y si algún turno se generó con memorias activas. La pregunta es texto libre: la vista previa muestra exactamente lo que se envía y cada turno se puede desmarcar.
-- **Quién ve**: `staff` por defecto (cuenta con rol de equipo); `public` cualquiera con el enlace, y pide marcar una confirmación. **Vence** en 24 h, 7 días (por defecto) o 30 días.
+- **Quién ve**: `staff` por defecto (cuenta con rol de equipo); `public` cualquiera con el enlace, y pide marcar una confirmación. Por ahora solo staff y owner crean enlaces `public` (`shareConfig.publicAllowed`; el texto viene del cliente y un suscriptor podría publicar respuestas inventadas). **Vence** en 24 h, 7 días (por defecto) o 30 días.
 - **Enlace**: se muestra una vez, con Copiar. "Mis enlaces" lista los activos y permite revocar (borra el contenido del server).
 - **Lectura**: `SharedChat.tsx`. Banner fijo de captura sin verificar, autoría solo en `staff`, `noindex` y `no-referrer` por `<meta>`. Vencido, revocado o inexistente dan el mismo mensaje.
 

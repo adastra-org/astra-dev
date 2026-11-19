@@ -183,6 +183,7 @@ describe('llamadas GraphQL', () => {
       maxTurns: 20,
       defaultTtlHours: 168,
       maxTtlHours: 720,
+      publicAllowed: true,
     }
     const ok = fakeFetch({ data: { shareConfig: cfg } })
     expect(await fetchShareConfig({ fetch: ok.fn, base: '/api' })).toEqual(cfg)

@@ -5,7 +5,12 @@ import { GraphQLError } from 'graphql'
 import type { AppDeps } from '../context.ts'
 import { AppError } from '../errors.ts'
 import type { GqlContext } from '../graphql.ts'
-import type { Created, ShareService, ShareSummary } from './service.ts'
+import {
+  canSharePublic,
+  type Created,
+  type ShareService,
+  type ShareSummary,
+} from './service.ts'
 import type { SharedChat, SharedSource, SharedTurn } from './service.ts'
 
 type Builder = InstanceType<typeof SchemaBuilder<{ Context: GqlContext }>>
@@ -113,6 +118,7 @@ export function addShareSchema(builder: Builder, deps: AppDeps) {
       maxTurns: number
       defaultTtlHours: number
       maxTtlHours: number
+      publicAllowed: boolean
     }>('ShareConfig')
     .implement({
       fields: (t) => ({
@@ -120,6 +126,7 @@ export function addShareSchema(builder: Builder, deps: AppDeps) {
         maxTurns: t.exposeInt('maxTurns'),
         defaultTtlHours: t.exposeInt('defaultTtlHours'),
         maxTtlHours: t.exposeInt('maxTtlHours'),
+        publicAllowed: t.exposeBoolean('publicAllowed'),
       }),
     })
 
@@ -173,15 +180,21 @@ export function addShareSchema(builder: Builder, deps: AppDeps) {
   builder.queryFields((t) => ({
     shareConfig: t.field({
       type: ConfigRef,
-      resolve: () =>
-        deps.share
-          ? { enabled: true, ...deps.share.settings }
-          : {
-              enabled: false,
-              maxTurns: 0,
-              defaultTtlHours: 0,
-              maxTtlHours: 0,
-            },
+      resolve: async (_root, _args, ctx) => {
+        if (!deps.share)
+          return {
+            enabled: false,
+            maxTurns: 0,
+            defaultTtlHours: 0,
+            maxTtlHours: 0,
+            publicAllowed: false,
+          }
+        // Accounts down or signed out: no public option, the rest still works.
+        const publicAllowed = await deps.viewers
+          .resolve(ctx.request)
+          .then(canSharePublic, () => false)
+        return { enabled: true, ...deps.share.settings, publicAllowed }
+      },
     }),
     myShares: t.field({
       type: [SummaryRef],

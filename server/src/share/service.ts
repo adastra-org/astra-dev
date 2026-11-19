@@ -159,6 +159,13 @@ export class ShareService {
     requireChatAccess(viewer)
     const now = this.#now()
     const audience = this.#audience(input.audience)
+    // For now only staff publish links anyone can open: the text comes from the client, so a
+    // public link would let any subscriber post made-up answers under this domain.
+    if (audience === 'public' && !canSharePublic(viewer))
+      throw new AppError(
+        'staff_required',
+        'Only staff can create public links.',
+      )
     const ttlHours = this.#ttl(input.ttlHours)
     const payload = this.#sanitize(input.turns)
 
@@ -393,6 +400,10 @@ export class ShareService {
     return out
   }
 }
+
+/** Who may create a `public` link. */
+export const canSharePublic = (viewer: Viewer): boolean =>
+  viewer.id !== null && atLeast(viewer.role, 'staff')
 
 const notFound = () =>
   new AppError('share_not_found', 'This link does not exist or has expired.')

@@ -29,6 +29,7 @@ const config: ShareConfig = {
   maxTurns: 20,
   defaultTtlHours: 168,
   maxTtlHours: 720,
+  publicAllowed: true,
 }
 const done = (id: number, over: Partial<Turn> = {}): Turn => ({
   ...emptyTurn(id, `pregunta ${id}`),
@@ -72,6 +73,20 @@ describe('ShareDialog', () => {
     // `public` pide confirmación: con `staff` elegido no aparece.
     expect(html).not.toContain('Entiendo que cualquiera')
     expect(html).toContain('Crear enlace')
+  })
+
+  test('sin publicAllowed (no staff): solo staff, sin opción pública', () => {
+    const html = wrap(
+      <ShareDialog
+        open
+        onClose={() => {}}
+        turns={[done(1)]}
+        memories={[]}
+        config={{ ...config, publicAllowed: false }}
+      />,
+    )
+    expect(html).toContain('Crear enlace')
+    expect(html).not.toContain('Cualquiera con el enlace')
   })
 
   test('avisa del enmascarado y de memorias activas', () => {

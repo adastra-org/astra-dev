@@ -166,14 +166,29 @@ describe('feature off', () => {
     const s = await setup()
     const r = await s.gql(
       'anon',
-      '{ shareConfig { enabled maxTurns defaultTtlHours maxTtlHours } }',
+      '{ shareConfig { enabled maxTurns defaultTtlHours maxTtlHours publicAllowed } }',
     )
     expect(r.data.shareConfig).toEqual({
       enabled: true,
       maxTurns: 20,
       defaultTtlHours: 168,
       maxTtlHours: 720,
+      publicAllowed: false,
     })
+  })
+
+  test('publicAllowed: staff and owner only; accounts down is false', async () => {
+    const s = await setup()
+    const q = '{ shareConfig { publicAllowed } }'
+    for (const [as, ok] of [
+      ['anon', false],
+      ['free', false],
+      ['ana', false],
+      ['down', false],
+      ['sol', true],
+      ['faku', true],
+    ] as const)
+      expect((await s.gql(as, q)).data.shareConfig.publicAllowed).toBe(ok)
   })
 })
 
@@ -207,6 +222,14 @@ describe('creating', () => {
     const s = await setup()
     expect(s.code(await s.share('down'))).toBe('viewer_unavailable')
     expect(s.store.query('SELECT * FROM shared_chats')).toHaveLength(0)
+  })
+
+  test('public links: staff and owner only, for now', async () => {
+    const s = await setup()
+    expect(s.code(await s.share('ana', 'public'))).toBe('staff_required')
+    expect(s.store.query('SELECT * FROM shared_chats')).toHaveLength(0)
+    for (const as of ['sol', 'faku'])
+      expect((await created(s, as, 'public')).token).toBeDefined()
   })
 
   test('audience and ttl are validated', async () => {
@@ -282,7 +305,7 @@ describe('reading a staff link', () => {
 describe('reading a public link', () => {
   test('anonymous opens it and accounts is never asked', async () => {
     const s = await setup()
-    const { token } = await created(s, 'ana', 'public')
+    const { token } = await created(s, 'sol', 'public')
     const before = s.viewers.resolves
     const r = await s.read('anon', token)
     expect(r.errors).toBeUndefined()
@@ -292,18 +315,18 @@ describe('reading a public link', () => {
 
   test('accounts down does not stop a public link', async () => {
     const s = await setup()
-    const { token } = await created(s, 'ana', 'public')
+    const { token } = await created(s, 'sol', 'public')
     const r = await s.read('down', token)
     expect(r.errors).toBeUndefined()
   })
 
   test('it never says who shared it, and the viewer id is stored but never returned', async () => {
     const s = await setup()
-    const { token } = await created(s, 'ana', 'public')
+    const { token } = await created(s, 'sol', 'public')
     const r = await s.read('anon', token)
     expect(r.data.sharedChat.sharedBy).toBeNull()
-    expect(JSON.stringify(r)).not.toContain('u-ana')
-    expect(JSON.stringify(r)).not.toContain('ana"')
+    expect(JSON.stringify(r)).not.toContain('u-sol')
+    expect(JSON.stringify(r)).not.toContain('sol"')
     const row = s.store.query<{ owner_handle: string | null }>(
       'SELECT owner_handle FROM shared_chats',
     )[0]!
@@ -628,7 +651,7 @@ describe('limits', () => {
 
   test('reads are rate limited per IP', async () => {
     const s = await setup({ RATE_SHARE_READ_IP_PER_MIN: '2' })
-    const { token } = await created(s, 'ana', 'public')
+    const { token } = await created(s, 'sol', 'public')
     await s.read('anon', token)
     await s.read('anon', token)
     expect(s.code(await s.read('anon', token))).toBe('rate_limited')

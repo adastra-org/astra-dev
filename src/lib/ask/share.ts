@@ -29,6 +29,8 @@ export interface ShareConfig {
   maxTurns: number
   defaultTtlHours: number
   maxTtlHours: number
+  /** Solo staff crea enlaces públicos (por ahora). */
+  publicAllowed: boolean
 }
 
 export const SHARE_OFF: ShareConfig = {
@@ -36,6 +38,7 @@ export const SHARE_OFF: ShareConfig = {
   maxTurns: 0,
   defaultTtlHours: 0,
   maxTtlHours: 0,
+  publicAllowed: false,
 }
 
 export interface SharePayloadTurn {
@@ -257,7 +260,7 @@ export async function fetchShareConfig(
 ): Promise<ShareConfig> {
   try {
     const d = await gql<{ shareConfig: ShareConfig }>(
-      '{ shareConfig { enabled maxTurns defaultTtlHours maxTtlHours } }',
+      '{ shareConfig { enabled maxTurns defaultTtlHours maxTtlHours publicAllowed } }',
       {},
       opts,
     )
