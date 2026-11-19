@@ -7,8 +7,8 @@ Layout base de Astra Dev: sidebar, barra superior y área de contenido, con rout
 | Ruta          | Página               | Estado                         |
 | ------------- | -------------------- | ------------------------------ |
 | `/`           | `pages/Home.tsx`     | Portada                        |
-| `/docs`       | `pages/Docs.tsx`     | Placeholder                    |
-| `/docs/:slug` | `pages/Doc.tsx`      | Ejemplo del formato de lectura |
+| `/docs`       | `pages/Docs.tsx`     | Índice por tag con filtro (M1) |
+| `/docs/:slug` | `pages/Doc.tsx`      | Doc real o 404 de doc (M1)     |
 | `/tools`      | `pages/Tools.tsx`    | Placeholder                    |
 | `/roadmap`    | `pages/Roadmap.tsx`  | Placeholder                    |
 | `*`           | `pages/NotFound.tsx` | 404                            |
@@ -56,6 +56,9 @@ Placeholder. ES activo, EN deshabilitado. No guarda estado ni cambia textos; la 
 
 ## Pendiente
 
-- Resaltado de sintaxis y render de Markdown: M1.
-- Botón de volver arriba en páginas largas: M1, junto con el motor de docs.
-- Búsqueda en la barra superior: M3 (Ask Ether).
+- Resaltado de sintaxis, render de Markdown y botón de volver arriba: hechos en M1, ver [`docs-engine/README.md`](../docs-engine/README.md).
+- Búsqueda léxica Ctrl+K: hecha, ver [`cmdk/README.md`](../cmdk/README.md). La búsqueda semántica y Ask Ether siguen en M3.
+
+## Barra superior (v0.3.0)
+
+Ya no es una barra: son pastillas flotantes sin fondo ni borde (menú bajo `lg`, migas de pan, buscador Ctrl+K, idioma). Cada pastilla lleva su relleno; el espacio entre ellas es el único separador con el contenido. Las migas salen de la ruta (`src/lib/crumbs.ts`, con test) y bajo `md` colapsan a "… / actual". Reglas en [`DESIGN.md`](../../DESIGN.md), sección "Shell".

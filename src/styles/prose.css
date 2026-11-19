@@ -1,0 +1,200 @@
+/* Contenido de docs: el HTML que genera scripts/docs/markdown.ts, con roles del design system.
+   Nunca un hex ni una paleta externa. */
+
+/* Colores del resaltado (shiki, tema css-variables con prefijo --code-). Cada uno es un rol.
+   src/lib/code-colors.test.ts mide su contraste sobre surface-sunken. */
+:root {
+  --code-foreground: var(--ink);
+  --code-token-comment: var(--ink-subtle);
+  --code-token-keyword: var(--accent);
+  --code-token-string: var(--success);
+  --code-token-string-expression: var(--success);
+  --code-token-constant: var(--warning);
+  --code-token-function: var(--info);
+  --code-token-parameter: var(--ink-muted);
+  --code-token-punctuation: var(--ink-muted);
+  --code-token-link: var(--accent);
+}
+
+.doc-prose {
+  color: var(--ink-muted);
+  max-width: 65ch;
+  @apply text-body;
+}
+.doc-prose > * + * {
+  margin-top: 1rem;
+}
+/* Prosa: pasa la palabra entera al renglón siguiente (sin partir ni guionar), párrafos
+   justificados con lang="es" (lo pone <article lang>) y sin viudas. Solo `p`: no listas, tablas,
+   código ni títulos. Bajo md la columna es angosta y el justificado abre huecos: alineado al inicio. */
+.doc-prose {
+  min-width: 0;
+  hyphens: manual;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.doc-prose p,
+.doc-prose li {
+  text-wrap: pretty;
+}
+@media (width >= 48rem) {
+  .doc-prose p {
+    text-align: justify;
+  }
+}
+.doc-prose :is(h2, h3, h4) {
+  text-wrap: balance;
+}
+.doc-prose strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.doc-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.doc-prose a:hover {
+  color: var(--ink);
+}
+.doc-prose ul,
+.doc-prose ol {
+  padding-left: 1.25rem;
+}
+.doc-prose ul {
+  list-style: disc;
+}
+.doc-prose ol {
+  list-style: decimal;
+}
+.doc-prose li + li {
+  margin-top: 0.5rem;
+}
+.doc-prose li::marker {
+  color: var(--ink-subtle);
+}
+.doc-prose h3 {
+  color: var(--ink);
+  margin-top: 1.5rem;
+  scroll-margin-top: 5rem;
+  @apply text-h4;
+}
+.doc-prose h4 {
+  color: var(--ink);
+  margin-top: 1.25rem;
+  scroll-margin-top: 5rem;
+  @apply text-label;
+}
+.doc-prose blockquote {
+  border-left: 2px solid var(--border-strong);
+  padding-left: 1rem;
+}
+.doc-prose hr {
+  border-color: var(--border);
+}
+
+/* Código en línea. */
+.doc-prose :not(pre) > code,
+.doc-summary :not(pre) > code {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: 400 0.875em/1 var(--font-mono);
+  padding: 0.125em 0.375em;
+  /* Un token (slug, ruta, clave) nunca se parte: baja entero al renglón siguiente. */
+  white-space: nowrap;
+}
+/* Token muy largo sin espacios (JSON, ruta): puede partirse, solo como último recurso. */
+.doc-prose :not(pre) > code.code-long {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* Código anidado (listas, citas): sin cabecera, mismo aspecto. */
+.doc-prose pre.code-plain {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  overflow-x: auto;
+  padding: 1rem;
+  @apply text-code;
+}
+
+/* Un borde por nivel visible: lo que vive dentro de un contenedor con borde (sección plegable,
+   resumen, tabla) se distingue por fondo y espacio, no por otro borde. */
+:is(details, .doc-summary, .table-wrap) :is(.code-fig, pre.code-plain),
+:is(details, .doc-summary, .table-wrap) :not(pre) > code {
+  border-color: transparent;
+}
+
+/* Secciones plegables: alto y opacidad animados al abrir y al cerrar. `interpolate-size` permite
+   animar hacia `auto`; sin `::details-content` (Firefox, Safari antiguos) abre al instante. */
+@media (prefers-reduced-motion: no-preference) {
+  details {
+    interpolate-size: allow-keywords;
+  }
+  details::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      block-size var(--duration-panel) var(--ease-out-brand),
+      opacity var(--duration-panel) var(--ease-out-brand),
+      content-visibility var(--duration-panel) allow-discrete;
+  }
+  details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+}
+
+/* Ancla de encabezado: aparece al pasar el cursor o al enfocar; en táctil siempre visible. */
+.anchor {
+  color: var(--ink-subtle);
+  margin-left: 0.5rem;
+  opacity: 0;
+  text-decoration: none;
+}
+:is(h2, h3, h4):hover > .anchor,
+.anchor:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .anchor {
+    opacity: 1;
+  }
+}
+
+/* Tablas: se desplazan dentro de su contenedor, nunca ensanchan la página. */
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  max-width: 100%;
+  overflow-x: auto;
+}
+.table-wrap table {
+  border-collapse: collapse;
+  min-width: 30rem;
+  width: 100%;
+}
+.table-wrap th {
+  color: var(--ink);
+  text-align: left;
+  @apply text-label;
+}
+.table-wrap th,
+.table-wrap td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  @apply text-body-sm;
+}
+.table-wrap th {
+  background: var(--surface-raised);
+  @apply text-label;
+}
+.table-wrap tr:last-child td {
+  border-bottom: 0;
+}

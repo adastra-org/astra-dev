@@ -1,0 +1,21 @@
+/* Command palette: entrada breve del panel y del fondo. Solo sin `prefers-reduced-motion: reduce`. */
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes palette-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .palette-dialog[open] {
+    animation: palette-in var(--duration-panel) var(--ease-out-brand);
+  }
+  .palette-dialog[open]::backdrop {
+    animation: palette-fade var(--duration-panel) var(--ease-out-brand);
+  }
+}
