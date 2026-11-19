@@ -15,6 +15,9 @@ export type ErrorCode =
   | 'index_unavailable'
   | 'project_unavailable'
   | 'usage_unavailable'
+  | 'share_unavailable'
+  | 'share_not_found'
+  | 'share_limit'
   | 'not_found'
   | 'internal'
 
@@ -33,6 +36,9 @@ const STATUS: Record<ErrorCode, number> = {
   index_unavailable: 503,
   project_unavailable: 503,
   usage_unavailable: 503,
+  share_unavailable: 503,
+  share_not_found: 404,
+  share_limit: 409,
   not_found: 404,
   internal: 500,
 }

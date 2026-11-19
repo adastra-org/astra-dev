@@ -32,6 +32,7 @@ export function useMentionOptions(
   const sessions = useSyncExternalStore(
     sessionStore.subscribe,
     sessionStore.getState,
+    sessionStore.getState,
   )
   const [remote, setRemote] = useState<{
     query: string

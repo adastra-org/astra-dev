@@ -29,7 +29,7 @@ Reglas, sin excepciones:
 
 /** Zero-width, bidi and control characters that hide or reorder text. `\n` and `\t` are kept. */
 // oxlint-disable-next-line no-control-regex
-const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F​-‏‪-‮⁠-⁤﻿]/g
+const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F​-‏‪-‮⁠-⁤⁦-⁩﻿]/g
 
 /** Cleans untrusted text: no invisible chars, bounded blank lines, trimmed, capped. */
 export function cleanText(s: string, max: number): string {

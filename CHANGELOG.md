@@ -2,12 +2,30 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
-## [0.21.0] - 2026-11-19
+## [0.23.0] - 2026-11-19
 
 ### Added
 
 - `/ask`: `@` in the composer attaches a saved conversation, a native or an issue as context for the next question (#33). Conversations are the ones saved in this browser (`localStorage`) and travel as a bounded summary; natives and issues are resolved by the server (issues for staff only).
 - `POST /chat` accepts `mentions` (max 5, strict validation, never cached, count-only logging); GraphQL `project.issues(query, limit)` for the picker.
+
+## [0.22.0] - 2026-11-19
+
+### Added
+
+- Compartir una charla de `/ask` por enlace de solo lectura (#34): botón en el rail, diálogo con vista previa exacta, audiencia `staff` (por defecto) o `public` (por ahora solo la crea staff), vencimiento 24 h / 7 d / 30 d, copiar, "Mis enlaces" y revocar. Lectura en `/ask/s/:token` con banner de captura sin verificar, `noindex` y `no-referrer`.
+- Server: operaciones GraphQL `shareConfig`, `shareChat`, `sharedChat`, `myShares`, `revokeShare`. SQLite propio (`SHARE_DB_PATH`, apagado si falta), token de 128 bits guardado solo como hash, payload por allow-list, fuentes reconstruidas desde el índice, límites y rate limits (`SHARE_*`, `RATE_SHARE_*`).
+
+### Changed
+
+- `cleanText` también quita los aislantes bidi U+2066 a U+2069 (afecta al chat).
+- `/graphql` rechaza cuerpos de más de 128 KiB.
+
+## [0.20.0] - 2026-11-19
+
+### Added
+
+- `/ask`: select text in an answer and quote it in the next question ("Citar en la pregunta", #36). The quote carries the sources of the fragment (its `[n]` cites, or its block's when it has none) and they replace the previous answer's sources for that follow-up. Up to 2 quotes per question, shown as removable chips above the composer and as a quote block in the sent turn; Edit and Resend keep them. Client-only: no change to `POST /api/chat`.
 
 ## [0.19.12] - 2026-11-19
 

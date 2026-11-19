@@ -181,6 +181,7 @@ export class Retriever {
   readonly #lookup: NativeLookup
   readonly #names: NativeNameIndex
   readonly #opts: RetrieverOptions
+  readonly #bySlug = new Map<string, IndexedChunk[]>()
   #downUntil = 0
 
   constructor(
@@ -194,6 +195,37 @@ export class Retriever {
     this.#lookup = new NativeLookup(index.chunks)
     this.#names = new NativeNameIndex(index.chunks)
     this.#opts = opts
+    for (const c of index.chunks) {
+      const list = this.#bySlug.get(c.slug)
+      if (list) list.push(c)
+      else this.#bySlug.set(c.slug, [c])
+    }
+  }
+
+  /**
+   * What the index says about a slug, for rebuilding a source from an id alone (shared chats keep
+   * `slug` and `anchor`, never a title or a path). `anchor` is kept only if some chunk of the slug
+   * has it; otherwise the source points at the top of the page. `null` = the slug is not indexed.
+   */
+  sourceRef(
+    slug: string,
+    anchor: string | null = null,
+  ): Pick<
+    IndexedChunk,
+    'kind' | 'slug' | 'title' | 'heading' | 'anchor'
+  > | null {
+    const list = this.#bySlug.get(slug)
+    const first = list?.[0]
+    if (!list || !first) return null
+    const hit = anchor ? list.find((c) => c.anchor === anchor) : undefined
+    const c = hit ?? first
+    return {
+      kind: c.kind,
+      slug: c.slug,
+      title: c.title,
+      heading: hit ? hit.heading : null,
+      anchor: hit ? hit.anchor : null,
+    }
   }
 
   get info() {
