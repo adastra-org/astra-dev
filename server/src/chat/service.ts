@@ -13,6 +13,7 @@ import type { LlmProvider } from '../llm/provider.ts'
 import { estimateTokens, type TokenBudget } from '../limits.ts'
 import { chatSettingsFor, type Policy } from '../policy.ts'
 import { cacheKey, type AnswerCache } from './cache.ts'
+import type { ResolvedMentions } from './mentions.ts'
 import { renderStyle, styleLabel, type ChatStyle } from './style.ts'
 import {
   REFUSAL_ES,
@@ -144,6 +145,8 @@ export interface ChatInput {
   sources?: string[]
   /** Validated user memories (`parseMemories`). Their presence turns the answer cache off. */
   memories?: string[]
+  /** Resolved `@` mentions (`resolveMentions`). Their presence turns the answer cache off. */
+  mentions?: ResolvedMentions
   /** Validated tone/length (`parseStyle`). Part of the cache key unless it is the default. */
   style?: ChatStyle
   /** UI language of the visitor. */
@@ -303,12 +306,22 @@ export class ChatService {
 
     // The gate only removes fragments. null = it could not decide: everything stays. It judges the
     // question with the topic it refers to, and never drops what the previous answer was built on.
-    let hits = found.hits
+    // Natives the user mentioned with `@` come first and are never judged: they asked for them.
+    // A slug the index does not know is a 404, not a silent drop.
+    const mentionedNatives = input.mentions?.natives ?? []
+    const pinned = this.#d.retriever.nativeChunks(mentionedNatives)
+    for (const slug of new Set(mentionedNatives))
+      if (!pinned.some((h) => h.slug === slug))
+        throw new AppError('not_found', `Native "${slug}" does not exist.`)
+    const mentionBlocks = input.mentions?.blocks ?? []
+    const mentioned = pinned.length > 0 || mentionBlocks.length > 0
+    const pinnedIds = new Set(pinned.map((h) => h.id))
+    let hits = [...pinned, ...found.hits.filter((h) => !pinnedIds.has(h.id))]
     let gate: { kept: number; total: number } | null = null
     if (this.#d.gate && hits.length) {
       const tGate = performance.now()
-      // What the previous answer cited and what the question names are never judged.
-      const exempt = new Set(named.map((c) => c.id))
+      // What the previous answer cited, what the question names and what was mentioned are never judged.
+      const exempt = new Set([...named.map((c) => c.id), ...pinnedIds])
       const gated = hits.filter(
         (h) => !carrySlugs?.has(h.slug) && !exempt.has(h.id),
       )
@@ -345,6 +358,7 @@ export class ChatService {
         : hits,
       ...(topic.length ? { topic } : {}),
       ...(input.memories?.length ? { memories: input.memories } : {}),
+      ...(mentionBlocks.length ? { mentions: mentionBlocks } : {}),
       ...(styleBody ? { style: styleBody } : {}),
       contextMaxChars: s.contextMaxChars,
       env: renderEnv({
@@ -399,7 +413,8 @@ export class ChatService {
       followUp &&
       lastAssistant !== undefined &&
       !isRefusal(lastAssistant.content)
-    if (!built.used.length && !talk) {
+    // A mention is material of its own (a past conversation, an issue): the model decides what to do with it.
+    if (!built.used.length && !talk && !mentioned) {
       return {
         ...base,
         async *events() {
@@ -420,9 +435,9 @@ export class ChatService {
     // Same question over the same sources for the same role: replay the stored answer. No model
     // call and no budget spent.
     const { cache } = this.#d
-    // Memories shape the answer and are the user's own: such an answer is neither read from nor stored in the cache.
+    // Memories and mentions shape the answer and are the user's own: such an answer is neither read from nor stored in the cache.
     const key =
-      cache?.enabled && !input.memories?.length
+      cache?.enabled && !input.memories?.length && !mentioned
         ? cacheKey({
             role: input.role,
             question,

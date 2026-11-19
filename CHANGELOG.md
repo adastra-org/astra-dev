@@ -2,6 +2,13 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.23.0] - 2026-11-19
+
+### Added
+
+- `/ask`: `@` in the composer attaches a saved conversation, a native or an issue as context for the next question (#33). Conversations are the ones saved in this browser (`localStorage`) and travel as a bounded summary; natives and issues are resolved by the server (issues for staff only).
+- `POST /chat` accepts `mentions` (max 5, strict validation, never cached, count-only logging); GraphQL `project.issues(query, limit)` for the picker.
+
 ## [0.22.1] - 2026-11-19
 
 ### Fixed

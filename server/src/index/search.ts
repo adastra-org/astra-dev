@@ -247,6 +247,23 @@ export class Retriever {
   }
 
   /**
+   * The first `perSlug` chunks of each native slug, as hits (score 1: the user picked them). Slugs
+   * that are not natives of this index are left out; the caller compares to detect them.
+   */
+  nativeChunks(slugs: readonly string[], perSlug = 2): Hit[] {
+    const out: Hit[] = []
+    for (const slug of new Set(slugs)) {
+      let n = 0
+      for (const c of this.#index.chunks) {
+        if (c.kind !== 'native' || c.slug !== slug) continue
+        out.push(toHit(c, 1))
+        if (++n >= perSlug) break
+      }
+    }
+    return out
+  }
+
+  /**
    * Title of the first chunk of each slug (unknown slugs skipped). Natives come first, then docs,
    * each group in the order given: a native is the subject of a question, a doc is its context.
    * A native's title is its name (`GET_ACTUAL_SCREEN_RESOLUTION`), so it names the topic.

@@ -108,6 +108,27 @@ class TtlSource<T> {
   }
 }
 
+export interface IssueRef {
+  number: number
+  title: string
+  state: 'open' | 'closed'
+}
+
+export interface IssueDetail extends IssueRef {
+  labels: string[]
+  body: string
+  isPull: boolean
+}
+
+interface RawIssueDetail {
+  number: number
+  title?: string
+  state?: string
+  body?: string | null
+  labels?: (string | { name?: string } | null)[]
+  pull_request?: unknown
+}
+
 interface RawEvolution {
   issues: RawIssue[]
   pulls: RawPull[]
@@ -241,6 +262,67 @@ export class ProjectService {
       truncated: raw.truncated,
     })
     return { ...ev, generatedAt: new Date(at).toISOString(), stale }
+  }
+
+  /**
+   * Issues for the `@` picker in /ask: by number prefix or by words of the title, newest first.
+   * Pull requests share the list on GitHub and are left out. Reads the cached list, no extra call.
+   */
+  async searchIssues(query: string, limit = 8): Promise<IssueRef[]> {
+    const { value: raw } = await this.#raw.get()
+    const q = query.trim().replace(/^#/, '').toLowerCase()
+    const words = q.split(/\s+/).filter(Boolean)
+    const max = Math.min(Math.max(Math.trunc(limit), 1), 20)
+    const out: IssueRef[] = []
+    for (const i of raw.issues) {
+      if (i.pull_request || typeof i.title !== 'string') continue
+      const title = i.title.toLowerCase()
+      const hit =
+        words.length === 0 ||
+        (/^\d+$/.test(q) && String(i.number).startsWith(q)) ||
+        words.every((w) => title.includes(w))
+      if (!hit) continue
+      out.push({
+        number: i.number,
+        title: i.title.slice(0, 200),
+        state: i.state,
+      })
+      if (out.length >= max) break
+    }
+    return out
+  }
+
+  /** One issue with its body, for a mention. `null` when it does not exist. */
+  async issue(number: number): Promise<IssueDetail | null> {
+    const { github, repo } = this.#o
+    let page
+    try {
+      page = await github.page<RawIssueDetail>(
+        `/repos/${repo}/issues/${Math.trunc(number)}`,
+      )
+    } catch (e) {
+      this.#o.logger.warn('project_source_failed', {
+        source: 'issue',
+        status: e instanceof GithubError ? e.status : 0,
+      })
+      throw new AppError(
+        'project_unavailable',
+        'GitHub data is not available right now.',
+      )
+    }
+    const d = page?.data
+    if (!d || typeof d.number !== 'number') return null
+    return {
+      number: d.number,
+      title: String(d.title ?? '').slice(0, 200),
+      state: d.state === 'closed' ? 'closed' : 'open',
+      labels: (d.labels ?? [])
+        .map((l) => (typeof l === 'string' ? l : (l?.name ?? '')))
+        .filter(Boolean)
+        .slice(0, 10),
+      body: typeof d.body === 'string' ? d.body : '',
+      isPull: d.pull_request !== undefined,
+    }
   }
 
   async checklist(): Promise<Checklist> {
