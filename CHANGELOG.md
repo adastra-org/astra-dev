@@ -7,6 +7,12 @@ Notable changes per release, newest first. Format: [Keep a Changelog](https://ke
 ### Fixed
 
 - `CodeBlock`: the sandbox `import()` calls moved out of the component so the React Compiler can optimize it (`react-hooks-js/todo`, #24). Loading stays lazy.
+## [0.19.11] - 2026-11-19
+
+### Fixed
+
+- Onboarding dialog: the tour body mounts on open, so step and draft start fresh without a reset effect (#52).
+- `useRemote`: `loading` and `error` are derived in render instead of a synchronous `setState` in the effect (#29).
 
 ## [0.19.10] - 2026-11-19
 
