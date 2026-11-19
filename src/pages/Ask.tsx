@@ -1,9 +1,12 @@
 import { Gauge, SquarePen, TriangleAlert } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ContextBudget } from '@/components/ask/ContextBudget'
 import { Composer, Transcript } from '@/components/ask/Conversation'
 import { MemoriesPanel } from '@/components/ask/MemoriesPanel'
+import { OnboardingDialog } from '@/components/ask/OnboardingDialog'
+import { PersonalizePanel } from '@/components/ask/PersonalizePanel'
 import { useAsk } from '@/components/ask/useAsk'
+import { useAskPrefs } from '@/components/ask/useAskPrefs'
 import { useMemories } from '@/components/ask/useMemories'
 import { PageHeader } from '@/components/doc/PageHeader'
 import {
@@ -30,6 +33,9 @@ export default function Ask() {
   useTitle(tr('ask.page.title'))
   const { turns, draft, viewerRole, contextWindow } = useAsk()
   const memories = useMemories()
+  const { prefs } = useAskPrefs()
+  // Primera visita: el onboarding se abre solo. Después, solo con el botón del rail.
+  const [onboarding, setOnboarding] = useState(() => !prefs.done)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const last = turns.at(-1)
@@ -54,7 +60,11 @@ export default function Ask() {
   const session = sessionTotals(turns)
 
   return (
-    <div className="flex flex-col gap-8">
+    <div data-chat-accent={prefs.accent} className="flex flex-col gap-8">
+      <OnboardingDialog
+        open={onboarding}
+        onClose={() => setOnboarding(false)}
+      />
       <PageHeader
         eyebrow={tr('ask.page.eyebrow')}
         title={tr('ask.page.title')}
@@ -127,6 +137,8 @@ export default function Ask() {
               {tr('ask.newChat')}
             </button>
           </section>
+
+          <PersonalizePanel onOpen={() => setOnboarding(true)} />
 
           <MemoriesPanel />
         </aside>

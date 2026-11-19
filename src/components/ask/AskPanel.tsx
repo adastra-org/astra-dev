@@ -8,6 +8,7 @@ import { Composer, Transcript } from './Conversation'
 import { isTurnBusy, turnStatusText } from '@/lib/ask/status'
 import { EtherOrb } from './EtherOrb'
 import { useAsk } from './useAsk'
+import { useAskPrefs } from './useAskPrefs'
 
 /**
  * Panel del chat: `<dialog>` modal anclado a la derecha (foco atrapado, fondo inerte, Esc cierra).
@@ -15,6 +16,7 @@ import { useAsk } from './useAsk'
  */
 export function AskPanel() {
   const { open } = useAsk()
+  const { prefs } = useAskPrefs()
   const { tr } = useLang()
   const ref = useRef<HTMLDialogElement>(null)
   // Tras seguir una cita el foco va al contenido; con Esc o el botón, vuelve a quien abrió.
@@ -48,6 +50,7 @@ export function AskPanel() {
     <dialog
       ref={ref}
       data-palette=""
+      data-chat-accent={prefs.accent}
       aria-label={tr('ask.name')}
       onCancel={(e) => {
         e.preventDefault()

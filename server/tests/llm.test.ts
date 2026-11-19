@@ -201,3 +201,37 @@ describe('DeepSeekProvider as a local server', () => {
     expect(hosted.some((c) => c.type === 'timing')).toBe(false)
   })
 })
+
+describe('speed from the local timings', () => {
+  const stream = (timings: string) =>
+    new DeepSeekProvider({
+      name: 'local',
+      apiKey: '',
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      model: 'm',
+      timeoutMs: 5000,
+      fetch: (async () =>
+        sseBody([
+          'data: {"choices":[{"delta":{"content":"ok"}}]}',
+          `data: {"choices":[],"timings":${timings}}`,
+          'data: [DONE]',
+        ])) as unknown as typeof fetch,
+    }).stream({ messages: [], maxOutputTokens: 5 })
+
+  test('predicted_n and predicted_ms travel with the timing', async () => {
+    const out = await collect(
+      stream('{"prompt_ms":100,"predicted_ms":2000,"predicted_n":240}'),
+    )
+    expect(out).toContainEqual({
+      type: 'timing',
+      gpuMs: 2100,
+      predictedTokens: 240,
+      predictedMs: 2000,
+    })
+  })
+
+  test('without predicted_n there is no speed to report', async () => {
+    const out = await collect(stream('{"prompt_ms":100,"predicted_ms":2000}'))
+    expect(out).toContainEqual({ type: 'timing', gpuMs: 2100 })
+  })
+})

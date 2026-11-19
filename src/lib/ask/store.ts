@@ -6,6 +6,7 @@ import { setPaletteAccess } from '@/lib/palette/registry'
 import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
+import { prefsStore, type StyleBody } from './prefs'
 import {
   AskError,
   type AskEvent,
@@ -45,6 +46,8 @@ export interface Turn {
   /** Uso de tokens que informó el `done`. Null hasta que llega. */
   usage: { inputTokens: number; outputTokens: number } | null
   usageEstimated: boolean
+  /** Velocidad que midió el modelo (`done.tps`). Null si el proveedor no la informó. */
+  serverTps: number | null
   /** Tokens estimados de las memorias que viajaron con este envío (0 si ninguna). */
   memoryTokens: number
 }
@@ -79,6 +82,7 @@ export const emptyTurn = (id: number, question: string): Turn => ({
   timing: { startedAt: null, firstDeltaAt: null, doneAt: null },
   usage: null,
   usageEstimated: false,
+  serverTps: null,
   memoryTokens: 0,
 })
 
@@ -115,6 +119,10 @@ export function applyEvent(turn: Turn, ev: AskEvent, at?: number): Turn {
         cached: ev.cached === true,
         usage: ev.usage,
         usageEstimated: ev.usageEstimated === true,
+        serverTps:
+          typeof ev.tps === 'number' && Number.isFinite(ev.tps) && ev.tps > 0
+            ? ev.tps
+            : null,
         ...(at === undefined ? {} : { timing: { ...turn.timing, doneAt: at } }),
       }
     case 'error':
@@ -165,6 +173,8 @@ export interface AskStoreOptions {
   now?: () => number
   /** Memorias activas a enviar. Por defecto las del navegador (`memoryStore`). */
   memories?: () => string[]
+  /** Tono y largo a enviar. Por defecto los del navegador (`prefsStore`). */
+  style?: () => StyleBody | undefined
 }
 
 export class AskStore {
@@ -257,6 +267,7 @@ export class AskStore {
     const history = historyFor(this.#state.turns)
     const sources = sourcesFor(this.#state.turns)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
+    const style = (this.#opts.style ?? (() => prefsStore.style()))()
     const id = this.#nextId++
     const usedDraft = question === undefined
     const startedAt = this.#now()
@@ -279,6 +290,7 @@ export class AskStore {
         question: q,
         history,
         memories,
+        ...(style ? { style } : {}),
         sources,
         signal: ctl.signal,
         onEvent: (ev) => {

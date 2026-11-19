@@ -54,6 +54,8 @@ export type AskEvent =
       usage: { inputTokens: number; outputTokens: number }
       /** The provider did not report usage; the server counted it from the text. */
       usageEstimated?: boolean
+      /** Tokens por segundo que midió el propio modelo local (con su razonamiento). Ausente si no los informa. */
+      tps?: number
     }
   | { type: 'error'; code: string; message: string }
 

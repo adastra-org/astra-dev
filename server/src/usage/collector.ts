@@ -63,10 +63,9 @@ export class UsageCollector {
       outputTokens: output,
       ttftMs: t?.ttftMs ?? null,
       durationMs,
-      genTps:
-        t?.genMs && t.genMs > 0 && output > 0
-          ? Math.round((output / (t.genMs / 1000)) * 10) / 10
-          : null,
+      // The model's own timing when it gave one. The visible-text window (first to last delta)
+      // misses the time spent reasoning: too short or too fast to be real, it is no measure.
+      genTps: t?.tokensPerSecond ?? textSpeed(output, t?.genMs ?? null),
       outcome: this.outcome,
       cacheHit: this.cacheHit,
       gpuMs: provider === 'local' ? (t?.gpuMs ?? null) : null,
@@ -76,4 +75,14 @@ export class UsageCollector {
     }
     this.#sink.record(record)
   }
+}
+
+/** Shortest text window and fastest speed that can still be a real measure. */
+const MIN_TEXT_MS = 500
+const MAX_TPS = 1000
+
+function textSpeed(tokens: number, ms: number | null): number | null {
+  if (ms === null || ms < MIN_TEXT_MS || tokens <= 0) return null
+  const tps = Math.round((tokens / (ms / 1000)) * 10) / 10
+  return tps > MAX_TPS ? null : tps
 }

@@ -27,7 +27,13 @@ export type LlmChunk =
   /** Which provider and model answered. First chunk; lets a fallback show up in the usage record. */
   | { type: 'served'; provider: 'deepseek' | 'local'; model: string }
   /** Local models only: milliseconds the machine spent on this call (llama.cpp `timings`). */
-  | { type: 'timing'; gpuMs: number }
+  | {
+      type: 'timing'
+      gpuMs: number
+      /** Tokens the model generated (reasoning included) and the time that took: the real speed. */
+      predictedTokens?: number
+      predictedMs?: number
+    }
 
 export interface LlmProvider {
   readonly name: string
