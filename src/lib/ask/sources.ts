@@ -8,7 +8,7 @@ import type { AskSource } from './types'
  */
 export const NATIVE_PAGES_PUBLISHED = true
 
-export const isLinkable = (s: AskSource): boolean =>
+export const isLinkable = (s: Pick<AskSource, 'kind'>): boolean =>
   s.kind === 'doc' || NATIVE_PAGES_PUBLISHED
 
 /**

@@ -104,7 +104,11 @@ export default function Ask() {
           className="flex min-w-0 flex-col gap-6"
         >
           <h2 className="sr-only">{tr('ask.conversation')}</h2>
-          <Transcript turns={turns} viewerRole={viewerRole} />
+          <Transcript
+            turns={turns}
+            viewerRole={viewerRole}
+            onQuoted={() => inputRef.current?.focus()}
+          />
           <div ref={endRef} />
           <p role="status" className="sr-only">
             {turnStatusText(last, tr)}

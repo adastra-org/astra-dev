@@ -7,6 +7,7 @@ import type { Permission } from '@/lib/palette/types'
 import { API_BASE, streamChat } from './client'
 import { memoryStore, textsTokens } from './memories'
 import { prefsStore, type StyleBody } from './prefs'
+import { addQuote, composeQuestion, quoteSlugs, type Quote } from './quote'
 import {
   AskError,
   type AskEvent,
@@ -20,7 +21,10 @@ export type TurnStatus = 'waiting' | 'streaming' | 'done' | 'stopped' | 'error'
 
 export interface Turn {
   id: number
+  /** Lo que la persona escribió. Las citas van aparte: al modelo viajan con `composeQuestion`. */
   question: string
+  /** Fragmentos de respuestas anteriores que acompañaron la pregunta, con sus fuentes. */
+  quotes: Quote[]
   /** Respuesta acumulada (Markdown). */
   text: string
   sources: AskSource[]
@@ -58,15 +62,22 @@ export interface AskState {
   open: boolean
   /** Texto sin enviar del campo; sobrevive a cerrar el panel. */
   draft: string
+  /** Fragmentos citados que acompañarán la próxima pregunta. */
+  quotes: Quote[]
   turns: Turn[]
   viewerRole: ViewerRole
   /** Ventana de contexto del modelo, desde `meta`. Null hasta la primera respuesta. */
   contextWindow: number | null
 }
 
-export const emptyTurn = (id: number, question: string): Turn => ({
+export const emptyTurn = (
+  id: number,
+  question: string,
+  quotes: Quote[] = [],
+): Turn => ({
   id,
   question,
+  quotes,
   text: '',
   sources: [],
   cited: [],
@@ -140,7 +151,13 @@ export function historyFor(turns: readonly Turn[]): HistoryTurn[] {
       (t.status === 'done' || t.status === 'stopped') && t.text && !t.refused,
   )
   return ok.slice(-MAX_HISTORY_EXCHANGES).flatMap((t) => [
-    { role: 'user' as const, content: t.question.slice(0, MAX_HISTORY_CHARS) },
+    {
+      role: 'user' as const,
+      content: composeQuestion(t.quotes, t.question).slice(
+        0,
+        MAX_HISTORY_CHARS,
+      ),
+    },
     {
       role: 'assistant' as const,
       content: t.text.slice(0, MAX_HISTORY_CHARS),
@@ -181,6 +198,7 @@ export class AskStore {
   #state: AskState = {
     open: false,
     draft: '',
+    quotes: [],
     turns: [],
     viewerRole: 'unknown',
     contextWindow: null,
@@ -235,6 +253,15 @@ export class AskStore {
     this.#set({ draft })
   }
 
+  /** Agrega un fragmento citado a la próxima pregunta. */
+  addQuote(q: Quote): void {
+    this.#set({ quotes: addQuote(this.#state.quotes, q) })
+  }
+
+  removeQuote(text: string): void {
+    this.#set({ quotes: this.#state.quotes.filter((q) => q.text !== text) })
+  }
+
   /** Quién es el visitante, para saber si Ask Ether le corresponde antes de que pregunte. */
   async loadViewer(): Promise<void> {
     const f = this.#opts.fetch ?? fetch
@@ -260,12 +287,18 @@ export class AskStore {
     }
   }
 
-  /** Envía la pregunta (o el borrador). Ignora la llamada si ya hay una respuesta en curso. */
-  async ask(question?: string): Promise<void> {
+  /**
+   * Envía la pregunta (o el borrador). Ignora la llamada si ya hay una respuesta en curso. Con
+   * `quotes` (reenviar, editar, reintentar) usa esas citas; sin él, las del campo, que se consumen.
+   * Si las citas traen fuentes, viajan esas como contexto en lugar de las de la última respuesta.
+   */
+  async ask(question?: string, quotes?: Quote[]): Promise<void> {
     const q = (question ?? this.#state.draft).trim()
     if (!q || this.busy) return
+    const sentQuotes = quotes ?? this.#state.quotes
     const history = historyFor(this.#state.turns)
-    const sources = sourcesFor(this.#state.turns)
+    const quoted = quoteSlugs(sentQuotes)
+    const sources = quoted.length ? quoted : sourcesFor(this.#state.turns)
     const memories = (this.#opts.memories ?? (() => memoryStore.active()))()
     const style = (this.#opts.style ?? (() => prefsStore.style()))()
     const id = this.#nextId++
@@ -275,19 +308,20 @@ export class AskStore {
       turns: [
         ...this.#state.turns,
         {
-          ...emptyTurn(id, q),
+          ...emptyTurn(id, q, sentQuotes),
           memoryTokens: textsTokens(memories),
           timing: { startedAt, firstDeltaAt: null, doneAt: null },
         },
       ],
       ...(usedDraft ? { draft: '' } : {}),
+      ...(quotes === undefined ? { quotes: [] } : {}),
     })
 
     const ctl = new AbortController()
     this.#abort = ctl
     try {
       await streamChat({
-        question: q,
+        question: composeQuestion(sentQuotes, q),
         history,
         memories,
         ...(style ? { style } : {}),
@@ -344,7 +378,7 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn || turn.status !== 'error' || this.busy) return
     this.#set({ turns: this.#state.turns.filter((t) => t.id !== id) })
-    void this.ask(turn.question)
+    void this.ask(turn.question, turn.quotes)
   }
 
   /**
@@ -362,8 +396,9 @@ export class AskStore {
   edit(id: number, question: string): void {
     const q = question.trim()
     if (!q || !this.#state.turns.some((t) => t.id === id)) return
+    const turn = this.#state.turns.find((t) => t.id === id)
     this.rewind(id)
-    void this.ask(q)
+    void this.ask(q, turn?.quotes ?? [])
   }
 
   /** Vuelve a preguntar lo mismo desde ese punto: una respuesta nueva reemplaza a la anterior. */
@@ -371,14 +406,14 @@ export class AskStore {
     const turn = this.#state.turns.find((t) => t.id === id)
     if (!turn) return
     this.rewind(id)
-    void this.ask(turn.question)
+    void this.ask(turn.question, turn.quotes)
   }
 
   /** Nueva conversación. */
   reset(): void {
     this.#abort?.abort()
     this.#abort = null
-    this.#set({ turns: [] })
+    this.#set({ turns: [], quotes: [] })
   }
 }
 
