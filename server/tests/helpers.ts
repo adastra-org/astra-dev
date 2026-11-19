@@ -16,6 +16,7 @@ import { RateLimiter, TokenBudget } from '../src/limits.ts'
 import { FakeLlmProvider } from '../src/llm/fake.ts'
 import type { LlmProvider } from '../src/llm/provider.ts'
 import { createLogger, silentLogger, type Logger } from '../src/log.ts'
+import { UsageStore, type UsageSink } from '../src/usage/store.ts'
 import { DevStubViewerPort, type ViewerPort } from '../src/viewer.ts'
 
 export const doc = (
@@ -154,6 +155,7 @@ export async function harness(
     cache?: AnswerCache
     decider?: FollowUpDecider
     gate?: ContextGate
+    usage?: UsageSink
   } = {},
 ): Promise<Harness> {
   const config = testConfig(opts.env)
@@ -190,6 +192,8 @@ export async function harness(
             }),
         })
       : null,
+    usage: opts.usage ?? null,
+    usageReader: opts.usage instanceof UsageStore ? opts.usage : null,
     limiters: {
       chatViewer: new RateLimiter(config.limits.chatViewerPerMin),
       chatIp: new RateLimiter(config.limits.chatIpPerMin),

@@ -11,12 +11,18 @@ import { LineChart } from './chart/LineChart'
 import { EmptyNote } from './parts'
 import { RANGES, type Range } from './ranges'
 
-export function RangePicker({
+export function RangePicker<T extends number = Range>({
   value,
   onChange,
+  options = RANGES as unknown as readonly T[],
+  format,
 }: {
-  value: Range
-  onChange: (r: Range) => void
+  value: T
+  onChange: (r: T) => void
+  /** Periodos que ofrece; por defecto los del roadmap. */
+  options?: readonly T[]
+  /** Texto de cada botón; por defecto "N días". */
+  format?: (n: T) => string
 }) {
   const { tr } = useLang()
   return (
@@ -25,7 +31,7 @@ export function RangePicker({
       aria-label={tr('rm.period')}
       className="flex flex-wrap gap-2"
     >
-      {RANGES.map((r) => (
+      {options.map((r) => (
         <button
           key={r}
           type="button"
@@ -33,7 +39,7 @@ export function RangePicker({
           onClick={() => onChange(r)}
           className="text-label bg-surface-raised text-ink-muted hover:bg-surface-overlay hover:text-ink aria-pressed:bg-accent-fill aria-pressed:text-on-accent flex min-h-11 items-center rounded-pill px-4 transition-colors lg:min-h-10"
         >
-          {tr('rm.days', { n: r })}
+          {format ? format(r) : tr('rm.days', { n: r })}
         </button>
       ))}
     </div>

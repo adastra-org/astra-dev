@@ -39,9 +39,10 @@ describe('parseArgs', () => {
 })
 
 describe('serverEnv', () => {
-  test('viewer staff por defecto, sin pisar el del usuario', () => {
+  test('viewer owner y registro de uso por defecto, sin pisar lo del usuario', () => {
     expect(serverEnv({ local: false, fake: false }, {}, new Set())).toEqual({
-      ASTRA_DEV_VIEWER: 'staff',
+      ASTRA_DEV_VIEWER: 'owner',
+      USAGE_DB_PATH: 'data/usage.sqlite',
     })
     expect(
       serverEnv(
@@ -49,12 +50,12 @@ describe('serverEnv', () => {
         { ASTRA_DEV_VIEWER: 'public' },
         new Set(),
       ),
-    ).toEqual({})
+    ).toEqual({ USAGE_DB_PATH: 'data/usage.sqlite' })
     expect(
       serverEnv(
         { local: false, fake: false },
         {},
-        new Set(['ASTRA_DEV_VIEWER']),
+        new Set(['ASTRA_DEV_VIEWER', 'USAGE_DB_PATH']),
       ),
     ).toEqual({})
   })

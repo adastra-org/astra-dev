@@ -7,7 +7,9 @@ import type { AppDeps } from './context.ts'
 import { chunkPath, type ChunkKind, type NativeMeta } from './docs/chunk.ts'
 import { AppError } from './errors.ts'
 import type { Hit } from './index/search.ts'
+import { policyFor } from './policy.ts'
 import { addProjectSchema } from './project/schema.ts'
+import { addUsageSchema } from './usage/schema.ts'
 import type { Entitlement, Viewer } from './viewer.ts'
 
 export interface GqlContext {
@@ -106,6 +108,19 @@ export function createSchema(deps: AppDeps) {
       }),
     })
 
+  /** The per-IP search limit. An owner (known by cookie) is exempt; anyone else, or an accounts failure, is limited. */
+  const searchLimit = async (ctx: GqlContext) => {
+    if (ctx.request.headers.get('cookie')) {
+      try {
+        const viewer = await deps.viewers.resolve(ctx.request)
+        if (!policyFor(viewer, deps.config).rateLimits) return
+      } catch {
+        // accounts down: fall through to the limit
+      }
+    }
+    deps.limiters.searchIp.hit(ctx.ip)
+  }
+
   builder.queryType({
     fields: (t) => ({
       viewer: t.field({
@@ -128,7 +143,7 @@ export function createSchema(deps: AppDeps) {
         },
         resolve: async (_root, args, ctx) => {
           try {
-            deps.limiters.searchIp.hit(ctx.ip)
+            await searchLimit(ctx)
             if (!deps.retriever)
               throw new AppError(
                 'index_unavailable',
@@ -148,9 +163,9 @@ export function createSchema(deps: AppDeps) {
       native: t.field({
         type: [NativeRef],
         args: { q: t.arg.string({ required: true }) },
-        resolve: (_root, args, ctx) => {
+        resolve: async (_root, args, ctx) => {
           try {
-            deps.limiters.searchIp.hit(ctx.ip)
+            await searchLimit(ctx)
             if (!deps.retriever)
               throw new AppError(
                 'index_unavailable',
@@ -170,6 +185,7 @@ export function createSchema(deps: AppDeps) {
   })
 
   addProjectSchema(builder, deps)
+  addUsageSchema(builder, deps)
 
   return builder.toSchema()
 }

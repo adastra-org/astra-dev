@@ -7,12 +7,14 @@ export type ErrorCode =
   | 'unauthenticated'
   | 'subscription_required'
   | 'staff_required'
+  | 'owner_required'
   | 'rate_limited'
   | 'budget_exceeded'
   | 'viewer_unavailable'
   | 'llm_unavailable'
   | 'index_unavailable'
   | 'project_unavailable'
+  | 'usage_unavailable'
   | 'not_found'
   | 'internal'
 
@@ -23,12 +25,14 @@ const STATUS: Record<ErrorCode, number> = {
   unauthenticated: 401,
   subscription_required: 403,
   staff_required: 403,
+  owner_required: 403,
   rate_limited: 429,
   budget_exceeded: 429,
   viewer_unavailable: 503,
   llm_unavailable: 502,
   index_unavailable: 503,
   project_unavailable: 503,
+  usage_unavailable: 503,
   not_found: 404,
   internal: 500,
 }

@@ -2,7 +2,7 @@
 // never from the repo or the browser.
 import { ConfigError } from './errors.ts'
 
-export type Role = 'public' | 'subscriber' | 'staff'
+export type Role = 'public' | 'subscriber' | 'staff' | 'owner'
 
 export interface Config {
   production: boolean
@@ -17,6 +17,8 @@ export interface Config {
   accounts: { baseUrl: string; viewerPath: string; timeoutMs: number }
   /** Dev stub role. `null` means: use the accounts service. Always null in production. */
   devViewer: Role | null
+  /** Accounts ids allowed to be `owner` (they must also be `staff` in accounts). Empty = no owners. */
+  ownerIds: string[]
   embedder: {
     url: string
     model: string
@@ -90,6 +92,17 @@ export interface Config {
     searchIpPerMin: number
     dailyTokensViewer: number
     dailyTokensGlobal: number
+    /** Owner only: rounds (tool calls, subagents) in one message before the server asks to continue. */
+    ownerMaxRounds: number
+  }
+  /** Per-request usage records (SQLite). See docs/chat/README.md. */
+  usage: {
+    /** Empty = no records. Keep it OUTSIDE the slot dirs so blue and green share it. */
+    dbPath: string
+    retentionDays: number
+    /** USD per million tokens, to estimate the cost of hosted models. */
+    priceInPerMTok: number
+    priceOutPerMTok: number
   }
 }
 
@@ -230,11 +243,24 @@ export function loadConfig(env: Env = process.env): Config {
     if (
       requestedStub === 'public' ||
       requestedStub === 'subscriber' ||
-      requestedStub === 'staff'
+      requestedStub === 'staff' ||
+      requestedStub === 'owner'
     )
       devViewer = requestedStub
-    else problems.push('ASTRA_DEV_VIEWER must be public, subscriber or staff')
+    else
+      problems.push(
+        'ASTRA_DEV_VIEWER must be public, subscriber, staff or owner',
+      )
   }
+
+  // Ids of accounts that may be owner. A malformed entry fails the boot instead of being skipped.
+  const ownerIds = (env.OWNER_IDS ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+  for (const id of ownerIds)
+    if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(id))
+      problems.push('OWNER_IDS has an entry that is not a valid account id')
 
   const repo = str('PROJECT_REPO', 'adastra-org/astra-dev')
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo))
@@ -293,6 +319,7 @@ export function loadConfig(env: Env = process.env): Config {
       timeoutMs: int('ACCOUNTS_TIMEOUT_MS', 3000, 100, 30000),
     },
     devViewer,
+    ownerIds,
     embedder: {
       url: embedderUrl,
       model: embedderModel,
@@ -386,6 +413,13 @@ export function loadConfig(env: Env = process.env): Config {
       searchIpPerMin: int('RATE_SEARCH_IP_PER_MIN', 60, 1, 10000),
       dailyTokensViewer: int('DAILY_TOKENS_VIEWER', 120_000, 1000),
       dailyTokensGlobal: int('DAILY_TOKENS_GLOBAL', 1_000_000, 1000),
+      ownerMaxRounds: int('OWNER_MAX_ROUNDS', 8, 1, 100),
+    },
+    usage: {
+      dbPath: str('USAGE_DB_PATH', ''),
+      retentionDays: int('USAGE_RETENTION_DAYS', 180, 1, 3650),
+      priceInPerMTok: num('USAGE_PRICE_IN_PER_MTOK', 0.14, 0, 1000),
+      priceOutPerMTok: num('USAGE_PRICE_OUT_PER_MTOK', 0.28, 0, 1000),
     },
   }
 

@@ -114,7 +114,7 @@ export function historyFor(turns: readonly Turn[]): HistoryTurn[] {
 }
 
 const isPermission = (v: unknown): v is Permission =>
-  v === 'public' || v === 'subscriber' || v === 'staff'
+  v === 'public' || v === 'subscriber' || v === 'staff' || v === 'owner'
 
 export interface AskStoreOptions {
   fetch?: typeof fetch

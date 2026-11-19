@@ -6,6 +6,8 @@ import { t, type MessageKey, type Vars } from '@/lib/i18n'
 export type ApiErrorCode =
   | 'unauthenticated'
   | 'staff_required'
+  | 'owner_required'
+  | 'usage_unavailable'
   | 'project_unavailable'
   | 'rate_limited'
   | 'viewer_unavailable'
@@ -27,6 +29,8 @@ export class ApiError extends Error {
 const KNOWN = new Set<string>([
   'unauthenticated',
   'staff_required',
+  'owner_required',
+  'usage_unavailable',
   'project_unavailable',
   'rate_limited',
   'viewer_unavailable',
@@ -159,6 +163,13 @@ export function describeError(
       }
     case 'staff_required':
       return { title: tr('rm.err.staff'), hint: tr('rm.err.staff.hint') }
+    case 'owner_required':
+      return { title: tr('ai.err.owner'), hint: tr('ai.err.owner.hint') }
+    case 'usage_unavailable':
+      return {
+        title: tr('ai.err.disabled'),
+        hint: tr('ai.err.disabled.hint'),
+      }
     case 'project_unavailable':
       return {
         title: tr('rm.err.unavailable'),

@@ -7,7 +7,8 @@
 import { AppError } from '../errors.ts'
 import type { Logger } from '../log.ts'
 import { RateLimiter } from '../limits.ts'
-import type { Viewer } from '../viewer.ts'
+import type { Policy } from '../policy.ts'
+import { atLeast, type Viewer } from '../viewer.ts'
 import { parseComplexity } from './complexity.ts'
 import {
   computeEvolution,
@@ -57,7 +58,7 @@ interface Entry<T> {
 export function requireProjectAccess(viewer: Viewer): void {
   if (viewer.id === null)
     throw new AppError('unauthenticated', 'Sign in to see the project.')
-  if (viewer.role !== 'staff')
+  if (!atLeast(viewer.role, 'staff'))
     throw new AppError('staff_required', 'The project page is for staff.')
 }
 
@@ -164,10 +165,13 @@ export class ProjectService {
     )
   }
 
-  /** Gate for every `project` query: staff only, then a per-viewer rate limit. */
-  authorize(viewer: Viewer): void {
+  /** Gate for every `project` query: staff only, then a per-viewer rate limit (owner is exempt). */
+  authorize(
+    viewer: Viewer,
+    policy: Pick<Policy, 'rateLimits'> = { rateLimits: true },
+  ): void {
     requireProjectAccess(viewer)
-    this.#limiter.hit(viewer.id!, this.#now())
+    if (policy.rateLimits) this.#limiter.hit(viewer.id!, this.#now())
   }
 
   async #loadRaw(): Promise<RawEvolution> {

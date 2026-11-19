@@ -2,6 +2,7 @@
 // and the complexity series as sub-fields. Access is checked once, in `project`; the sub-fields
 // then load independently, so one failing source does not blank the page.
 import type SchemaBuilder from '@pothos/core'
+import { policyFor } from '../policy.ts'
 import { GraphQLError } from 'graphql'
 import type { AppDeps } from '../context.ts'
 import { AppError } from '../errors.ts'
@@ -265,7 +266,8 @@ export function addProjectSchema(builder: Builder, deps: AppDeps) {
       resolve: async (_root, _args, ctx) =>
         guard(async () => {
           const svc = need()
-          svc.authorize(await deps.viewers.resolve(ctx.request))
+          const viewer = await deps.viewers.resolve(ctx.request)
+          svc.authorize(viewer, policyFor(viewer, deps.config))
           return svc
         }),
     }),

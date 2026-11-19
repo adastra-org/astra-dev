@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
 import { useAsk } from '@/components/ask/useAsk'
 import { CommandPalette } from '@/components/palette/CommandPalette'
+import '@/lib/ai/palette'
 import '@/lib/ask/palette'
 import { askStore } from '@/lib/ask/store'
 import {
