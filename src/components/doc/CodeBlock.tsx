@@ -39,6 +39,10 @@ const LIMIT_KEY = {
 
 const ms = (n: number) => `${Math.round(n)} ms`
 
+// `import()` vive fuera del componente: el compilador de React no lo soporta dentro (react-hooks-js/todo).
+const loadRunner = () => import('@/lib/sandbox/run')
+const loadTools = () => import('@/lib/sandbox/tools')
+
 /** El bloque de código. `CodeBlock` no sabe ejecutar: carga el sandbox solo al pulsar. */
 export function CodeBlock({
   code,
@@ -84,7 +88,7 @@ export function CodeBlock({
   // llamador limpia el estado después, solo si el componente sigue montado.
   const attemptRun = async (): Promise<RunResult | null> => {
     try {
-      const { runLua } = await import('@/lib/sandbox/run')
+      const { runLua } = await loadRunner()
       if (!alive.current) return null
       const handle = runLua(text, (_line, all) => {
         if (alive.current) setLines([...all])
@@ -115,7 +119,7 @@ export function CodeBlock({
 
   const attemptLint = async () => {
     try {
-      const { lint } = await import('@/lib/sandbox/tools')
+      const { lint } = await loadTools()
       return await lint(text)
     } catch {
       return loadFailure(tr)
@@ -135,7 +139,7 @@ export function CodeBlock({
 
   const attemptFormat = async () => {
     try {
-      const { format: formatLua } = await import('@/lib/sandbox/tools')
+      const { format: formatLua } = await loadTools()
       return await formatLua(text)
     } catch {
       return loadFailure(tr)

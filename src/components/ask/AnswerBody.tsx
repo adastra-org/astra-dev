@@ -19,7 +19,7 @@ interface Props {
 export function AnswerBody({ text, sources, onNavigate }: Props) {
   const blocks = parseAnswer(text, sources.length)
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <div data-ask-answer="" className="flex min-w-0 flex-col gap-3">
       {blocks.map((b, i) => (
         <BlockView
           key={i}
@@ -44,7 +44,7 @@ function BlockView({
   switch (block.kind) {
     case 'p':
       return (
-        <p className="text-body text-ink">
+        <p data-block="" className="text-body text-ink">
           <Inlines
             items={block.children}
             sources={sources}
@@ -64,7 +64,7 @@ function BlockView({
           ].join(' ')}
         >
           {block.items.map((item, i) => (
-            <li key={i} className="pl-1">
+            <li key={i} data-block="" className="pl-1">
               {item.map((b, j) => (
                 <Fragment key={j}>
                   {b.kind === 'p' ? (
@@ -113,7 +113,7 @@ function BlockView({
             </thead>
             <tbody>
               {block.rows.map((r, i) => (
-                <tr key={i}>
+                <tr key={i} data-block="">
                   {r.map((c, j) => (
                     <td key={j} className="text-ink-muted px-3 py-2 align-top">
                       <Inlines
@@ -220,17 +220,29 @@ function Cite({
   n: number
   onNavigate: () => void
 }) {
-  if (!source) return <span className={CITE}>{n}</span>
+  if (!source)
+    return (
+      <span data-cite={n} className={CITE}>
+        {n}
+      </span>
+    )
   const label = `Fuente ${n}: ${source.title}`
   if (!isLinkable(source))
     return (
-      <span className={CITE} title={label} role="img" aria-label={label}>
+      <span
+        data-cite={n}
+        className={CITE}
+        title={label}
+        role="img"
+        aria-label={label}
+      >
         {n}
       </span>
     )
   return (
     <Link
       to={source.path}
+      data-cite={n}
       onClick={onNavigate}
       aria-label={label}
       title={label}

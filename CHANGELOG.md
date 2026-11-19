@@ -13,6 +13,22 @@ Notable changes per release, newest first. Format: [Keep a Changelog](https://ke
 
 - `cleanText` también quita los aislantes bidi U+2066 a U+2069 (afecta al chat).
 - `/graphql` rechaza cuerpos de más de 128 KiB.
+## [0.20.0] - 2026-11-19
+
+### Added
+
+- `/ask`: select text in an answer and quote it in the next question ("Citar en la pregunta", #36). The quote carries the sources of the fragment (its `[n]` cites, or its block's when it has none) and they replace the previous answer's sources for that follow-up. Up to 2 quotes per question, shown as removable chips above the composer and as a quote block in the sent turn; Edit and Resend keep them. Client-only: no change to `POST /api/chat`.
+## [0.19.12] - 2026-11-19
+
+### Fixed
+
+- `CodeBlock`: the sandbox `import()` calls moved out of the component so the React Compiler can optimize it (`react-hooks-js/todo`, #24). Loading stays lazy.
+## [0.19.11] - 2026-11-19
+
+### Fixed
+
+- Onboarding dialog: the tour body mounts on open, so step and draft start fresh without a reset effect (#52).
+- `useRemote`: `loading` and `error` are derived in render instead of a synchronous `setState` in the effect (#29).
 
 ## [0.19.10] - 2026-11-19
 
