@@ -1,5 +1,5 @@
 // The owner dashboard: aggregates over the usage records, and who may read them.
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { UsageStore, type UsageRecord } from '../src/usage/store.ts'
 import { ANONYMOUS, type ViewerPort } from '../src/viewer.ts'
 import { harness } from './helpers.ts'
@@ -160,6 +160,8 @@ describe('buildReport', () => {
 })
 
 describe('aiUsage over GraphQL: owner only', () => {
+  let clock: { mockRestore(): void } | undefined
+  afterEach(() => clock?.mockRestore())
   const query = { query: '{ aiUsage(days: 7) { days totals { requests } } }' }
   const call = async (
     opts: Parameters<typeof harness>[0],
@@ -198,6 +200,8 @@ describe('aiUsage over GraphQL: owner only', () => {
   })
 
   test('owner: gets the aggregates', async () => {
+    // The resolver reads the real clock; the fixtures are anchored to NOW.
+    clock = spyOn(Date, 'now').mockReturnValue(NOW)
     const store = seeded()
     const h = await harness({ role: 'owner', usage: store })
     const r = await (await h.call('/graphql', { json: query })).json()
