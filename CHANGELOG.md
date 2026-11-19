@@ -9,6 +9,13 @@ Notable changes per release, newest first. Format: [Keep a Changelog](https://ke
 - `/ask`: `@` in the composer attaches a saved conversation, a native or an issue as context for the next question (#33). Conversations are the ones saved in this browser (`localStorage`) and travel as a bounded summary; natives and issues are resolved by the server (issues for staff only).
 - `POST /chat` accepts `mentions` (max 5, strict validation, never cached, count-only logging); GraphQL `project.issues(query, limit)` for the picker.
 
+## [0.22.1] - 2026-11-19
+
+### Fixed
+
+- Production `/natives` was empty: the deploy ran `bun run import` after the front build, so the Vite plugin published no `/data/natives/*.json`. The import now runs first and the deploy fails if `dist/data/natives/index.json` is missing.
+- `server/src/usage/store.ts` formatted (left unformatted by #53, it failed the deploy of `main`).
+
 ## [0.22.0] - 2026-11-19
 
 ### Added
