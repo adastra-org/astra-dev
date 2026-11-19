@@ -64,7 +64,14 @@ export type ChatStep =
   | { id: 'cache'; ms: number }
 
 export type ChatEvent =
-  | { type: 'meta'; requestId: string; mode: SearchMode; degraded: boolean }
+  | {
+      type: 'meta'
+      requestId: string
+      mode: SearchMode
+      degraded: boolean
+      /** Tokens the model holds (prompt + answer). Absent when the deployment does not say. */
+      contextWindow?: number
+    }
   | { type: 'step'; step: ChatStep }
   /** The model's reasoning, only for viewers allowed to see it (`showThinking`). */
   | { type: 'thinking'; text: string }
@@ -78,6 +85,8 @@ export type ChatEvent =
       /** The answer came from the cache: no model call, no tokens spent. */
       cached?: boolean
       usage: { inputTokens: number; outputTokens: number }
+      /** The provider sent no usage: `usage` is a count from the text. */
+      usageEstimated?: boolean
     }
   | { type: 'error'; code: string; message: string }
 
@@ -111,6 +120,8 @@ export interface ChatDeps {
   head?: HeadSource
   /** Version of the running build, shown in <entorno>. */
   version?: string
+  /** Context window of the model, sent in `meta` so the client can show the budget. */
+  contextWindow?: number
   now?: () => Date
 }
 
@@ -122,6 +133,10 @@ export interface ChatInput {
   role: Role
   question: string
   history: unknown
+  /** Slugs the previous answer cited (`parseSources`). Used only when the question depends on the history. */
+  sources?: string[]
+  /** Validated user memories (`parseMemories`). Their presence turns the answer cache off. */
+  memories?: string[]
   /** UI language of the visitor. */
   lang?: ChatLang
   /** Who asks. Only goes to the model inside <entorno>; never part of the cache key. */
@@ -200,15 +215,29 @@ export class ChatService {
       if (usedHistory !== null)
         steps.push({ id: 'history', ms: since(t0), usedHistory })
     }
-    const query =
-      lastUser && usedHistory !== false
-        ? `${lastUser.content}\n${question}`
-        : question
+    // A follow-up is a question that needs the conversation: no decider or no answer counts as one.
+    const followUp = lastUser !== undefined && usedHistory !== false
+    const query = followUp
+      ? `${lastUser.content}
+${question}`
+      : question
+    // What the previous answer cited is searched apart (only within those slugs), because a vague
+    // follow-up ("explicame eso") cannot drive a new search on its own.
+    const carrySlugs =
+      followUp && input.sources?.length ? new Set(input.sources) : null
     // Docs and natives are ranked apart: ~7,000 natives would otherwise crowd the docs out. A
     // native named in the question (by name or hash) always comes first.
     const tSearch = performance.now()
     const [found, head] = await Promise.all([
       this.#d.retriever.searchMany(query.slice(0, s.maxQuestionChars * 2), [
+        ...(carrySlugs
+          ? [
+              {
+                k: Math.min(s.topK, 4),
+                slugs: carrySlugs as ReadonlySet<string>,
+              },
+            ]
+          : []),
         { kind: 'doc', k: s.topK },
         ...(s.nativesTopK > 0
           ? [{ kind: 'native' as const, k: s.nativesTopK }]
@@ -225,16 +254,25 @@ export class ChatService {
       natives: found.hits.filter((h) => h.kind === 'native').length,
     })
 
-    // The gate only removes fragments. null = it could not decide: everything stays.
+    // The gate only removes fragments. null = it could not decide: everything stays. It judges the
+    // question with the topic it refers to, and never drops what the previous answer was built on.
     let hits = found.hits
     let gate: { kept: number; total: number } | null = null
     if (this.#d.gate && hits.length) {
       const tGate = performance.now()
-      const kept = await this.#d.gate.select(question, hits)
+      const gated = hits.filter((h) => !carrySlugs?.has(h.slug))
+      const asked = followUp ? query : question
+      const kept = gated.length
+        ? await this.#d.gate.select(
+            asked.slice(0, s.maxQuestionChars * 2),
+            gated,
+          )
+        : []
       if (kept) {
-        gate = { kept: kept.length, total: hits.length }
+        gate = { kept: kept.length, total: gated.length }
         steps.push({ id: 'gate', ms: since(tGate), ...gate })
-        hits = kept
+        const keep = new Set(kept.map((h) => h.id))
+        hits = hits.filter((h) => carrySlugs?.has(h.slug) || keep.has(h.id))
       }
     }
 
@@ -244,6 +282,7 @@ export class ChatService {
       question,
       history,
       hits,
+      ...(input.memories?.length ? { memories: input.memories } : {}),
       contextMaxChars: s.contextMaxChars,
       env: renderEnv({
         lang,
@@ -266,12 +305,14 @@ export class ChatService {
     }))
 
     // First events of every stream: meta, then what the pipeline did.
+    const contextWindow = this.#d.contextWindow
     const lead = function* (extra: ChatStep[] = []): Generator<ChatEvent> {
       yield {
         type: 'meta',
         requestId: input.requestId,
         mode: found.mode,
         degraded: found.degraded,
+        ...(contextWindow === undefined ? {} : { contextWindow }),
       }
       for (const step of [...steps, ...extra]) yield { type: 'step', step }
     }
@@ -285,8 +326,17 @@ export class ChatService {
       gate,
     }
 
-    // Nothing retrieved: refuse without calling the model (and without spending budget).
-    if (!built.used.length) {
+    // Nothing retrieved: refuse without calling the model (and without spending budget). Unless the
+    // question is a follow-up to an answer the assistant really gave: then the conversation is the
+    // material (the prompt only lets the model clarify it, never add facts).
+    const lastAssistant = [...history]
+      .reverse()
+      .find((t) => t.role === 'assistant')
+    const talk =
+      followUp &&
+      lastAssistant !== undefined &&
+      !isRefusal(lastAssistant.content)
+    if (!built.used.length && !talk) {
       return {
         ...base,
         async *events() {
@@ -307,16 +357,18 @@ export class ChatService {
     // Same question over the same sources for the same role: replay the stored answer. No model
     // call and no budget spent.
     const { cache } = this.#d
-    const key = cache?.enabled
-      ? cacheKey({
-          role: input.role,
-          question,
-          history,
-          sourceIds: built.used.map((h) => h.id),
-          // The answer can depend on these, so they split the cache; the user does not.
-          context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}`,
-        })
-      : null
+    // Memories shape the answer and are the user's own: such an answer is neither read from nor stored in the cache.
+    const key =
+      cache?.enabled && !input.memories?.length
+        ? cacheKey({
+            role: input.role,
+            question,
+            history,
+            sourceIds: built.used.map((h) => h.id),
+            // The answer can depend on these, so they split the cache; the user does not.
+            context: `${lang}|${now.toISOString().slice(0, 10)}|${head?.sha ?? ''}`,
+          })
+        : null
     const cached = key ? cache!.get(key) : null
     if (cached) {
       return {
@@ -459,6 +511,7 @@ export class ChatService {
             inputTokens: estimateTokens(inputChars),
             outputTokens: estimateTokens(answer.length),
           },
+          usageEstimated: usage === null,
         }
       },
     }

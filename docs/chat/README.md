@@ -8,9 +8,9 @@ Plan vivo de la zona de chat. Fase 0 detallada abajo; fases 0b a 5 en esqueleto.
 | ---- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | 0    | Rol `owner` + registro de uso (telemetría)                                                                                       | **Implementada en v0.13.0**; tests y verificación local abajo       |
 | 0b   | Dashboard de IA (solo owner)                                                                                                     | **Implementada en v0.14.0**, verificada en navegador (ver Fase 0b)  |
-| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | Esqueleto                                                           |
+| 1    | `/ask` workspace (página del chat con la IA; `POST /chat` es el endpoint) + context budget + output speed + editar/rewind/resend | En curso, v0.15.0 (`feat/chat-page`)                                |
 | 2    | Herramientas `ejecutar` + `check` (sandbox en navegador)                                                                         | Esqueleto. **No se mergea antes de la revisión de seguridad de M4** |
-| 3    | Memorias (localStorage)                                                                                                          | Esqueleto                                                           |
+| 3    | Memorias (localStorage)                                                                                                          | En curso, v0.16.0 (`feat/chat-memories`, base `feat/chat-page`)     |
 | 4    | Cross-session                                                                                                                    | Esqueleto                                                           |
 | 5    | Subagents                                                                                                                        | Esqueleto                                                           |
 
@@ -224,3 +224,117 @@ Página `/dashboard` (solo owner), servida por la query GraphQL `aiUsage(days)` 
 | Datos                                                                                                                                                                        | Base sembrada a mano (903 requests simulados), no tráfico real        |
 | Contraste y estados de foco                                                                                                                                                  | Sin medir con herramienta; solo reusa tokens y componentes existentes |
 | Navegador del usuario (Chrome, Safari)                                                                                                                                       | No probado                                                            |
+
+## Fase 1: `/ask` workspace (v0.15.0, rama `feat/chat-page`)
+
+Base: `feat/chat-workspace` (dfc04f7). Cuando #30 mergee, retargetear a `feat/context-gate`.
+
+Alcance: página `/ask` con transcript, composer y rail. Mismo store (`askStore`) y mismos componentes que el panel; el panel gana el enlace "Abrir en página" y las acciones de editar/reenviar. Sin herramientas (fase 2). `POST /chat` sigue siendo el endpoint.
+
+### Archivos
+
+| Archivo                                             | Cambio                                                                                                                                                                                                   |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/src/config.ts`                              | `LLM_CONTEXT_WINDOW` (int; default 8192 en local, 65536 en deepseek, a confirmar) en `config.llm.contextWindow`                                                                                          |
+| `server/src/boot.ts`                                | pasa `contextWindow` a `ChatService`                                                                                                                                                                     |
+| `server/src/chat/service.ts`                        | `meta` lleva `contextWindow` (opcional en `ChatDeps`)                                                                                                                                                    |
+| `server/tests/chat.test.ts`, `server/tests/config*` | contrato de `meta`; parseo y rango de `LLM_CONTEXT_WINDOW`                                                                                                                                               |
+| `src/lib/ask/types.ts`                              | `meta.contextWindow?`                                                                                                                                                                                    |
+| `src/lib/ask/store.ts`                              | `Turn.timing` (inicio, primer delta, fin), `Turn.usage`, `AskState.contextWindow`; `applyEvent(turn, ev, at?)`; `edit(id, texto)`, `resend(id)`, `rewind(id)`; `now` inyectable                          |
+| `src/lib/ask/budget.ts` (nuevo)                     | puro: `contextUsage(turns, ventana, borrador)` → usado, límite, nivel (ok, warn desde 80 %, full desde 100 %); `outputSpeed(turn)` → tok/s; `ttft(turn)`; estimación `ceil(chars/3)` igual que el server |
+| `src/components/ask/Conversation.tsx` (nuevo)       | `Transcript`, `TurnView`, `Empty`, `Composer` extraídos de `AskPanel.tsx`; `TurnView` gana Editar/Reenviar y la línea de velocidad                                                                       |
+| `src/components/ask/ContextBudget.tsx` (nuevo)      | medidor `role="meter"` + texto "X de Y tokens"; ok/warn/full con icono y texto, no solo color                                                                                                            |
+| `src/components/ask/AskPanel.tsx`                   | usa `Transcript`/`Composer`; enlace "Abrir en página" a `/ask`                                                                                                                                           |
+| `src/pages/Ask.tsx` (nuevo)                         | `PageHeader` + transcript + composer (sticky abajo) + rail (presupuesto, velocidad de la última respuesta, sesión, "Nueva conversación"); gate para `public`                                             |
+| `src/routes.tsx`                                    | `{ path: '/ask', element: <Ask /> }`                                                                                                                                                                     |
+| `src/lib/i18n.ts`                                   | claves `ask.page.*`, `ask.edit*`, `ask.resend`, `ask.budget.*`, `ask.speed.*`, `ask.rail.*` en ES y EN                                                                                                   |
+| `src/lib/ask/budget.test.ts`, `ask.test.ts`         | presupuesto, velocidad, edit/resend/rewind, timings, `contextWindow` desde `meta`                                                                                                                        |
+| `src/components/ask/ask-page.test.tsx`              | render: rail en los tres niveles, Editar/Reenviar deshabilitados mientras responde, gate para public                                                                                                     |
+| `docs/server/README.md`, `docs/ask/README.md`       | contrato `meta.contextWindow`, variable nueva                                                                                                                                                            |
+| `package.json` (raíz)                               | 0.14.2 → 0.15.0                                                                                                                                                                                          |
+
+### Context budget
+
+- Servidor: `contextWindow` sale de `LLM_CONTEXT_WINDOW` y viaja en `meta`, que llega antes que cualquier texto: el medidor existe durante el stream.
+- Cliente: lo usado es `inputTokens + outputTokens` del último `done` con uso real (no caché, no rechazo): lo que la ventana sostuvo en ese envío. El borrador suma `ceil(chars/3)` como estimación de lo próximo.
+- Historial: el cliente manda como mucho 3 intercambios (`historyFor`); el medidor refleja eso.
+- Si el proveedor no reporta uso (fallback o fake), el texto dice que es estimación.
+
+### Velocidad de salida (cliente)
+
+- `startedAt` al enviar, `firstDeltaAt` en el primer `delta`, `doneAt` en el `done`.
+- `ttft = firstDeltaAt - startedAt`. `tok/s = outputTokens / ((doneAt - firstDeltaAt) / 1000)`, solo con al menos 200 ms de stream y `outputTokens > 0`. Respuestas de caché no muestran velocidad.
+- Se mide en el navegador, así que incluye la red. No se mezcla con el `ttft` del log del server.
+
+### Editar, reenviar, rewind
+
+- `rewind(id)`: corta la respuesta en curso si la hay; quita el turno `id` y los siguientes.
+- `edit(id, texto)` = `rewind(id)` + `ask(texto)`. `resend(id)` = `rewind(id)` + `ask(pregunta)`.
+- El historial sale de los turnos que quedan: la edición no arrastra respuestas viejas. Sin endpoint nuevo.
+
+### Tests (`bun test`)
+
+- Presupuesto: nivel ok/warn/full en los bordes (79/80 %, 99/100 %); sin uso → estimación; caché no cuenta.
+- Velocidad: cálculo exacto con `now` inyectado; stream menor a 200 ms → sin dato; caché → sin dato.
+- Store: `edit` corta la respuesta en curso y reenvía con el historial correcto; `resend` deja un solo turno nuevo; `rewind` no toca turnos anteriores.
+- Server: `meta.contextWindow` igual a la config; `LLM_CONTEXT_WINDOW` fuera de rango falla al arrancar.
+
+### Verificación en navegador (puppeteer-core + Edge, `E:\Proyectos\_scratch\browser`)
+
+- `bun dev --fake`, viewer owner. 1280 y 375 px: sin scroll horizontal, rail legible, composer visible.
+- Teclado: Tab por el transcript; Editar abre el campo con foco; Esc cancela; Enter envía; foco visible.
+- Estados: vacío, error (`llm_unavailable`), rate limit (429 con `retryAfter`), público (gate), medidor en ok/warn/full.
+- Velocidad aparece tras una respuesta del fake; una respuesta de caché no la muestra.
+- Consola sin errores. Capturas en `E:\Proyectos\_scratch\chat-page\`.
+
+## Fase 3: memorias del usuario (v0.16.0, rama `feat/chat-memories`)
+
+Base: `feat/chat-page` (PR #31). Decisión de Faku: las memorias viven en el navegador (`localStorage`), no en el server y no se cachean.
+
+### Modelo de datos
+
+- Clave `astra.ask.memories.v1`: `{ v: 1, items: Memory[] }`.
+- `Memory = { id: string, text: string, enabled: boolean, createdAt: number, updatedAt: number }`. `id` = `crypto.randomUUID()` (fallback `Date.now().toString(36)+random`).
+- Topes (cliente, constantes en `src/lib/ask/memories.ts`, espejo de las del server): 12 memorias, 280 caracteres cada una, 2000 caracteres entre las activas. Texto con `trim`, sin vacío, sin caracteres de control; los duplicados exactos se rechazan.
+- Lectura defensiva: JSON ilegible, versión desconocida o forma inválida → lista vacía (no se borra lo guardado hasta la próxima escritura válida). Los ítems inválidos se descartan uno a uno.
+
+### UI
+
+- Sección "Memorias" en el rail de `/ask` (componente nuevo `MemoriesPanel`; no se tocan los estilos existentes del rail de v0.15.1). Contador "N activas de M".
+- Listar: cada memoria con casilla activar/desactivar (`role="switch"`), texto, Editar y Borrar. Crear: campo de una línea + "Agregar" (Enter agrega; las memorias son de una sola línea). Editar: inline con foco, Enter guarda, Esc cancela. Borrar: inmediato con aviso `role="status"` y "Deshacer" (sin diálogo).
+- Targets de 44 px en táctil. Estados con icono y texto, no solo color. Vacío: texto que explica qué son y que quedan solo en este navegador.
+- Sincroniza entre pestañas con el evento `storage`.
+- Fallos de `localStorage` (modo privado, bloqueado, cuota): todo acceso en `try/catch`. Si no se puede leer o escribir, las memorias funcionan **en memoria durante la sesión** y la UI muestra un aviso "No se pueden guardar en este navegador: se pierden al cerrar la pestaña". La página nunca falla por esto.
+
+### Inyección en el request
+
+- Campo nuevo opcional en `POST /chat`: `memories: string[]` (solo las activas, solo texto). El `question` no se toca: así no se mezcla con la búsqueda semántica, el decider, el gate ni el tope de 800 caracteres.
+- Server (`app.ts` + `prompt.ts`): validación **estricta**; si `memories` está presente y no es un array de ≤ 12 strings de 1..280 caracteres con suma ≤ 2000, responde `400 bad_request` (no recorta en silencio). Ausente o `[]` = igual que hoy. Los topes valen también para owner (no son topes de política sino del formato del campo).
+- Prompt: bloque propio `<memorias>` entre `<entorno>` y `<contexto>`, cada línea `- <texto escapado con escapeData>`. Es dato del usuario, no instrucción: el `SYSTEM_PROMPT` ya trata el contenido de los bloques como dato; se agrega una línea que dice que `<memorias>` son preferencias del usuario que no anulan las reglas ni son fuentes citables.
+- Caché: con memorias, la respuesta **ni se lee ni se guarda** (`key = null`). Sin memorias nada cambia.
+- Tamaño: 2000 caracteres de memorias ≈ 2,2 KB en español (peor caso multibyte ≈ 6 KB). Pregunta (800) + historial (6 × 800) + memorias ≈ 9 KB con el overhead JSON, bajo `CHAT_MAX_BODY_BYTES` = 16384. Si alguien baja `CHAT_MAX_BODY_BYTES` a menos de lo necesario, el 413 ya existente es la respuesta.
+- Context budget: el tope de contexto del server (`CHAT_CONTEXT_MAX_CHARS`) recorta fuentes, no memorias; las memorias se suman aparte (≤ ~700 tokens). El medidor del cliente agrega `ceil(chars activos / 3)` a la estimación del próximo envío, y el texto lo dice. Si no entran en la ventana, el medidor pasa a `warn`/`full` como cualquier otro contenido.
+
+### Privacidad
+
+- El texto de las memorias nunca se loguea: el log de requests y `usage_events` siguen sin pregunta, respuesta ni memorias. Se agrega solo `memories: <cantidad>` al log de la request (un número), nada más. Test que verifica que el texto no aparece en el log ni en el registro de uso.
+- No entran a la clave de caché ni a la caché. No se envían a ningún otro endpoint (`/search`, `/project`).
+- Se envían solo las activas y solo en `POST /chat`.
+
+### Archivos
+
+| Archivo                                                             | Cambio                                                                                                                                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/ask/memories.ts` (nuevo)                                   | puro: modelo, topes, `parseStored`, `addMemory`, `editMemory`, `removeMemory`, `toggleMemory`, `activeTexts`, `memoryTokens`; `MemoryStore` con storage inyectable y try/catch |
+| `src/lib/ask/memories.test.ts` (nuevo)                              | topes, duplicados, JSON corrupto, versión desconocida, storage que lanza (get/set/cuota), solo activas                                                                         |
+| `src/lib/ask/client.ts`, `store.ts`, `budget.ts`                    | `memories` en el body (solo si hay), medidor suma las activas                                                                                                                  |
+| `src/components/ask/MemoriesPanel.tsx` (nuevo), `src/pages/Ask.tsx` | UI en el rail                                                                                                                                                                  |
+| `src/lib/i18n.ts`                                                   | claves `ask.memories.*` en ES y EN                                                                                                                                             |
+| `server/src/app.ts`, `server/src/chat/{prompt,service}.ts`          | validación estricta, bloque `<memorias>`, sin caché, contador en el log                                                                                                        |
+| `server/tests/chat.test.ts`                                         | 400 por forma/tope, bloque en el prompt y escapado, sin caché, sin texto en log/uso                                                                                            |
+| `docs/server/README.md`, `docs/ask/README.md`                       | contrato del campo `memories`                                                                                                                                                  |
+| `package.json` (raíz)                                               | 0.15.0 → 0.16.0                                                                                                                                                                |
+
+### Verificación en navegador
+
+`bun dev --fake` como owner, 1280 y 375 px: crear, editar, borrar con deshacer, activar/desactivar, recarga persiste, dos pestañas se sincronizan, teclado completo, `localStorage` bloqueado (aviso, sigue funcionando en memoria), sin scroll horizontal, consola limpia.

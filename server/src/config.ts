@@ -35,6 +35,8 @@ export interface Config {
     model: string
     apiKey: string
     timeoutMs: number
+    /** Tokens the model can hold (prompt + answer). Shown to the visitor as the context budget. */
+    contextWindow: number
     /** Optional local fallback when the primary fails before answering. */
     fallback: { baseUrl: string; model: string } | null
   }
@@ -350,6 +352,12 @@ export function loadConfig(env: Env = process.env): Config {
       ),
       apiKey: provider === 'local' ? '' : apiKey,
       timeoutMs: int('LLM_TIMEOUT_MS', 60000, 1000, 300000),
+      contextWindow: int(
+        'LLM_CONTEXT_WINDOW',
+        provider === 'local' ? 8192 : 65536,
+        1024,
+        2_000_000,
+      ),
       fallback:
         fallbackName === 'local'
           ? {

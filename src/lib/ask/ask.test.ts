@@ -126,6 +126,27 @@ describe('streamChat', () => {
     })
   })
 
+  test('manda `memories` solo si hay', async () => {
+    const bodies: any[] = []
+    const run = (memories?: string[]) =>
+      streamChat({
+        question: 'hola',
+        history: [],
+        ...(memories ? { memories } : {}),
+        onEvent: () => {},
+        fetch: (async (_u: string, init: RequestInit) => {
+          bodies.push(JSON.parse(String(init.body)))
+          return streamed(sse(LIVE), 9)
+        }) as unknown as typeof fetch,
+      })
+    await run(['Responde corto'])
+    await run([])
+    await run()
+    expect(bodies[0].memories).toEqual(['Responde corto'])
+    expect('memories' in bodies[1]).toBe(false)
+    expect('memories' in bodies[2]).toBe(false)
+  })
+
   test('manda el idioma de la interfaz', async () => {
     let body = ''
     await streamChat({
@@ -269,6 +290,26 @@ describe('applyEvent / historyFor', () => {
   })
 })
 
+describe('AskStore: fuentes de la respuesta anterior', () => {
+  test('el follow-up manda los slugs de la última respuesta buena; la primera pregunta no manda nada', async () => {
+    const bodies: any[] = []
+    const store = new AskStore({
+      memories: () => [],
+      fetch: (async (_u: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)))
+        return streamed(sse(LIVE), 64)
+      }) as unknown as typeof fetch,
+    })
+    await store.ask('hola')
+    await store.ask('explicame eso')
+    expect('sources' in bodies[0]).toBe(false)
+    expect(bodies[1].sources).toEqual(
+      store.getState().turns[0]!.sources.map((s) => s.slug),
+    )
+    expect(bodies[1].sources.length).toBeGreaterThan(0)
+  })
+})
+
 describe('AskStore', () => {
   const make = (handler: (call: number) => Response | Promise<Response>) => {
     let calls = 0
@@ -294,6 +335,30 @@ describe('AskStore', () => {
       status: 'done',
       text: 'Hola mundo [1].',
     })
+  })
+
+  test('lleva las memorias activas en el body y las anota en el turno', async () => {
+    let active = ['Responde corto', 'Uso Windows']
+    const bodies: any[] = []
+    const store = new AskStore({
+      memories: () => active,
+      fetch: (async (_u: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)))
+        return streamed(sse(LIVE), 64)
+      }) as unknown as typeof fetch,
+    })
+    await store.ask('hola')
+    active = []
+    await store.ask('otra')
+    expect(bodies).toHaveLength(2)
+    expect(bodies[0].memories).toEqual(['Responde corto', 'Uso Windows'])
+    expect('memories' in bodies[1]).toBe(false)
+    const [t1, t2] = store.getState().turns
+    expect(t1!.memoryTokens).toBe(9) // 25 caracteres -> ceil(25/3)
+    expect(t2!.memoryTokens).toBe(0)
+    // El texto de las memorias no entra al turno ni al historial.
+    expect(JSON.stringify(store.getState().turns)).not.toContain('Windows')
+    expect(JSON.stringify(bodies[1].history)).not.toContain('Windows')
   })
 
   test('la segunda pregunta lleva el historial de la primera', async () => {

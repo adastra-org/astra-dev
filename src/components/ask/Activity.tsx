@@ -1,5 +1,6 @@
 import {
   Check,
+  ChevronRight,
   Filter,
   History,
   LoaderCircle,
@@ -55,20 +56,33 @@ function LiveRow({ turn }: { turn: Turn }) {
 }
 
 /**
- * El razonamiento va en un contenedor con `flex-col-reverse`: el navegador lo mantiene pegado al
- * final mientras crece, sin efectos ni medir el DOM. Es texto plano, nunca Markdown.
+ * El razonamiento (solo staff) va plegado y discreto: una línea con el título y un chevron, y al
+ * abrir un texto sobrio con filete a la izquierda, sin fondo. El contenedor es `flex-col-reverse`:
+ * el navegador lo mantiene pegado al final mientras crece, sin efectos ni medir el DOM. Es texto
+ * plano, nunca Markdown.
  */
 function Thought({ text }: { text: string }) {
   const { tr } = useLang()
   return (
-    <section aria-label={tr('ask.act.thought')} className="flex flex-col gap-1">
-      <h3 className="text-eyebrow px-0">{tr('ask.act.thought')}</h3>
-      <div className="bg-surface-sunken flex max-h-40 flex-col-reverse overflow-y-auto rounded-md">
-        <pre className="text-code text-ink-muted p-3 whitespace-pre-wrap">
+    <details className="group/thought">
+      <summary className="text-caption text-ink-muted hover:text-ink focus-visible:outline-accent flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-md md:min-h-8 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="text-ink-subtle size-4 shrink-0 transition-transform group-open/thought:rotate-90 motion-reduce:transition-none"
+          aria-hidden="true"
+        />
+        {tr('ask.act.thought')}
+      </summary>
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={tr('ask.act.thought')}
+        className="border-border focus-visible:outline-accent mt-1 ml-2 flex max-h-40 flex-col-reverse overflow-y-auto border-l-2 pl-4"
+      >
+        <p className="text-body-sm text-ink-muted py-1 whitespace-pre-wrap">
           {text}
-        </pre>
+        </p>
       </div>
-    </section>
+    </details>
   )
 }
 

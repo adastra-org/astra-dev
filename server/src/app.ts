@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto'
 import { Elysia } from 'elysia'
 import { parseLang } from './chat/environment.ts'
 import { citedLog } from './chat/log.ts'
+import { parseSources } from './chat/carry.ts'
+import { parseMemories } from './chat/memories.ts'
 import { sseResponse } from './chat/sse.ts'
 import type { AppDeps } from './context.ts'
 import { AppError, toAppError } from './errors.ts'
@@ -79,14 +81,22 @@ async function readChatBody(request: Request, maxBytes: number) {
   }
   if (body === null || typeof body !== 'object' || Array.isArray(body))
     throw new AppError('bad_request', 'Body must be a JSON object.')
-  const { question, history, lang } = body as {
+  const { question, history, lang, memories, sources } = body as {
     question?: unknown
     history?: unknown
     lang?: unknown
+    memories?: unknown
+    sources?: unknown
   }
   if (typeof question !== 'string')
     throw new AppError('bad_request', '`question` must be a string.')
-  return { question, history, lang: parseLang(lang) }
+  return {
+    question,
+    history,
+    lang: parseLang(lang),
+    memories: parseMemories(memories),
+    sources: parseSources(sources),
+  }
 }
 
 export function createApp(deps: AppDeps) {
@@ -154,10 +164,8 @@ export function createApp(deps: AppDeps) {
             'index_unavailable',
             'The docs index is not loaded.',
           )
-        const { question, history, lang } = await readChatBody(
-          request,
-          config.chat.maxBodyBytes,
-        )
+        const { question, history, lang, memories, sources } =
+          await readChatBody(request, config.chat.maxBodyBytes)
 
         const run = await deps.chat.prepare({
           requestId,
@@ -165,6 +173,8 @@ export function createApp(deps: AppDeps) {
           role: viewer.role,
           question,
           history,
+          memories,
+          sources,
           lang,
           user: { handle: viewer.handle },
           showThinking: atLeast(viewer.role, 'staff'),
@@ -179,6 +189,8 @@ export function createApp(deps: AppDeps) {
           usage.telemetry = run.telemetry
         }
         if (run.usedHistory != null) log.usedHistory = run.usedHistory
+        // Only how many; the text of a memory never reaches a log.
+        if (memories.length) log.memories = memories.length
         if (run.gate) log.gate = `${run.gate.kept}/${run.gate.total}`
 
         return sseResponse(
