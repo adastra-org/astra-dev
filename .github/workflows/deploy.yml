@@ -3,6 +3,8 @@ name: Deploy development.adastrarp.com
 on:
   push:
     branches: [main]
+  # Manual run from the Actions tab (Run workflow), on the ref picked there.
+  workflow_dispatch:
 
 permissions:
   contents: read
