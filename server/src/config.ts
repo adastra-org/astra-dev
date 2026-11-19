@@ -131,7 +131,7 @@ export interface Config {
 
 type Env = Record<string, string | undefined>
 
-const SLOT_PORTS: Record<string, number> = { blue: 4101, green: 4102 }
+const SLOT_PORTS: Record<string, number> = { blue: 4201, green: 4202 }
 
 export function loadConfig(env: Env = process.env): Config {
   const problems: string[] = []

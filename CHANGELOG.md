@@ -2,6 +2,13 @@
 
 Notable changes per release, newest first. Format: [Keep a Changelog](https://keepachangelog.com), versions follow `package.json`. Each PR adds its entry under `## [Unreleased]`; the release PR renames it to the version.
 
+## [0.22.2] - 2026-11-19
+
+### Fixed
+
+- API slots move to 127.0.0.1:4201 (blue) and 4202 (green). 4101/4102 belong to WePanel: with Bun's default `reusePort` both apps shared the port and `/api/` answered WePanel half the time, so the deploy's public check failed and rolled back.
+- The server listens with `reusePort: false`: a taken port now fails the start instead of splitting connections.
+
 ## [0.22.1] - 2026-11-19
 
 ### Fixed

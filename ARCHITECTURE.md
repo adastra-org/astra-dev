@@ -30,7 +30,7 @@ browser ──► nginx (development.adastrarp.com, TLS)
               └─ /  ──► /var/www/development.adastrarp.com/current ──► blue | green   (Vite SPA build)
               └─ /ready.json   build identity: {"ok":true,"sha":...,"version":...,"slot":...}
 
-              └─ /api/*  ──► astra-dev@<slot> (Bun, 127.0.0.1:4101 blue | 4102 green; nginx strips /api)
+              └─ /api/*  ──► astra-dev@<slot> (Bun, 127.0.0.1:4201 blue | 4202 green; nginx strips /api)
 ```
 
 ## Deploy

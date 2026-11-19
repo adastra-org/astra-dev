@@ -19,6 +19,8 @@ try {
     hostname: config.host,
     port: config.port,
     maxRequestBodySize: config.chat.maxBodyBytes * 4,
+    // A port taken by another app must fail the start, not share connections with it.
+    reusePort: false,
   })
   logger.info('listening', {
     ...describeConfig(config),

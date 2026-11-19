@@ -21,7 +21,7 @@
 # API server stage (optional, docs/server/README.md): when [server-dir] is given AND the systemd
 # user unit astra-dev@.service is installed, the same slot flip also moves the API:
 #   ~/deploy/astra-dev-server/{blue,green}  one server bundle each, run by astra-dev@<slot>
-#   blue = 127.0.0.1:4101, green = 127.0.0.1:4102 (must match server/src/config.ts)
+#   blue = 127.0.0.1:4201, green = 127.0.0.1:4202 (must match server/src/config.ts)
 # Without the unit the stage is skipped with a warning and the static deploy proceeds as before.
 
 set -euo pipefail
@@ -63,7 +63,7 @@ reload_nginx() {
 
 # ---- API server (user units astra-dev@<slot>, loopback ports) ----
 
-port_of() { case "$1" in blue) echo 4101 ;; green) echo 4102 ;; *) echo 0 ;; esac; }
+port_of() { case "$1" in blue) echo 4201 ;; green) echo 4202 ;; *) echo 0 ;; esac; }
 
 # `systemctl --user` from a non-login shell (the runner) needs the user bus path.
 user_systemctl() {
