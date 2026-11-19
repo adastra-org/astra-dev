@@ -53,6 +53,10 @@
 
   /* Movimiento: entradas desde abajo, ease-out, sin rebotes */
   --ease-out-brand: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Duraciones (house: 120 hover, 180 panel, 240 reflow) */
+  --duration-fast: 120ms;
+  --duration-panel: 180ms;
+  --duration-reflow: 240ms;
 }
 
 /* Escala tipográfica del DS (typography.md). Mobile: h1 → 34/40, h2 → 24/30. */

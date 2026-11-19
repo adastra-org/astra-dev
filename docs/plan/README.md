@@ -27,11 +27,11 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M1 — Motor de docs (0.2.0)
 
-- [ ] Docs en Markdown con frontmatter (título, tags, `related`, `since`).
-- [ ] Render con estilos del DS; bloques de código con resaltado.
-- [ ] Historial de cambios por documento (git log del archivo, mostrado en la página).
-- [ ] Referencias cruzadas: `related` en frontmatter + backlinks calculados en build ("usada con X", "uso específico para Y").
-- [ ] Vista TDA: resumen arriba, secciones colapsables, ejemplo mínimo primero.
+- [x] Docs en Markdown con frontmatter (título, tags, `related`, `since`). Validado en build; detalle en [`docs-engine/README.md`](../docs-engine/README.md).
+- [x] Render con estilos del DS; bloques de código con resaltado (shiki en build, colores por roles) y botón Copiar.
+- [x] Historial de cambios por documento (git log del archivo, mostrado en la página). Verificado en dev; `deploy.yml` usa `fetch-depth: 0`, falta comprobarlo en el primer deploy real.
+- [x] Referencias cruzadas: `related` en frontmatter + backlinks calculados en build ("Relacionados" y "Usada por"). Los backlinks salen solo de `related`; "uso específico para Y" queda para M2.
+- [x] Vista TDA: resumen arriba, secciones colapsables, ejemplo mínimo primero.
 
 ## M2 — Contenido y traducción (0.3.0)
 
@@ -42,10 +42,19 @@ M4 y M5 son independientes de M2/M3 y pueden correr en paralelo.
 
 ## M3 — Ask Ether (0.4.0)
 
+- [x] Búsqueda léxica sin IA: command palette Ctrl+K público (docs por título, resumen y tags, destinos, encabezados), publicado como 0.3.0. Detalle y extensión para IA en [`cmdk/README.md`](../cmdk/README.md). Verificado en navegador (escritorio y 375 px).
 - [ ] Índice de embeddings de todas las docs (WeKit `embed_text`), regenerado en build.
 - [ ] Búsqueda en lenguaje natural: query a embedding, top-k, resultados con extracto.
 - [ ] Respuesta redactada por LLM sobre los resultados (componente Ask Ether de WeKit), con citas a las páginas.
 - [ ] Rate limit y caché de consultas.
+
+Estado del server de Ask Ether (v0.4.0, [server/README](../server/README.md)). Mitad servidor hecha; falta la UI del chat y verificar contra el embedder real y las cuentas reales. Se ticka el ítem de arriba cuando esté completo (servidor + UI):
+
+- [~] Índice de embeddings: `bun run index` y degradado a palabras clave verificados; el índice semántico real **no** (el embedder solo existe en el VPS). `deploy.yml` lo regenera, sin aplicar.
+- [~] Búsqueda en lenguaje natural: `searchDocs` (GraphQL) y recuperación del chat verificados con embedder simulado; falta el ranking con el embedder real.
+- [~] Respuesta redactada por LLM con citas: `POST /chat` (SSE, sin herramientas, citas validadas, rechazo fuera de la doc) verificado con tests y a mano contra DeepSeek; falta el panel en la UI.
+- [~] Rate limit y caché: rate limit por viewer e IP y presupuesto diario de tokens hechos (en memoria); **falta la caché**.
+- [~] Permisos por `Viewer`: mapeo del payload real de cuentas (`staff` por `role`, `subscriber` por entitlement `tebex-subscriber` vigente) probado con fixtures; falta probarlo contra el endpoint desplegado.
 
 ## M4 — Sandbox de código (0.5.0)
 

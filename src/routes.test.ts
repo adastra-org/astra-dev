@@ -50,3 +50,11 @@ describe('navegación', () => {
     ])
   })
 })
+
+describe('docs reales', () => {
+  test('cada doc de content/docs tiene su ruta /docs/:slug', async () => {
+    const { docs } = await import('virtual:astra-docs')
+    expect(docs.length).toBeGreaterThanOrEqual(4)
+    for (const d of docs) expect(leaf(`/docs/${d.slug}`)).toBe('/docs/:slug')
+  })
+})
